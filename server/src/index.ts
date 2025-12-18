@@ -5,8 +5,8 @@ import { errorHandler } from './middleware/errorHandler.js'
 
 // Routes
 import authRoutes from './routes/auth.routes.js'
-import driverRoutes from './routes/driver.routes.js'
-import vehicleRoutes from './routes/vehicle.routes.js'
+import driverRoutes from './modules/fleet/driver.routes.js'
+import vehicleRoutes from './modules/fleet/vehicle.routes.js'
 import operatorRoutes from './routes/operator.routes.js'
 import locationRoutes from './routes/location.routes.js'
 import routeRoutes from './routes/route.routes.js'
