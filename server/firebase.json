@@ -9,7 +9,11 @@
         ".git",
         "firebase-debug.log",
         "firebase-debug.*.log",
-        "*.local"
+        "*.local",
+        "src/**/__tests__/**",
+        "src/**/*.test.ts",
+        "jest.config.js",
+        "tsconfig.build.json"
       ],
       "predeploy": [
         "npm run build"
