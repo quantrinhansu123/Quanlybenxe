@@ -1,8 +1,7 @@
 import { Request, Response } from 'express'
 import bcrypt from 'bcryptjs'
 import jwt, { SignOptions } from 'jsonwebtoken'
-import { db } from '../config/database.js'
-import { firebaseREST } from '../lib/firebase-rest.js'
+import { db, firebaseDb } from '../config/database.js'
 import { loginSchema, registerSchema } from '../utils/validation.js'
 
 export const login = async (req: Request, res: Response): Promise<void> => {
@@ -10,17 +9,17 @@ export const login = async (req: Request, res: Response): Promise<void> => {
     const validated = loginSchema.parse(req.body)
     const { usernameOrEmail, password } = validated
 
-    // Use Firebase REST API instead of Admin SDK to avoid credential issues
-    console.log('Starting Firebase REST query for users...')
+    // Use Firebase Admin SDK for authentication
+    console.log('Starting Firebase Admin SDK query for users...')
     let allUsers: any = null
     try {
       const startTime = Date.now()
-      allUsers = await firebaseREST.get('users')
+      allUsers = await firebaseDb.get('users')
       const queryTime = Date.now() - startTime
-      console.log(`Firebase REST query completed in ${queryTime}ms`)
+      console.log(`Firebase Admin SDK query completed in ${queryTime}ms`)
       console.log(`Found ${allUsers ? Object.keys(allUsers).length : 0} users`)
     } catch (error: any) {
-      console.error('Firebase REST query error:', error)
+      console.error('Firebase Admin SDK query error:', error)
       res.status(500).json({ error: 'Database connection error', details: error.message })
       return
     }
@@ -212,8 +211,8 @@ export const getCurrentUser = async (req: Request, res: Response): Promise<void>
       return
     }
 
-    // Use Firebase REST API instead of Admin SDK
-    const allUsers = await firebaseREST.get('users')
+    // Use Firebase Admin SDK
+    const allUsers = await firebaseDb.get('users')
 
     if (!allUsers) {
       res.status(404).json({ error: 'User not found' })
