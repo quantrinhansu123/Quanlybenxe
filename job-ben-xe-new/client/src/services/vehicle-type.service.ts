@@ -24,27 +24,27 @@ export const vehicleTypeService = {
   getById: async (id: string): Promise<VehicleType> => {
     const data = await firebaseClient.get<FirebaseVehicleType>(`vehicle_types/${id}`)
     if (!data) throw new Error('Vehicle type not found')
-    return mapVehicleType({ id, ...data })
+    return mapVehicleType({ ...data, id })
   },
 
   create: async (input: { name: string; description?: string }): Promise<VehicleType> => {
     const id = firebaseClient.generateId()
     const now = new Date().toISOString()
-    
+
     const data: FirebaseVehicleType = {
       id,
       name: input.name,
       description: input.description || '',
       created_at: now,
     }
-    
+
     await firebaseClient.set(`vehicle_types/${id}`, data)
     return mapVehicleType(data)
   },
 
   update: async (id: string, input: { name?: string; description?: string }): Promise<VehicleType> => {
     const updateData: any = {}
-    
+
     if (input.name !== undefined) updateData.name = input.name
     if (input.description !== undefined) updateData.description = input.description
 

@@ -23,23 +23,33 @@ export interface RegisterCredentials {
   role?: 'admin' | 'dispatcher' | 'accountant' | 'reporter'
 }
 
+// Shift types (Ca trực)
+export interface Shift {
+  id: string
+  name: string
+  startTime: string
+  endTime: string
+  isActive: boolean
+  createdAt?: string
+}
+
 // Operator types
 export interface Operator {
   id: string
   name: string
   code: string
   taxCode?: string
-  
+
   isTicketDelegated: boolean
   province?: string
   district?: string
   address?: string
-  
+
   phone?: string
   email?: string
   representativeName?: string
   representativePosition?: string
-  
+
   isActive: boolean
   createdAt?: string
   updatedAt?: string
@@ -49,12 +59,12 @@ export interface OperatorInput {
   name: string
   code: string
   taxCode?: string
-  
+
   isTicketDelegated?: boolean
   province?: string
   district?: string
   address?: string
-  
+
   phone?: string
   email?: string
   representativeName?: string
@@ -89,18 +99,18 @@ export interface Vehicle {
   engineNumber?: string
   color?: string
   imageUrl?: string
-  
+
   insuranceExpiryDate?: string
   inspectionExpiryDate?: string
-  
+
   cargoLength?: number
   cargoWidth?: number
   cargoHeight?: number
-  
+
   gpsProvider?: string
   gpsUsername?: string
   gpsPassword?: string
-  
+
   province?: string
 
   isActive: boolean
@@ -139,18 +149,18 @@ export interface VehicleInput {
   engineNumber?: string
   color?: string
   imageUrl?: string
-  
+
   insuranceExpiryDate?: string
   inspectionExpiryDate?: string
-  
+
   cargoLength?: number
   cargoWidth?: number
   cargoHeight?: number
-  
+
   gpsProvider?: string
   gpsUsername?: string
   gpsPassword?: string
-  
+
   province?: string
 
   notes?: string
@@ -199,6 +209,8 @@ export interface Location {
   name: string
   code: string
   stationType?: string
+  province?: string
+  district?: string
   phone?: string
   email?: string
   address?: string
@@ -212,12 +224,16 @@ export interface LocationInput {
   name: string
   code: string
   stationType?: string
+  province?: string
+  district?: string
   phone?: string
   email?: string
   address?: string
   latitude?: number
   longitude?: number
+  isActive?: boolean
 }
+
 
 // Route types
 export interface Route {
@@ -231,13 +247,13 @@ export interface Route {
   destination?: Location
   distanceKm?: number
   estimatedDurationMinutes?: number
-  
+
   plannedFrequency?: string
   boardingPoint?: string
   journeyDescription?: string
   departureTimesDescription?: string
   restStops?: string
-  
+
   isActive: boolean
   stops?: RouteStop[]
   createdAt?: string
@@ -258,17 +274,19 @@ export interface RouteStop {
 export interface RouteInput {
   routeCode: string
   routeName: string
+  routeType?: string
   originId: string
   destinationId: string
   distanceKm?: number
   estimatedDurationMinutes?: number
-  
+
   plannedFrequency?: string
   boardingPoint?: string
   journeyDescription?: string
   departureTimesDescription?: string
   restStops?: string
-  
+
+  isActive?: boolean
   stops?: Omit<RouteStop, 'id' | 'routeId' | 'createdAt'>[]
 }
 
@@ -327,16 +345,16 @@ export interface DispatchRecord {
   routeId: string
   route?: Route
   routeName: string
-  
+
   // Entry
   entryTime: string
   entryBy?: string
-  
+
   // Passenger drop-off
   passengerDropTime?: string
   passengersArrived?: number
   passengerDropBy?: string
-  
+
   // Boarding permit
   boardingPermitTime?: string
   plannedDepartureTime?: string
@@ -345,23 +363,23 @@ export interface DispatchRecord {
   permitStatus?: PermitStatus
   rejectionReason?: string
   boardingPermitBy?: string
-  
+
   // Payment
   paymentTime?: string
   paymentAmount?: number
   paymentMethod?: PaymentMethod
   invoiceNumber?: string
   paymentBy?: string
-  
+
   // Departure order
   departureOrderTime?: string
   passengersDeparting?: number
   departureOrderBy?: string
-  
+
   // Exit
   exitTime?: string
   exitBy?: string
-  
+
   // Status
   currentStatus: DispatchStatus
   notes?: string
@@ -478,6 +496,7 @@ export interface ServiceInput {
   displayOrder: number
   isDefault: boolean
   autoCalculateQuantity: boolean
+  isActive?: boolean
 }
 
 // Service Formula types (Quản lý biểu thức)

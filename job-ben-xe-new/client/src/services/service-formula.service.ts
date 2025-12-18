@@ -29,7 +29,7 @@ export const serviceFormulaService = {
   getAll: async (formulaType?: 'quantity' | 'price', isActive?: boolean): Promise<ServiceFormula[]> => {
     try {
       const data = await firebaseClient.getAsArray<FirebaseServiceFormula>('service_formulas')
-      
+
       let filtered = data
       if (formulaType) {
         filtered = filtered.filter(f => f.formula_type === formulaType)
@@ -49,7 +49,7 @@ export const serviceFormulaService = {
     try {
       const data = await firebaseClient.get<FirebaseServiceFormula>(`service_formulas/${id}`)
       if (!data) throw new Error('Service formula not found')
-      return mapServiceFormula({ id, ...data })
+      return mapServiceFormula({ ...data, id })
     } catch (error) {
       console.error('Error fetching service formula by id from Firebase:', error)
       throw error
@@ -59,7 +59,7 @@ export const serviceFormulaService = {
   create: async (input: ServiceFormulaInput): Promise<ServiceFormula> => {
     const id = firebaseClient.generateId()
     const now = new Date().toISOString()
-    
+
     const data: FirebaseServiceFormula = {
       id,
       code: input.code,
@@ -71,14 +71,14 @@ export const serviceFormulaService = {
       created_at: now,
       updated_at: now,
     }
-    
+
     await firebaseClient.set(`service_formulas/${id}`, data)
     return mapServiceFormula(data)
   },
 
   update: async (id: string, input: Partial<ServiceFormulaInput>): Promise<ServiceFormula> => {
     const updateData: any = { updated_at: new Date().toISOString() }
-    
+
     if (input.code !== undefined) updateData.code = input.code
     if (input.name !== undefined) updateData.name = input.name
     if (input.description !== undefined) updateData.description = input.description

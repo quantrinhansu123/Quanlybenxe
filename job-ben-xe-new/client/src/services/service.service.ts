@@ -44,12 +44,12 @@ export const serviceService = {
   getAll: async (isActive?: boolean): Promise<Service[]> => {
     try {
       const data = await firebaseClient.getAsArray<FirebaseService>('services')
-      
+
       if (!data || data.length === 0) {
         console.log('No services found in Firebase')
         return []
       }
-      
+
       let filtered = data
       if (isActive !== undefined) {
         filtered = filtered.filter(s => s.is_active === isActive)
@@ -68,7 +68,7 @@ export const serviceService = {
     try {
       const data = await firebaseClient.get<FirebaseService>(`services/${id}`)
       if (!data) throw new Error('Service not found')
-      return mapService({ id, ...data })
+      return mapService({ ...data, id })
     } catch (error) {
       console.error('Error fetching service by id from Firebase:', error)
       throw error
@@ -78,7 +78,7 @@ export const serviceService = {
   create: async (input: ServiceInput): Promise<Service> => {
     const id = firebaseClient.generateId()
     const now = new Date().toISOString()
-    
+
     const data: FirebaseService = {
       id,
       code: input.code,
@@ -98,14 +98,14 @@ export const serviceService = {
       created_at: now,
       updated_at: now,
     }
-    
+
     await firebaseClient.set(`services/${id}`, data)
     return mapService(data)
   },
 
   update: async (id: string, input: Partial<ServiceInput>): Promise<Service> => {
     const updateData: any = { updated_at: new Date().toISOString() }
-    
+
     if (input.code !== undefined) updateData.code = input.code
     if (input.name !== undefined) updateData.name = input.name
     if (input.unit !== undefined) updateData.unit = input.unit

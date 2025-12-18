@@ -47,7 +47,7 @@ const mapDispatchRecord = async (record: FirebaseDispatchRecord): Promise<Dispat
   const drivers = await firebaseClient.get<Record<string, any>>('drivers') || {}
   const routes = await firebaseClient.get<Record<string, any>>('routes') || {}
   const operators = await firebaseClient.get<Record<string, any>>('operators') || {}
-  
+
   const vehicle = vehicles[record.vehicle_id]
   const driver = drivers[record.driver_id]
   const route = record.route_id ? routes[record.route_id] : null
@@ -60,6 +60,8 @@ const mapDispatchRecord = async (record: FirebaseDispatchRecord): Promise<Dispat
       id: record.vehicle_id,
       plateNumber: vehicle.plate_number,
       operatorId: vehicle.operator_id,
+      seatCapacity: vehicle.seat_capacity || 0,
+      isActive: vehicle.is_active ?? true,
       operator: operator ? {
         id: vehicle.operator_id,
         name: operator.name,
@@ -74,6 +76,11 @@ const mapDispatchRecord = async (record: FirebaseDispatchRecord): Promise<Dispat
       id: record.driver_id,
       fullName: driver.full_name,
       operatorId: driver.operator_id,
+      idNumber: driver.id_number || '',
+      licenseNumber: driver.license_number || '',
+      licenseClass: driver.license_class || '',
+      licenseExpiryDate: driver.license_expiry_date || '',
+      isActive: driver.is_active ?? true,
     } : undefined,
     driverName: driver?.full_name || '',
     scheduleId: record.schedule_id,
@@ -82,6 +89,9 @@ const mapDispatchRecord = async (record: FirebaseDispatchRecord): Promise<Dispat
       id: record.route_id || '',
       routeName: route.route_name,
       routeCode: route.route_code,
+      originId: route.origin_id || '',
+      destinationId: route.destination_id || '',
+      isActive: route.is_active ?? true,
     } : undefined,
     routeName: route?.route_name || '',
     entryTime: record.entry_time,
@@ -117,7 +127,7 @@ export const dispatchService = {
   getAll: async (status?: DispatchStatus, vehicleId?: string, driverId?: string, routeId?: string): Promise<DispatchRecord[]> => {
     try {
       const data = await firebaseClient.getAsArray<FirebaseDispatchRecord>('dispatch_records')
-      
+
       let filtered = data
       if (status) {
         filtered = filtered.filter(r => r.current_status === status)
@@ -133,7 +143,7 @@ export const dispatchService = {
       }
 
       // Sort by entry_time descending
-      filtered.sort((a, b) => 
+      filtered.sort((a, b) =>
         new Date(b.entry_time).getTime() - new Date(a.entry_time).getTime()
       )
 
@@ -149,7 +159,7 @@ export const dispatchService = {
     try {
       const data = await firebaseClient.get<FirebaseDispatchRecord>(`dispatch_records/${id}`)
       if (!data) throw new Error('Dispatch record not found')
-      return mapDispatchRecord({ id, ...data })
+      return mapDispatchRecord({ ...data, id })
     } catch (error) {
       console.error('Error fetching dispatch record by id from Firebase:', error)
       throw error
@@ -159,7 +169,7 @@ export const dispatchService = {
   create: async (input: DispatchInput): Promise<DispatchRecord> => {
     const id = firebaseClient.generateId()
     const now = new Date().toISOString()
-    
+
     const data: FirebaseDispatchRecord = {
       id,
       vehicle_id: input.vehicleId,
@@ -174,7 +184,7 @@ export const dispatchService = {
       created_at: now,
       updated_at: now,
     }
-    
+
     await firebaseClient.set(`dispatch_records/${id}`, data)
     return mapDispatchRecord(data)
   },
@@ -187,11 +197,11 @@ export const dispatchService = {
       passenger_drop_by: '',
       updated_at: new Date().toISOString(),
     }
-    
+
     if (routeId) {
       updateData.route_id = routeId
     }
-    
+
     if (passengersArrived > 0) {
       updateData.current_status = 'passengers_dropped'
     }
@@ -224,7 +234,7 @@ export const dispatchService = {
       permit_shift_id: data.permitShiftId,
       updated_at: new Date().toISOString(),
     }
-    
+
     if (data.rejectionReason) {
       updateData.rejection_reason = data.rejectionReason
     }

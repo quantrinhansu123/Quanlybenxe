@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select } from "@/components/ui/select";
 import { serviceService } from "@/services/service.service";
+import { serviceChargeService } from "@/services/service-charge.service";
 import type { Service } from "@/types";
 
 // Utility functions for number formatting

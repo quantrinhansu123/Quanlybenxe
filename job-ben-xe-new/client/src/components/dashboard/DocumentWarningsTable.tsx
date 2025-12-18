@@ -24,11 +24,11 @@ interface DocumentWarningsTableProps {
 
 const ITEMS_PER_PAGE = 10
 
-export function DocumentWarningsTable({ 
-  warnings, 
-  isLoading, 
-  onEditDocument, 
-  onViewHistory 
+export function DocumentWarningsTable({
+  warnings,
+  isLoading,
+  onEditDocument,
+  onViewHistory
 }: DocumentWarningsTableProps) {
   const [currentPage, setCurrentPage] = useState(1)
 
@@ -37,7 +37,7 @@ export function DocumentWarningsTable({
   const endIndex = startIndex + ITEMS_PER_PAGE
   const currentWarnings = warnings.slice(startIndex, endIndex)
 
-  const getDaysRemaining = (expiryDate: Date) => {
+  const getDaysRemaining = (expiryDate: string | Date) => {
     const today = new Date()
     const expiry = new Date(expiryDate)
     return differenceInDays(expiry, today)
@@ -107,7 +107,7 @@ export function DocumentWarningsTable({
                   {currentWarnings.map((warning, index) => {
                     const daysRemaining = getDaysRemaining(warning.expiryDate)
                     return (
-                      <TableRow 
+                      <TableRow
                         key={`${warning.type}-${warning.plateNumber || warning.name}-${index}`}
                         className={`hover:bg-gray-50 ${getRowClassName(daysRemaining)}`}
                       >
@@ -118,8 +118,8 @@ export function DocumentWarningsTable({
                         </TableCell>
                         <TableCell>
                           <div className="font-medium">
-                            {warning.type === "vehicle" 
-                              ? warning.plateNumber 
+                            {warning.type === "vehicle"
+                              ? warning.plateNumber
                               : warning.name}
                           </div>
                         </TableCell>
@@ -182,7 +182,7 @@ export function DocumentWarningsTable({
                     <ChevronLeft className={iconStyles.navigationIcon} />
                     Trước
                   </Button>
-                  
+
                   <div className="flex items-center gap-1">
                     {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => (
                       <Button

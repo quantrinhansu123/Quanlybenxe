@@ -22,7 +22,7 @@ export const scheduleService = {
       const data = await firebaseClient.getAsArray<FirebaseSchedule>('schedules')
       const routes = await firebaseClient.get<Record<string, any>>('routes') || {}
       const operators = await firebaseClient.get<Record<string, any>>('operators') || {}
-      
+
       let filtered = data
       if (routeId) {
         filtered = filtered.filter(s => s.route_id === routeId)
@@ -37,7 +37,7 @@ export const scheduleService = {
       return filtered.map(s => {
         const route = routes[s.route_id]
         const operator = operators[s.operator_id]
-        
+
         return {
           id: s.id,
           scheduleCode: s.schedule_code,
@@ -47,6 +47,8 @@ export const scheduleService = {
             routeCode: route.route_code,
             routeName: route.route_name,
             routeType: route.route_type,
+            originId: route.origin_id || '',
+            destinationId: route.destination_id || '',
             isActive: route.is_active,
           } : undefined,
           operatorId: s.operator_id,
@@ -77,12 +79,12 @@ export const scheduleService = {
     try {
       const data = await firebaseClient.get<FirebaseSchedule>(`schedules/${id}`)
       if (!data) throw new Error('Schedule not found')
-      
+
       const routes = await firebaseClient.get<Record<string, any>>('routes') || {}
       const operators = await firebaseClient.get<Record<string, any>>('operators') || {}
       const route = routes[data.route_id]
       const operator = operators[data.operator_id]
-      
+
       return {
         id,
         scheduleCode: data.schedule_code,
@@ -92,6 +94,8 @@ export const scheduleService = {
           routeCode: route.route_code,
           routeName: route.route_name,
           routeType: route.route_type,
+          originId: route.origin_id || '',
+          destinationId: route.destination_id || '',
           isActive: route.is_active,
         } : undefined,
         operatorId: data.operator_id,
@@ -120,10 +124,10 @@ export const scheduleService = {
   create: async (input: ScheduleInput): Promise<Schedule> => {
     const id = firebaseClient.generateId()
     const now = new Date().toISOString()
-    
+
     // Generate schedule code if not provided
     const scheduleCode = input.scheduleCode || `SCHED-${Date.now()}`
-    
+
     const data: FirebaseSchedule = {
       id,
       schedule_code: scheduleCode,
@@ -138,14 +142,14 @@ export const scheduleService = {
       created_at: now,
       updated_at: now,
     }
-    
+
     await firebaseClient.set(`schedules/${id}`, data)
     return scheduleService.getById(id)
   },
 
   update: async (id: string, input: Partial<ScheduleInput>): Promise<Schedule> => {
     const updateData: any = { updated_at: new Date().toISOString() }
-    
+
     if (input.scheduleCode !== undefined) updateData.schedule_code = input.scheduleCode
     if (input.routeId !== undefined) updateData.route_id = input.routeId
     if (input.operatorId !== undefined) updateData.operator_id = input.operatorId

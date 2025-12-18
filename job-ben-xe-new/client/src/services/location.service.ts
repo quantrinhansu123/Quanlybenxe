@@ -36,7 +36,7 @@ const mapLocation = (l: FirebaseLocation): Location => ({
 export const locationService = {
   getAll: async (isActive?: boolean): Promise<Location[]> => {
     const data = await firebaseClient.getAsArray<FirebaseLocation>('locations')
-    
+
     let filtered = data
     if (isActive !== undefined) {
       filtered = filtered.filter(l => l.is_active === isActive)
@@ -48,13 +48,13 @@ export const locationService = {
   getById: async (id: string): Promise<Location> => {
     const data = await firebaseClient.get<FirebaseLocation>(`locations/${id}`)
     if (!data) throw new Error('Location not found')
-    return mapLocation({ id, ...data })
+    return mapLocation({ ...data, id })
   },
 
   create: async (input: LocationInput): Promise<Location> => {
     const id = firebaseClient.generateId()
     const now = new Date().toISOString()
-    
+
     const data: FirebaseLocation = {
       id,
       name: input.name,
@@ -70,14 +70,14 @@ export const locationService = {
       is_active: input.isActive !== false,
       created_at: now,
     }
-    
+
     await firebaseClient.set(`locations/${id}`, data)
     return mapLocation(data)
   },
 
   update: async (id: string, input: Partial<LocationInput>): Promise<Location> => {
     const updateData: any = {}
-    
+
     if (input.name !== undefined) updateData.name = input.name
     if (input.code !== undefined) updateData.code = input.code
     if (input.stationType !== undefined) updateData.station_type = input.stationType

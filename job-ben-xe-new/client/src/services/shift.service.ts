@@ -50,13 +50,13 @@ export const shiftService = {
       if (defaultShift) return defaultShift
       throw new Error('Shift not found')
     }
-    return mapShift({ id, ...data })
+    return mapShift({ ...data, id })
   },
 
   create: async (input: { name: string; startTime: string; endTime: string }): Promise<Shift> => {
     const id = firebaseClient.generateId()
     const now = new Date().toISOString()
-    
+
     const data: FirebaseShift = {
       id,
       name: input.name,
@@ -66,14 +66,14 @@ export const shiftService = {
       created_at: now,
       updated_at: now,
     }
-    
+
     await firebaseClient.set(`shifts/${id}`, data)
     return mapShift(data)
   },
 
   update: async (id: string, input: Partial<{ name: string; startTime: string; endTime: string; isActive: boolean }>): Promise<Shift> => {
     const updateData: any = { updated_at: new Date().toISOString() }
-    
+
     if (input.name !== undefined) updateData.name = input.name
     if (input.startTime !== undefined) updateData.start_time = input.startTime
     if (input.endTime !== undefined) updateData.end_time = input.endTime
