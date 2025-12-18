@@ -225,14 +225,7 @@ export function VehicleForm({
         province: vehicle.province || "",
         imageUrl: vehicle.imageUrl || "",
       }
-      
-      console.log("Resetting form with vehicle data:", { 
-        vehicle, 
-        formValues,
-        operatorId,
-        operatorsLoaded: operators.length > 0 
-      })
-      
+
       // Reset form values
       reset(formValues)
       setVehicleImage(vehicle.imageUrl || null)
@@ -250,7 +243,6 @@ export function VehicleForm({
   }, [vehicle, reset, setValue, operators.length])
 
   const onSubmit = async (data: VehicleFormData) => {
-    console.log("Form submitted with data:", data)
     try {
       // Clean up data: remove undefined values for optional fields
       const submitData: any = {
@@ -275,15 +267,11 @@ export function VehicleForm({
       if (submitData.gpsUsername === "") delete submitData.gpsUsername
       if (submitData.gpsPassword === "") delete submitData.gpsPassword
       if (submitData.province === "") delete submitData.province
-      
-      console.log("Submitting data:", submitData)
-      
+
       if (mode === "create") {
-        console.log("Creating vehicle...")
         await vehicleService.create(submitData as VehicleInput)
         toast.success("Thêm xe thành công!")
       } else if (vehicle) {
-        console.log("Updating vehicle...")
         await vehicleService.update(vehicle.id, submitData)
         toast.success("Cập nhật xe thành công!")
       }

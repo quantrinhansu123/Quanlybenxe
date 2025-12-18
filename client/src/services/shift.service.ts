@@ -17,12 +17,11 @@ export const shiftService = {
     try {
       const response = await api.get<Shift[]>('/shifts')
       if (!response.data || response.data.length === 0) {
-        console.log('No shifts found, using defaults')
         return DEFAULT_SHIFTS
       }
       return response.data
-    } catch (error) {
-      console.warn('Shifts API not available, using default shifts')
+    } catch {
+      // Shifts API not available, using default shifts
       return DEFAULT_SHIFTS
     }
   },

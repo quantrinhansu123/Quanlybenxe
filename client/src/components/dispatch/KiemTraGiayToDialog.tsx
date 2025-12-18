@@ -101,9 +101,6 @@ export function KiemTraGiayToDialog({
         }
       }
 
-      // Log để debug
-      console.log('Updating documents:', JSON.stringify(documentsToUpdate, null, 2))
-
       await vehicleService.update(vehicle.id, {
         documents: documentsToUpdate
       })

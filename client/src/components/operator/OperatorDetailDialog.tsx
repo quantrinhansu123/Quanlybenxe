@@ -75,14 +75,7 @@ export function OperatorDetailDialog({
               })
           : Promise.resolve([])
       ])
-      
-      console.log("Loaded vehicles:", vehiclesData)
-      console.log("Loaded invoices:", invoicesData)
-      console.log("Loaded paid/dispatched dispatch records:", allDispatchData)
-      console.log("Invoice count:", invoicesData?.length || 0)
-      console.log("Paid invoices:", invoicesData?.filter((inv) => inv.paymentStatus === "paid") || [])
-      console.log("Paid/dispatched dispatch records count:", allDispatchData?.length || 0)
-      
+
       setInvoices(Array.isArray(invoicesData) ? invoicesData : [])
       setPaidDispatchRecords(Array.isArray(allDispatchData) ? allDispatchData : [])
     } catch (error: any) {

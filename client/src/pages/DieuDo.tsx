@@ -16,7 +16,6 @@ import {
   XCircle,
   Banknote,
   ArrowRightLeft,
-  CarFront,
   ArrowRight,
   Users
 } from "lucide-react";
@@ -46,6 +45,7 @@ import type { DispatchRecord, DispatchStatus, Vehicle } from "@/types";
 import { formatVietnamDateTime } from "@/lib/vietnam-time";
 import { useUIStore } from "@/store/ui.store";
 import { iconStyles } from "@/lib/icon-theme";
+import { BusPlusIcon, FileExclamationIcon, BusEnterIcon } from "@/components/dispatch/icons";
 
 // Display status type for UI tabs (different from backend status)
 type DisplayStatus = "in-station" | "permit-issued" | "paid" | "departed";
@@ -898,47 +898,4 @@ export default function DieuDo() {
       </div>
     </div>
   );
-}
-
-function BusPlusIcon({ className = "" }: { className?: string }) {
-  return (
-    <div className={`relative inline-flex h-5 w-5 ${className}`}>
-      <CarFront className="h-5 w-5" />
-      <div className="absolute -bottom-0.5 -right-0.5 bg-white rounded-full p-0.5">
-        <Plus className="h-2.5 w-2.5" strokeWidth={3} />
-      </div>
-    </div>
-  );
-}
-
-function FileExclamationIcon({ className = "" }: { className?: string }) {
-  return (
-    <svg
-      xmlns="http://www.w3.org/2000/svg"
-      width="20"
-      height="20"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      className={className}
-    >
-      <path d="M6 22a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h8a2.4 2.4 0 0 1 1.704.706l3.588 3.588A2.4 2.4 0 0 1 20 8v12a2 2 0 0 1-2 2z" />
-      <path d="M12 9v4" />
-      <path d="M12 17h.01" />
-    </svg>
-  );
-}
-
-function BusEnterIcon({ className = "" }: { className?: string }) {
-  return (
-    <div className={`relative inline-flex h-5 w-5 ${className}`}>
-      <Bus className="h-5 w-5" />
-      <div className="absolute -bottom-0.5 -right-0.5 bg-white rounded-full p-0.5">
-        <ArrowRight className="h-2.5 w-2.5" strokeWidth={2.5} />
-      </div>
-    </div>
-  )
 }

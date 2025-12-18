@@ -373,9 +373,8 @@ export function CapPhepDialog({
       printDisplay: boolean;
     }
   ) => {
-    // Options có thể được sử dụng trong tương lai để xử lý logic bổ sung
-    // Ví dụ: tạo đơn hàng, ký lệnh, in bản thể hiện
-    console.log("Options:", options);
+    // Options can be used for future processing: createOrder, signAndTransmit, printDisplay
+    void options; // Suppress unused variable warning until implemented
     setIsLoading(true);
     try {
       // Danh sách các lý do từ LyDoKhongDuDieuKienDialog

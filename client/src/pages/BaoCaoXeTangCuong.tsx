@@ -135,7 +135,6 @@ export default function BaoCaoXeTangCuong() {
       }));
 
       setData(result);
-      console.log("Loaded reinforcement records:", result.length, "from", filteredRecords.length, "total records");
     } catch (error) {
       console.error("Failed to load reinforcement vehicle data:", error);
       toast.error("Không thể tải dữ liệu báo cáo");

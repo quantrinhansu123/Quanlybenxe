@@ -9,8 +9,11 @@
   },
   "scripts": {
     "dev": "tsx watch src/index.ts",
-    "build": "tsc",
+    "build": "tsc -p tsconfig.build.json",
     "start": "node dist/index.js",
+    "test": "cross-env NODE_OPTIONS=--experimental-vm-modules npx jest",
+    "test:watch": "cross-env NODE_OPTIONS=--experimental-vm-modules npx jest --watch",
+    "test:coverage": "cross-env NODE_OPTIONS=--experimental-vm-modules npx jest --coverage",
     "create-admin": "tsx src/scripts/create-admin.ts",
     "seed": "tsx src/db/seed-firebase-rest.ts",
     "migrate:denormalize": "tsx src/scripts/migrate-denormalize-dispatch.ts",
@@ -46,8 +49,12 @@
     "@types/bcryptjs": "^2.4.6",
     "@types/cors": "^2.8.17",
     "@types/express": "^4.17.21",
+    "@types/jest": "^30.0.0",
     "@types/jsonwebtoken": "^9.0.5",
     "@types/node": "^20.10.5",
+    "cross-env": "^10.1.0",
+    "jest": "^30.2.0",
+    "ts-jest": "^29.4.6",
     "tsx": "^4.7.0",
     "typescript": "^5.3.3"
   }

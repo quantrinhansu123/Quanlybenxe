@@ -28,8 +28,7 @@ export default function LienHe() {
 
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault()
-        // TODO: Implement form submission
-        console.log("Form submitted:", formData)
+        // TODO: Implement actual form submission to backend
         toast.success("Cảm ơn bạn đã liên hệ! Chúng tôi sẽ phản hồi sớm nhất có thể.")
         setFormData({
             name: "",

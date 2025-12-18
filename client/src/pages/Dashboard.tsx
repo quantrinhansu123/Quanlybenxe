@@ -87,10 +87,9 @@ const handleViewHistory = (warning: Warning) => {
 }
 
 
-  const handleSaveDocument = async (data: any) => {
-    // This would make an API call to update the document
-    console.log("Saving document:", data)
-    // Simulate API call
+  const handleSaveDocument = async (_data: unknown) => {
+    // TODO: Implement API call to update the document
+    // Simulate API call for now
     await new Promise(resolve => setTimeout(resolve, 1000))
     // Reload warnings after successful update
     loadDashboardData()

@@ -211,14 +211,6 @@ export function ServiceDialog({
           ? data.priceFormulaExpression 
           : undefined,
       }
-      
-      // Debug log để kiểm tra
-      console.log('Submitting service data:', {
-        quantityFormulaExpression: serviceData.quantityFormulaExpression,
-        priceFormulaExpression: serviceData.priceFormulaExpression,
-        useQuantityFormula: serviceData.useQuantityFormula,
-        usePriceFormula: serviceData.usePriceFormula,
-      })
 
       if (viewMode === "create") {
         await serviceService.create({ ...serviceData, isActive: data.isActive } as any)
