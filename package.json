@@ -1,24 +1,26 @@
 {
-    "name": "job-ben-xe-new",
+    "name": "benxe-management",
     "version": "1.0.0",
     "description": "Bus Station Management System - Full Stack Application",
     "private": true,
     "workspaces": [
-        "job-ben-xe-new/client",
-        "job-ben-xe-new/server"
+        "client",
+        "server"
     ],
     "scripts": {
         "dev": "npm run dev:server & npm run dev:client",
-        "dev:client": "npm run dev --workspace=job-ben-xe-new/client",
-        "dev:server": "npm run dev --workspace=job-ben-xe-new/server",
+        "dev:client": "npm run dev --workspace=client",
+        "dev:server": "npm run dev --workspace=server",
         "build": "npm run build --workspaces",
-        "build:client": "npm run build --workspace=job-ben-xe-new/client",
-        "build:server": "npm run build --workspace=job-ben-xe-new/server",
-        "start": "npm run start --workspace=job-ben-xe-new/server",
+        "build:client": "npm run build --workspace=client",
+        "build:server": "npm run build --workspace=server",
+        "start": "npm run start --workspace=server",
         "install:all": "npm install",
-        "clean": "rimraf node_modules job-ben-xe-new/client/node_modules job-ben-xe-new/server/node_modules",
-        "seed": "npm run seed --workspace=job-ben-xe-new/server",
-        "create-admin": "npm run create-admin --workspace=job-ben-xe-new/server"
+        "clean": "rimraf node_modules client/node_modules server/node_modules",
+        "seed": "npm run seed --workspace=server",
+        "create-admin": "npm run create-admin --workspace=server",
+        "deploy:server": "npm run deploy --workspace=server",
+        "deploy:client": "npm run deploy --workspace=client"
     },
     "keywords": [
         "bus-station",

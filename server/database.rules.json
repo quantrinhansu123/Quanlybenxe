@@ -1,0 +1,48 @@
+{
+  "rules": {
+    ".read": true,
+    ".write": true,
+    "users": {
+      ".indexOn": ["username", "email", "role"]
+    },
+    "operators": {
+      ".indexOn": ["code", "name", "is_active"]
+    },
+    "vehicles": {
+      ".indexOn": ["plate_number", "operator_id", "vehicle_type_id", "is_active"]
+    },
+    "drivers": {
+      ".indexOn": ["operator_id", "full_name", "license_number", "is_active"]
+    },
+    "routes": {
+      ".indexOn": ["route_code", "origin_id", "destination_id", "is_active"]
+    },
+    "locations": {
+      ".indexOn": ["code", "name", "province", "is_active"]
+    },
+    "schedules": {
+      ".indexOn": ["route_id", "operator_id", "schedule_code", "is_active"]
+    },
+    "dispatch_records": {
+      ".indexOn": ["vehicle_id", "driver_id", "route_id", "current_status", "entry_time", "created_at"]
+    },
+    "invoices": {
+      ".indexOn": ["operator_id", "dispatch_record_id", "payment_status", "issue_date"]
+    },
+    "services": {
+      ".indexOn": ["code", "is_active"]
+    },
+    "shifts": {
+      ".indexOn": ["name", "is_active"]
+    },
+    "vehicle_types": {
+      ".indexOn": ["name"]
+    },
+    "violations": {
+      ".indexOn": ["dispatch_record_id", "vehicle_id", "driver_id"]
+    },
+    "service_charges": {
+      ".indexOn": ["dispatch_record_id", "service_id"]
+    }
+  }
+}
