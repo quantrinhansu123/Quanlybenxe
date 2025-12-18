@@ -1,0 +1,36 @@
+{
+    "name": "job-ben-xe-new",
+    "version": "1.0.0",
+    "description": "Bus Station Management System - Full Stack Application",
+    "private": true,
+    "workspaces": [
+        "job-ben-xe-new/client",
+        "job-ben-xe-new/server"
+    ],
+    "scripts": {
+        "dev": "npm run dev:server & npm run dev:client",
+        "dev:client": "npm run dev --workspace=job-ben-xe-new/client",
+        "dev:server": "npm run dev --workspace=job-ben-xe-new/server",
+        "build": "npm run build --workspaces",
+        "build:client": "npm run build --workspace=job-ben-xe-new/client",
+        "build:server": "npm run build --workspace=job-ben-xe-new/server",
+        "start": "npm run start --workspace=job-ben-xe-new/server",
+        "install:all": "npm install",
+        "clean": "rimraf node_modules job-ben-xe-new/client/node_modules job-ben-xe-new/server/node_modules",
+        "seed": "npm run seed --workspace=job-ben-xe-new/server",
+        "create-admin": "npm run create-admin --workspace=job-ben-xe-new/server"
+    },
+    "keywords": [
+        "bus-station",
+        "management",
+        "react",
+        "express",
+        "firebase",
+        "fullstack"
+    ],
+    "author": "",
+    "license": "ISC",
+    "engines": {
+        "node": ">=18.0.0"
+    }
+}
