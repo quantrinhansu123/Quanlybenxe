@@ -46,7 +46,7 @@ export abstract class BaseRepository<TDB, TAPI> {
    * Map database entity to API format
    * Must be implemented by child classes
    */
-  protected abstract mapToAPI(db: TDB, ...args: any[]): TAPI
+  protected abstract mapToAPI(db: TDB, ...args: unknown[]): TAPI
 
   /**
    * Map API entity to database format
@@ -158,7 +158,10 @@ export abstract class BaseRepository<TDB, TAPI> {
    */
   async findByField(field: string, value: string | number | boolean): Promise<TAPI[]> {
     const all = await this.findAll()
-    return all.filter((item) => (item as any)[field] === value)
+    return all.filter((item) => {
+      const record = item as Record<string, unknown>
+      return record[field] === value
+    })
   }
 
   /**

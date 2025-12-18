@@ -8,6 +8,7 @@
 import { Request, Response } from 'express'
 import { AuthRequest } from '../../../middleware/auth.js'
 import { getCurrentVietnamTime, convertVietnamISOToUTCForStorage } from '../../../utils/timezone.js'
+import { getErrorMessage, isValidationError } from '../../../types/common.js'
 import {
   fetchDenormalizedData,
   buildDenormalizedFields,
@@ -97,12 +98,12 @@ export const createDispatchRecord = async (req: AuthRequest, res: Response) => {
 
     const record = await dispatchRepository.create(insertData)
     return res.status(201).json(mapDispatchToAPI(record))
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Error creating dispatch record:', error)
-    if (error.name === 'ZodError') {
-      return res.status(400).json({ error: error.errors[0].message })
+    if (isValidationError(error)) {
+      return res.status(400).json({ error: getErrorMessage(error) })
     }
-    return res.status(500).json({ error: error.message || 'Failed to create dispatch record' })
+    return res.status(500).json({ error: getErrorMessage(error, 'Failed to create dispatch record') })
   }
 }
 
@@ -116,7 +117,7 @@ export const recordPassengerDrop = async (req: AuthRequest, res: Response) => {
     const userId = req.user?.id
     const userName = await fetchUserName(userId)
 
-    const updateData: Record<string, any> = {
+    const updateData: Record<string, unknown> = {
       passenger_drop_time: getCurrentVietnamTime(),
       passengers_arrived: input.passengersArrived ?? null,
       passenger_drop_by: userId || null,
@@ -134,9 +135,9 @@ export const recordPassengerDrop = async (req: AuthRequest, res: Response) => {
     if (!record) return res.status(404).json({ error: 'Dispatch record not found' })
 
     return res.json({ message: 'Passenger drop recorded', dispatch: record })
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Error recording passenger drop:', error)
-    return res.status(500).json({ error: error.message || 'Failed to record passenger drop' })
+    return res.status(500).json({ error: getErrorMessage(error, 'Failed to record passenger drop') })
   }
 }
 
@@ -157,7 +158,7 @@ export const issuePermit = async (req: AuthRequest, res: Response) => {
     if (input.replacementVehicleId) metadata.replacementVehicleId = input.replacementVehicleId
     else if (input.replacementVehicleId === '') delete metadata.replacementVehicleId
 
-    const updateData: Record<string, any> = {
+    const updateData: Record<string, unknown> = {
       boarding_permit_time: getCurrentVietnamTime(),
       boarding_permit_by: userId || null,
       boarding_permit_by_name: userName,
@@ -189,10 +190,10 @@ export const issuePermit = async (req: AuthRequest, res: Response) => {
 
     const record = await dispatchRepository.update(id, updateData)
     return res.json({ message: 'Permit processed', dispatch: record })
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Error issuing permit:', error)
-    if (error.name === 'ZodError') return res.status(400).json({ error: error.errors[0].message })
-    return res.status(500).json({ error: error.message || 'Failed to issue permit' })
+    if (isValidationError(error)) return res.status(400).json({ error: getErrorMessage(error) })
+    return res.status(500).json({ error: getErrorMessage(error, 'Failed to issue permit') })
   }
 }
 
@@ -221,10 +222,10 @@ export const processPayment = async (req: AuthRequest, res: Response) => {
     if (!record) return res.status(404).json({ error: 'Dispatch record not found' })
 
     return res.json({ message: 'Payment processed', dispatch: record })
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Error processing payment:', error)
-    if (error.name === 'ZodError') return res.status(400).json({ error: error.errors[0].message })
-    return res.status(500).json({ error: error.message || 'Failed to process payment' })
+    if (isValidationError(error)) return res.status(400).json({ error: getErrorMessage(error) })
+    return res.status(500).json({ error: getErrorMessage(error, 'Failed to process payment') })
   }
 }
 
@@ -251,9 +252,9 @@ export const issueDepartureOrder = async (req: AuthRequest, res: Response) => {
     if (!record) return res.status(404).json({ error: 'Dispatch record not found' })
 
     return res.json({ message: 'Departure order issued', dispatch: record })
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Error issuing departure order:', error)
-    return res.status(500).json({ error: error.message || 'Failed to issue departure order' })
+    return res.status(500).json({ error: getErrorMessage(error, 'Failed to issue departure order') })
   }
 }
 
@@ -267,7 +268,7 @@ export const recordExit = async (req: AuthRequest, res: Response) => {
     const userId = req.user?.id
     const userName = await fetchUserName(userId)
 
-    const updateData: Record<string, any> = {
+    const updateData: Record<string, unknown> = {
       exit_time: input.exitTime ? convertVietnamISOToUTCForStorage(input.exitTime) : getCurrentVietnamTime(),
       exit_by: userId || null,
       exit_by_name: userName,
@@ -283,9 +284,9 @@ export const recordExit = async (req: AuthRequest, res: Response) => {
     if (!record) return res.status(404).json({ error: 'Dispatch record not found' })
 
     return res.json({ message: 'Exit recorded', dispatch: record })
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Error recording exit:', error)
-    return res.status(500).json({ error: error.message || 'Failed to record exit' })
+    return res.status(500).json({ error: getErrorMessage(error, 'Failed to record exit') })
   }
 }
 
