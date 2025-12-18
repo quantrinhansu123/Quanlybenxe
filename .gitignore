@@ -74,5 +74,5 @@ NUL
 firebase-debug.*.log
 *-debug.log
 
-# Plans reports (agent reports)
-plans/reports/
+# Plans folder (internal planning docs)
+plans/
