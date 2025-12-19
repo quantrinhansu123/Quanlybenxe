@@ -8,6 +8,8 @@ import {
   processPayment,
   issueDepartureOrder,
   recordExit,
+  deleteDispatchRecord,
+  updateDispatchRecord,
 } from '../controllers/dispatch.controller.js'
 import { authenticate } from '../middleware/auth.js'
 
@@ -18,6 +20,8 @@ router.use(authenticate)
 router.get('/', getAllDispatchRecords)
 router.get('/:id', getDispatchRecordById)
 router.post('/', createDispatchRecord)
+router.put('/:id', updateDispatchRecord)
+router.delete('/:id', deleteDispatchRecord)
 router.post('/:id/passenger-drop', recordPassengerDrop)
 router.post('/:id/permit', issuePermit)
 router.post('/:id/payment', processPayment)

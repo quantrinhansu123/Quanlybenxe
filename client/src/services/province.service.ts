@@ -1,98 +1,164 @@
-// Province Service - Using static data to avoid CORS issues
-// Original API: https://provinces.open-api.vn/ (often blocked by CORS)
+// Province Service - Using backend proxy to fetch data from addresskit.cas.so
+// Dữ liệu từ Tổng cục Thống kê, hỗ trợ cả trước và sau sáp nhập 2025
 
-import { PROVINCES, getDistrictsByProvince } from '@/constants/vietnam-locations'
+import api from '@/lib/api'
 
 export interface Province {
-  code: number
+  code: string
   name: string
-  districts?: District[]
 }
 
 export interface District {
-  code: number
+  code: string
   name: string
-  wards?: Ward[]
 }
 
 export interface Ward {
-  code: number
+  code: string
   name: string
 }
 
+// Cache for API responses
+interface CacheEntry<T> {
+  data: T
+  timestamp: number
+}
+
+const CACHE_TTL = 30 * 60 * 1000 // 30 minutes
+let provincesV1Cache: CacheEntry<Province[]> | null = null
+let provincesV2Cache: CacheEntry<Province[]> | null = null
+const districtsCache: Map<string, CacheEntry<District[]>> = new Map()
+const wardsCache: Map<string, CacheEntry<Ward[]>> = new Map()
+
+function isCacheValid<T>(cache: CacheEntry<T> | null | undefined): cache is CacheEntry<T> {
+  if (!cache) return false
+  return Date.now() - cache.timestamp < CACHE_TTL
+}
+
+// ============= PROVINCE SERVICE =============
+
 export const provinceService = {
+  // ============= V1 METHODS (Trước sáp nhập - 63 tỉnh) =============
+
   // Lấy danh sách tỉnh/thành phố
   getProvincesV1: async (): Promise<Province[]> => {
-    return PROVINCES.map((name, index) => ({
-      code: index + 1,
-      name,
-    }))
+    if (isCacheValid(provincesV1Cache)) {
+      return provincesV1Cache.data
+    }
+
+    try {
+      const response = await api.get<Province[]>('/provinces/v1')
+      const provinces = response.data
+      provincesV1Cache = { data: provinces, timestamp: Date.now() }
+      return provinces
+    } catch (error) {
+      console.error('Error fetching provinces V1:', error)
+      return []
+    }
   },
 
-  // Lấy danh sách tỉnh/thành phố (V2 - same as V1 for static data)
+  // Lấy quận/huyện của tỉnh
+  getDistrictsByProvinceV1: async (provinceCode: string): Promise<District[]> => {
+    if (!provinceCode) return []
+
+    const cacheKey = `districts_${provinceCode}`
+    const cached = districtsCache.get(cacheKey)
+    if (isCacheValid(cached)) {
+      return cached.data
+    }
+
+    try {
+      const response = await api.get<District[]>(`/provinces/v1/${provinceCode}/districts`)
+      const districts = response.data
+      districtsCache.set(cacheKey, { data: districts, timestamp: Date.now() })
+      return districts
+    } catch (error) {
+      console.error('Error fetching districts:', error)
+      return []
+    }
+  },
+
+  // Lấy phường/xã của quận/huyện
+  getWardsByDistrictV1: async (provinceCode: string, districtCode: string): Promise<Ward[]> => {
+    if (!provinceCode || !districtCode) return []
+
+    const cacheKey = `wards_${provinceCode}_${districtCode}`
+    const cached = wardsCache.get(cacheKey)
+    if (isCacheValid(cached)) {
+      return cached.data
+    }
+
+    try {
+      const response = await api.get<Ward[]>(`/provinces/v1/${provinceCode}/districts/${districtCode}/wards`)
+      const wards = response.data
+      wardsCache.set(cacheKey, { data: wards, timestamp: Date.now() })
+      return wards
+    } catch (error) {
+      console.error('Error fetching wards:', error)
+      return []
+    }
+  },
+
+  // ============= V2 METHODS (Sau sáp nhập 2025 - 34 tỉnh) =============
+
+  // Lấy danh sách tỉnh/thành phố (sau sáp nhập)
   getProvincesV2: async (): Promise<Province[]> => {
-    return PROVINCES.map((name, index) => ({
-      code: index + 1,
-      name,
-    }))
+    if (isCacheValid(provincesV2Cache)) {
+      return provincesV2Cache.data
+    }
+
+    try {
+      const response = await api.get<Province[]>('/provinces/v2')
+      const provinces = response.data
+      provincesV2Cache = { data: provinces, timestamp: Date.now() }
+      return provinces
+    } catch (error) {
+      console.error('Error fetching provinces V2:', error)
+      return []
+    }
   },
 
-  // Lấy districts của tỉnh
-  getDistrictsByProvinceV1: async (provinceCode: number): Promise<District[]> => {
-    const provinceName = PROVINCES[provinceCode - 1]
-    if (!provinceName) return []
-    
-    const districts = getDistrictsByProvince(provinceName)
-    return districts.map((name, index) => ({
-      code: (provinceCode * 100) + index + 1,
-      name,
-    }))
+  // Lấy phường/xã trực tiếp từ tỉnh (V2 không có cấp quận/huyện)
+  getWardsByProvinceV2: async (provinceCode: string): Promise<Ward[]> => {
+    if (!provinceCode) return []
+
+    const cacheKey = `wards_v2_${provinceCode}`
+    const cached = wardsCache.get(cacheKey)
+    if (isCacheValid(cached)) {
+      return cached.data
+    }
+
+    try {
+      const response = await api.get<Ward[]>(`/provinces/v2/${provinceCode}/wards`)
+      const wards = response.data
+      wardsCache.set(cacheKey, { data: wards, timestamp: Date.now() })
+      return wards
+    } catch (error) {
+      console.error('Error fetching wards V2:', error)
+      return []
+    }
   },
 
-  // Lấy wards của district (returns empty for static data)
-  getWardsByDistrictV1: async (_districtCode: number): Promise<Ward[]> => {
-    // Ward data not available in static constants
-    return []
-  },
+  // ============= SEARCH METHODS =============
 
-  // Lấy wards trực tiếp từ tỉnh (V2)
-  getWardsByProvinceV2: async (provinceCode: number): Promise<Ward[]> => {
-    // For V2, wards are direct children of provinces
-    // Using districts as wards equivalent for static data
-    const provinceName = PROVINCES[provinceCode - 1]
-    if (!provinceName) return []
-    
-    const districts = getDistrictsByProvince(provinceName)
-    return districts.map((name, index) => ({
-      code: (provinceCode * 100) + index + 1,
-      name,
-    }))
-  },
-
-  // Tìm kiếm tỉnh
   searchProvincesV1: async (query: string): Promise<Province[]> => {
+    const provinces = await provinceService.getProvincesV1()
     const normalizedQuery = query.toLowerCase()
-    return PROVINCES
-      .filter(name => name.toLowerCase().includes(normalizedQuery))
-      .map((name) => ({
-        code: PROVINCES.indexOf(name) + 1,
-        name,
-      }))
+    return provinces.filter(p => p.name.toLowerCase().includes(normalizedQuery))
   },
 
-  // Tìm kiếm district
-  searchDistrictsV1: async (query: string, provinceCode: number): Promise<District[]> => {
-    const provinceName = PROVINCES[provinceCode - 1]
-    if (!provinceName) return []
-    
-    const districts = getDistrictsByProvince(provinceName)
+  searchProvincesV2: async (query: string): Promise<Province[]> => {
+    const provinces = await provinceService.getProvincesV2()
     const normalizedQuery = query.toLowerCase()
-    
-    return districts
-      .filter(name => name.toLowerCase().includes(normalizedQuery))
-      .map((name, index) => ({
-        code: (provinceCode * 100) + index + 1,
-        name,
-      }))
+    return provinces.filter(p => p.name.toLowerCase().includes(normalizedQuery))
+  },
+
+  // ============= UTILITY METHODS =============
+
+  clearCache: () => {
+    provincesV1Cache = null
+    provincesV2Cache = null
+    districtsCache.clear()
+    wardsCache.clear()
   },
 }

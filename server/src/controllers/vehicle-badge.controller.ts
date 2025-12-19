@@ -1,8 +1,38 @@
 import { Request, Response } from 'express'
-import { db } from '../config/database.js'
+import { db, firebase } from '../config/database.js'
+
+// Helper function to get active dispatch vehicle plates (vehicles currently in operation)
+const getActiveDispatchPlates = async (): Promise<Set<string>> => {
+  try {
+    // Get all dispatch records that are NOT departed (still in process)
+    const { data: activeRecords } = await firebase
+      .from('dispatch_records')
+      .select('vehicle_plate_number, current_status')
+      .neq('current_status', 'departed')
+
+    const activePlates = new Set<string>()
+    if (activeRecords) {
+      for (const record of activeRecords) {
+        if (record.vehicle_plate_number) {
+          // Normalize plate number for comparison
+          activePlates.add(record.vehicle_plate_number.replace(/[.\-\s]/g, '').toUpperCase())
+        }
+      }
+    }
+    return activePlates
+  } catch (error) {
+    console.error('Error fetching active dispatch plates:', error)
+    return new Set()
+  }
+}
+
+// Helper function to normalize plate number for comparison
+const normalizePlate = (plate: string): string => {
+  return plate.replace(/[.\-\s]/g, '').toUpperCase()
+}
 
 // Helper function to map Firebase data to VehicleBadge format
-const mapFirebaseDataToBadge = (firebaseData: any) => {
+const mapFirebaseDataToBadge = (firebaseData: any, activePlates?: Set<string>) => {
   // Normalize status - map Vietnamese to English
   let status = 'active'
   if (firebaseData.TrangThai) {
@@ -49,15 +79,22 @@ const mapFirebaseDataToBadge = (firebaseData: any) => {
     revocation_decision: '',
     revocation_reason: '',
     warn_duplicate_plate: false,
+    // Compute operational_status based on active dispatch records
+    operational_status: activePlates && firebaseData.BienSoXe
+      ? (activePlates.has(normalizePlate(firebaseData.BienSoXe)) ? 'dang_chay' : 'trong_ben')
+      : 'trong_ben',
   }
 }
 
 export const getAllVehicleBadges = async (req: Request, res: Response): Promise<void> => {
   try {
-    const { status, badgeType, badgeColor, vehicleId, routeId } = req.query
+    const { status, badgeType, badgeColor, vehicleId, routeId, operationalStatus } = req.query
 
-    // Get data from Firebase vehicle_badges path
-    const snapshot = await db!.ref('vehicle_badges').once('value')
+    // Get active dispatch plates to compute operational_status
+    const activePlates = await getActiveDispatchPlates()
+
+    // Get data from Firebase datasheet/PHUHIEUXE path (migrated from old Firebase)
+    const snapshot = await db!.ref('datasheet/PHUHIEUXE').once('value')
     const firebaseData = snapshot.val()
 
     if (!firebaseData) {
@@ -68,7 +105,7 @@ export const getAllVehicleBadges = async (req: Request, res: Response): Promise<
     // Convert Firebase object to array and map to VehicleBadge format
     let badges = Object.keys(firebaseData).map(key => {
       const item = firebaseData[key]
-      return mapFirebaseDataToBadge(item)
+      return mapFirebaseDataToBadge(item, activePlates)
     })
 
     // Apply filters
@@ -86,6 +123,9 @@ export const getAllVehicleBadges = async (req: Request, res: Response): Promise<
     }
     if (routeId) {
       badges = badges.filter(badge => badge.route_id === routeId)
+    }
+    if (operationalStatus) {
+      badges = badges.filter(badge => badge.operational_status === operationalStatus)
     }
 
     // Sort by badge_number descending
@@ -105,8 +145,11 @@ export const getVehicleBadgeById = async (req: Request, res: Response): Promise<
   try {
     const { id } = req.params
 
-    // Get data from Firebase vehicle_badges path
-    const snapshot = await db!.ref('vehicle_badges').once('value')
+    // Get active dispatch plates to compute operational_status
+    const activePlates = await getActiveDispatchPlates()
+
+    // Get data from Firebase datasheet/PHUHIEUXE path (migrated from old Firebase)
+    const snapshot = await db!.ref('datasheet/PHUHIEUXE').once('value')
     const firebaseData = snapshot.val()
 
     if (!firebaseData) {
@@ -125,7 +168,7 @@ export const getVehicleBadgeById = async (req: Request, res: Response): Promise<
       return
     }
 
-    const badge = mapFirebaseDataToBadge(firebaseData[badgeKey])
+    const badge = mapFirebaseDataToBadge(firebaseData[badgeKey], activePlates)
     res.json(badge)
   } catch (error) {
     console.error('Error fetching vehicle badge:', error)
@@ -138,8 +181,8 @@ export const getVehicleBadgeById = async (req: Request, res: Response): Promise<
 
 export const getVehicleBadgeStats = async (_req: Request, res: Response): Promise<void> => {
   try {
-    // Get data from Firebase vehicle_badges path
-    const snapshot = await db!.ref('vehicle_badges').once('value')
+    // Get data from Firebase datasheet/PHUHIEUXE path (migrated from old Firebase)
+    const snapshot = await db!.ref('datasheet/PHUHIEUXE').once('value')
     const firebaseData = snapshot.val()
 
     if (!firebaseData) {

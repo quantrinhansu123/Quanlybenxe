@@ -3,9 +3,10 @@ import dotenv from 'dotenv'
 
 dotenv.config()
 
-const FIREBASE_DATABASE_URL = process.env.FIREBASE_DATABASE_URL || 'https://benxe-management-20251218-default-rtdb.asia-southeast1.firebasedatabase.app/'
+// Use RTDB_URL instead of FIREBASE_DATABASE_URL (reserved prefix in Firebase Functions)
+const RTDB_URL = process.env.RTDB_URL || 'https://benxe-management-20251218-default-rtdb.asia-southeast1.firebasedatabase.app/'
 // Remove trailing slash if present
-const baseUrl = FIREBASE_DATABASE_URL.replace(/\/$/, '')
+const baseUrl = RTDB_URL.replace(/\/$/, '')
 
 // Helper function to generate ID
 function generateId(): string {

@@ -6,7 +6,8 @@ import dotenv from 'dotenv'
 
 dotenv.config()
 
-const firebaseDatabaseURL = process.env.FIREBASE_DATABASE_URL || 'https://benxe-management-20251218-default-rtdb.asia-southeast1.firebasedatabase.app/'
+// Use RTDB_URL instead of FIREBASE_DATABASE_URL (reserved prefix in Firebase Functions)
+const firebaseDatabaseURL = process.env.RTDB_URL || 'https://benxe-management-20251218-default-rtdb.asia-southeast1.firebasedatabase.app/'
 
 let app: App | null = null
 let db: Database | null = null
@@ -19,7 +20,8 @@ function initializeFirebase(): Database {
   }
 
   if (!getApps().length) {
-    const serviceAccountPath = process.env.FIREBASE_SERVICE_ACCOUNT_PATH
+    // Use SERVICE_ACCOUNT_PATH instead of FIREBASE_SERVICE_ACCOUNT_PATH (reserved prefix in Firebase Functions)
+    const serviceAccountPath = process.env.SERVICE_ACCOUNT_PATH
     const googleApplicationCredentials = process.env.GOOGLE_APPLICATION_CREDENTIALS
 
     try {
@@ -39,13 +41,13 @@ function initializeFirebase(): Database {
           databaseURL: firebaseDatabaseURL
         })
         console.warn('Firebase initialized without explicit credentials. Make sure you have:')
-        console.warn('   1. Service account JSON file and set FIREBASE_SERVICE_ACCOUNT_PATH, OR')
+        console.warn('   1. Service account JSON file and set SERVICE_ACCOUNT_PATH, OR')
         console.warn('   2. Set GOOGLE_APPLICATION_CREDENTIALS environment variable, OR')
-        console.warn('   3. Running on GCP with default credentials')
+        console.warn('   3. Running on GCP/Firebase with default credentials')
       }
     } catch (error: any) {
       console.error('Firebase initialization error:', error)
-      throw new Error(`Failed to initialize Firebase: ${error.message}. Please check FIREBASE_DATABASE_URL and authentication setup.`)
+      throw new Error(`Failed to initialize Firebase: ${error.message}. Please check RTDB_URL and authentication setup.`)
     }
   } else {
     app = getApps()[0]
@@ -126,8 +128,12 @@ class FirebaseQuery {
     this.collection = collection
   }
 
-  select(fields: string) {
-    this.selectFields = fields.split(',').map(f => f.trim())
+  select(fields?: string) {
+    if (!fields || fields === '*') {
+      this.selectFields = ['*']
+    } else {
+      this.selectFields = fields.split(',').map(f => f.trim())
+    }
     return this
   }
 

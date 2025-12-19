@@ -17,7 +17,9 @@ import {
   Banknote,
   ArrowRightLeft,
   ArrowRight,
-  Users
+  Users,
+  Pencil,
+  Trash2
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -62,6 +64,7 @@ export default function DieuDo() {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [dialogType, setDialogType] = useState<
     | "entry"
+    | "edit"
     | "return"
     | "permit"
     | "payment"
@@ -99,6 +102,27 @@ export default function DieuDo() {
     } finally {
       setIsLoading(false);
     }
+  };
+
+  const handleDelete = async (record: DispatchRecord) => {
+    if (!window.confirm(`Bạn có chắc chắn muốn xóa xe ${record.vehiclePlateNumber} khỏi danh sách điều độ?`)) {
+      return;
+    }
+    try {
+      await dispatchService.delete(record.id);
+      toast.success("Đã xóa xe khỏi danh sách điều độ");
+      loadRecords();
+    } catch (error: any) {
+      console.error("Failed to delete dispatch record:", error);
+      toast.error(error.response?.data?.error || "Không thể xóa. Vui lòng thử lại sau.");
+    }
+  };
+
+  const handleEdit = (record: DispatchRecord) => {
+    setSelectedRecord(record);
+    setDialogType("edit");
+    setIsReadOnly(false);
+    setDialogOpen(true);
   };
 
   // Helper function to map backend status to frontend display status
@@ -251,6 +275,34 @@ export default function DieuDo() {
           title="Cấp phép"
         >
           <FileCheck className={`h-3.5 w-3.5 lg:h-4 lg:w-4 ${iconStyles.successIcon}`} />
+        </button>
+      );
+      // Edit button
+      buttons.push(
+        <button
+          key="edit"
+          onClick={(e) => {
+            e.stopPropagation();
+            handleEdit(record);
+          }}
+          className="p-1.5 lg:p-2 hover:bg-gray-100 rounded transition-colors"
+          title="Sửa thông tin"
+        >
+          <Pencil className="h-3.5 w-3.5 lg:h-4 lg:w-4 text-blue-500" />
+        </button>
+      );
+      // Delete button
+      buttons.push(
+        <button
+          key="delete"
+          onClick={(e) => {
+            e.stopPropagation();
+            handleDelete(record);
+          }}
+          className="p-1.5 lg:p-2 hover:bg-gray-100 rounded transition-colors"
+          title="Xóa"
+        >
+          <Trash2 className="h-3.5 w-3.5 lg:h-4 lg:w-4 text-red-500" />
         </button>
       );
     } else if (status === "permit-issued") {
@@ -730,8 +782,8 @@ export default function DieuDo() {
           />
         )}
 
-        {/* ChoXeVaoBenDialog - Full Page */}
-        {dialogType === "entry" && (
+        {/* ChoXeVaoBenDialog - Full Page (Entry or Edit mode) */}
+        {(dialogType === "entry" || dialogType === "edit") && (
           <ChoXeVaoBenDialog
             open={dialogOpen}
             vehicleOptions={vehicleOptions}
@@ -739,6 +791,7 @@ export default function DieuDo() {
             onSuccess={() => {
               loadRecords();
             }}
+            editRecord={dialogType === "edit" ? selectedRecord : null}
           />
         )}
         {/* Cho nhiều xe ra bến Dialog */}
@@ -771,7 +824,7 @@ export default function DieuDo() {
 
         {/* Other Dialogs */}
         <Dialog
-          open={dialogOpen && dialogType !== "permit" && dialogType !== "entry" && dialogType !== "depart-multiple"}
+          open={dialogOpen && dialogType !== "permit" && dialogType !== "entry" && dialogType !== "edit" && dialogType !== "depart-multiple"}
           onOpenChange={setDialogOpen}
         >
           <DialogContent

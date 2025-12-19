@@ -41,7 +41,7 @@ export function OperatorForm({ operator, mode, onClose }: OperatorFormProps) {
   const [districts, setDistricts] = useState<District[]>([])
   const [isLoadingProvinces, setIsLoadingProvinces] = useState(false)
   const [isLoadingDistricts, setIsLoadingDistricts] = useState(false)
-  const [selectedProvinceCode, setSelectedProvinceCode] = useState<number | null>(null)
+  const [selectedProvinceCode, setSelectedProvinceCode] = useState<string | null>(null)
   const isInitialMount = useRef(true)
   const isLoadingDistrictsRef = useRef(false)
 
@@ -127,7 +127,7 @@ export function OperatorForm({ operator, mode, onClose }: OperatorFormProps) {
   }
 
   // Load districts khi chọn province
-  const loadDistricts = async (provinceCode: number, apiVersion: boolean): Promise<District[]> => {
+  const loadDistricts = async (provinceCode: string, apiVersion: boolean): Promise<District[]> => {
     if (!provinceCode) {
       setDistricts([])
       return []
@@ -143,13 +143,13 @@ export function OperatorForm({ operator, mode, onClose }: OperatorFormProps) {
     try {
       let result: District[] = []
       if (apiVersion) {
-        // V2: depth=2 trả về wards (phường/xã) trực tiếp từ province
+        // V2: Lấy phường/xã trực tiếp từ province (không có cấp quận/huyện)
         const wards = await provinceService.getWardsByProvinceV2(provinceCode)
         // Convert wards to districts format for display
         result = wards.map(w => ({ code: w.code, name: w.name }))
         setDistricts(result)
       } else {
-        // V1: depth=2 trả về districts (quận/huyện)
+        // V1: Lấy quận/huyện từ province
         result = await provinceService.getDistrictsByProvinceV1(provinceCode)
         setDistricts(result)
       }

@@ -2,8 +2,9 @@ import dotenv from 'dotenv'
 
 dotenv.config()
 
-const FIREBASE_DATABASE_URL = process.env.FIREBASE_DATABASE_URL || 'https://benxe-management-20251218-default-rtdb.asia-southeast1.firebasedatabase.app/'
-const baseUrl = FIREBASE_DATABASE_URL.replace(/\/$/, '')
+// Use RTDB_URL instead of FIREBASE_DATABASE_URL (reserved prefix in Firebase Functions)
+const RTDB_URL = process.env.RTDB_URL || 'https://benxe-management-20251218-default-rtdb.asia-southeast1.firebasedatabase.app/'
+const baseUrl = RTDB_URL.replace(/\/$/, '')
 
 export class FirebaseREST {
   async get(path: string): Promise<any> {

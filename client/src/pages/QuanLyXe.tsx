@@ -22,11 +22,9 @@ import {
 } from "@/components/ui/dialog"
 import { Label } from "@/components/ui/label"
 import { Select } from "@/components/ui/select"
-import { vehicleService } from "@/services/vehicle.service"
+import { vehicleService, VehicleForm, VehicleView } from "@/features/fleet/vehicles"
 import type { Vehicle } from "@/types"
 import { useUIStore } from "@/store/ui.store"
-import { VehicleView } from "@/components/vehicle/VehicleView"
-import { VehicleForm } from "@/components/vehicle/VehicleForm"
 import { provinceService, type Province } from "@/services/province.service"
 import { format, isValid, parseISO } from "date-fns"
 

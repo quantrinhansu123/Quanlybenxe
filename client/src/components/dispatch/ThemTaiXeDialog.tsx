@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { createPortal } from "react-dom";
 import { toast } from "react-toastify";
-import { X, Search } from "lucide-react";
+import { X, Search, User } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { driverService } from "@/services/driver.service";
@@ -83,6 +83,7 @@ export function ThemTaiXeDialog({
           <table className="w-full text-sm text-left">
             <thead className="bg-gray-50 text-gray-700 font-medium sticky top-0">
               <tr>
+                <th className="px-4 py-3 w-16">Ảnh</th>
                 <th className="px-4 py-3">Họ và tên</th>
                 <th className="px-4 py-3">Số GPLX</th>
                 <th className="px-4 py-3">Hạng</th>
@@ -94,7 +95,7 @@ export function ThemTaiXeDialog({
               {isLoading ? (
                 <tr>
                   <td
-                    colSpan={5}
+                    colSpan={6}
                     className="px-4 py-8 text-center text-gray-500"
                   >
                     Đang tải...
@@ -103,7 +104,7 @@ export function ThemTaiXeDialog({
               ) : filteredDrivers.length === 0 ? (
                 <tr>
                   <td
-                    colSpan={5}
+                    colSpan={6}
                     className="px-4 py-8 text-center text-gray-500"
                   >
                     Không tìm thấy tài xế nào
@@ -112,6 +113,19 @@ export function ThemTaiXeDialog({
               ) : (
                 filteredDrivers.map((driver) => (
                   <tr key={driver.id} className="hover:bg-gray-50">
+                    <td className="px-4 py-3">
+                      {driver.imageUrl ? (
+                        <img
+                          src={driver.imageUrl}
+                          alt={driver.fullName}
+                          className="w-10 h-10 rounded-full object-cover border"
+                        />
+                      ) : (
+                        <div className="w-10 h-10 rounded-full bg-gray-100 flex items-center justify-center">
+                          <User className="h-5 w-5 text-gray-400" />
+                        </div>
+                      )}
+                    </td>
                     <td className="px-4 py-3 font-medium">{driver.fullName}</td>
                     <td className="px-4 py-3">{driver.licenseNumber}</td>
                     <td className="px-4 py-3">{driver.licenseClass}</td>

@@ -28,7 +28,8 @@ import provinceRoutes from './routes/province.routes.js'
 dotenv.config()
 
 const app = express()
-const PORT = Number(process.env.PORT) || 3000
+// Use APP_PORT instead of PORT (reserved in Firebase Functions)
+const PORT = Number(process.env.APP_PORT) || 3000
 
 // CORS Configuration - Allow Firebase Hosting and common domains
 const ALLOWED_ORIGINS = [

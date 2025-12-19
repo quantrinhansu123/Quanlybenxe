@@ -570,15 +570,137 @@ export const recordExit = async (req: AuthRequest, res: Response) => {
   }
 }
 
+// Delete dispatch record
+export const deleteDispatchRecord = async (req: AuthRequest, res: Response) => {
+  try {
+    const { id } = req.params
+
+    // Check if record exists
+    const { data: existingRecord, error: fetchError } = await firebase
+      .from('dispatch_records')
+      .select('*')
+      .eq('id', id)
+      .single()
+
+    if (fetchError || !existingRecord) {
+      return res.status(404).json({ error: 'Dispatch record not found' })
+    }
+
+    // Only allow deletion of records that haven't departed yet
+    if (existingRecord.current_status === 'departed') {
+      return res.status(400).json({ error: 'Cannot delete a record that has already departed' })
+    }
+
+    // Delete the record
+    const { error: deleteError } = await firebase
+      .from('dispatch_records')
+      .delete()
+      .eq('id', id)
+
+    if (deleteError) throw deleteError
+
+    return res.json({ message: 'Dispatch record deleted successfully' })
+  } catch (error: any) {
+    console.error('Error deleting dispatch record:', error)
+    return res.status(500).json({ error: error.message || 'Failed to delete dispatch record' })
+  }
+}
+
+// Update dispatch record (for editing basic info)
+export const updateDispatchRecord = async (req: AuthRequest, res: Response) => {
+  try {
+    const { id } = req.params
+    const { vehicleId, driverId, routeId, entryTime, notes } = req.body
+
+    // Check if record exists
+    const { data: existingRecord, error: fetchError } = await firebase
+      .from('dispatch_records')
+      .select('*')
+      .eq('id', id)
+      .single()
+
+    if (fetchError || !existingRecord) {
+      return res.status(404).json({ error: 'Dispatch record not found' })
+    }
+
+    // Only allow editing of records in early stages
+    const editableStatuses = ['entered', 'passengers_dropped']
+    if (!editableStatuses.includes(existingRecord.current_status)) {
+      return res.status(400).json({
+        error: 'Cannot edit a record that has already been permitted or paid'
+      })
+    }
+
+    // Build update data
+    const updateData: Record<string, any> = {
+      updated_at: new Date().toISOString(),
+    }
+
+    // Update vehicle if changed
+    if (vehicleId && vehicleId !== existingRecord.vehicle_id) {
+      const denormalized = await fetchDenormalizedData(vehicleId)
+      updateData.vehicle_id = vehicleId
+      Object.assign(updateData, buildDenormalizedFields(denormalized))
+    }
+
+    // Update driver if changed
+    if (driverId && driverId !== existingRecord.driver_id) {
+      const driverName = await fetchUserName(driverId)
+      updateData.driver_id = driverId
+      updateData.driver_full_name = driverName
+    }
+
+    // Update route if changed
+    if (routeId !== undefined) {
+      if (routeId && routeId !== existingRecord.route_id) {
+        const routeData = await fetchRouteData(routeId)
+        updateData.route_id = routeId
+        Object.assign(updateData, buildRouteDenormalizedFields(routeData))
+      } else if (!routeId) {
+        updateData.route_id = null
+        updateData.route_name = null
+        updateData.route_type = null
+        updateData.route_destination_id = null
+        updateData.route_destination_name = null
+        updateData.route_destination_code = null
+      }
+    }
+
+    // Update entry time if changed
+    if (entryTime) {
+      updateData.entry_time = convertVietnamISOToUTCForStorage(entryTime)
+    }
+
+    // Update notes if provided
+    if (notes !== undefined) {
+      updateData.notes = notes
+    }
+
+    // Perform update
+    const { data, error } = await firebase
+      .from('dispatch_records')
+      .update(updateData)
+      .eq('id', id)
+      .single()
+
+    if (error) throw error
+
+    return res.json({ message: 'Dispatch record updated successfully', dispatch: data })
+  } catch (error: any) {
+    console.error('Error updating dispatch record:', error)
+    return res.status(500).json({ error: error.message || 'Failed to update dispatch record' })
+  }
+}
+
 // Legacy endpoints for backward compatibility
 export const updateDispatchStatus = async (_req: Request, res: Response) => {
-  return res.status(400).json({ 
-    error: 'This endpoint is deprecated. Use specific workflow endpoints instead.' 
+  return res.status(400).json({
+    error: 'This endpoint is deprecated. Use specific workflow endpoints instead.'
   })
 }
 
 export const depart = async (_req: Request, res: Response) => {
-  return res.status(400).json({ 
-    error: 'This endpoint is deprecated. Use /depart endpoint instead.' 
+  return res.status(400).json({
+    error: 'This endpoint is deprecated. Use /depart endpoint instead.'
   })
 }

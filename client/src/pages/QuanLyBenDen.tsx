@@ -61,8 +61,8 @@ export default function QuanLyBenDen() {
   const [isLoadingProvinces, setIsLoadingProvinces] = useState(false)
   const [isLoadingDistricts, setIsLoadingDistricts] = useState(false)
   const [isLoadingWards, setIsLoadingWards] = useState(false)
-  const [selectedProvinceCode, setSelectedProvinceCode] = useState<number | null>(null)
-  const [selectedDistrictCode, setSelectedDistrictCode] = useState<number | null>(null)
+  const [selectedProvinceCode, setSelectedProvinceCode] = useState<string | null>(null)
+  const [selectedDistrictCode, setSelectedDistrictCode] = useState<string | null>(null)
 
   const {
     register,
@@ -98,7 +98,7 @@ export default function QuanLyBenDen() {
   }
 
   // Load districts khi chọn province
-  const loadDistricts = async (provinceCode: number, apiVersion: boolean): Promise<District[]> => {
+  const loadDistricts = async (provinceCode: string, apiVersion: boolean): Promise<District[]> => {
     if (!provinceCode) {
       setDistricts([])
       return []
@@ -108,13 +108,13 @@ export default function QuanLyBenDen() {
     try {
       let result: District[] = []
       if (apiVersion) {
-        // V2: depth=2 trả về wards (phường/xã) trực tiếp từ province
+        // V2: Lấy phường/xã trực tiếp từ province (không có cấp quận/huyện)
         const wards = await provinceService.getWardsByProvinceV2(provinceCode)
         // Convert wards to districts format for display
         result = wards.map(w => ({ code: w.code, name: w.name }))
         setDistricts(result)
       } else {
-        // V1: depth=2 trả về districts (quận/huyện)
+        // V1: Lấy quận/huyện từ province
         result = await provinceService.getDistrictsByProvinceV1(provinceCode)
         setDistricts(result)
       }
@@ -130,15 +130,16 @@ export default function QuanLyBenDen() {
   }
 
   // Load wards khi chọn district (chỉ cho v1)
-  const loadWards = async (districtCode: number) => {
-    if (!districtCode) {
+  // Sử dụng API từ addresskit.cas.so để lấy dữ liệu chính xác từ Cục Thống Kê
+  const loadWards = async (provinceCode: string, districtCode: string) => {
+    if (!provinceCode || !districtCode) {
       setWards([])
       return
     }
 
     setIsLoadingWards(true)
     try {
-      const data = await provinceService.getWardsByDistrictV1(districtCode)
+      const data = await provinceService.getWardsByDistrictV1(provinceCode, districtCode)
       setWards(data)
     } catch (error) {
       console.error("Failed to load wards:", error)
@@ -231,7 +232,7 @@ export default function QuanLyBenDen() {
             const district = loadedDistricts.find(d => d.name === districtName)
             if (district) {
               setSelectedDistrictCode(district.code)
-              loadWards(district.code).then(() => {
+              loadWards(province.code, district.code).then(() => {
                 reset({
                   code: selectedLocation.code,
                   stationType: selectedLocation.stationType || "",
@@ -320,11 +321,11 @@ export default function QuanLyBenDen() {
 
   // Khi chọn district từ dropdown (chỉ cho v1)
   useEffect(() => {
-    if (!useApiV2 && watchDistrict) {
+    if (!useApiV2 && watchDistrict && selectedProvinceCode) {
       const district = districts.find(d => d.name === watchDistrict)
       if (district && district.code !== selectedDistrictCode) {
         setSelectedDistrictCode(district.code)
-        loadWards(district.code)
+        loadWards(selectedProvinceCode, district.code)
         // Reset ward when district changes
         if (viewMode === "create") {
           setValue("ward", "")
@@ -334,7 +335,7 @@ export default function QuanLyBenDen() {
       setWards([])
       setSelectedDistrictCode(null)
     }
-  }, [watchDistrict, districts, selectedDistrictCode, useApiV2, viewMode, selectedLocation, setValue])
+  }, [watchDistrict, selectedProvinceCode, districts, selectedDistrictCode, useApiV2, viewMode, selectedLocation, setValue])
 
   const loadLocations = async () => {
     setIsLoading(true)

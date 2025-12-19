@@ -23,7 +23,7 @@ import {
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { DocumentHistoryDialog } from "@/components/dispatch/DocumentHistoryDialog"
-import type { Vehicle, DocumentInfo } from "@/types"
+import type { Vehicle, DocumentInfo } from "../types"
 
 // Helper functions
 const getVehicleTypeName = (vehicle: Vehicle): string => {

@@ -4,9 +4,8 @@
 export { vehicleApi, vehicleService } from './api'
 export { vehicleTypeApi, vehicleTypeService } from './api'
 
-// Components (re-exported from original location)
-export { VehicleForm } from '@/components/vehicle/VehicleForm'
-export { VehicleView } from '@/components/vehicle/VehicleView'
+// Components
+export { VehicleForm, VehicleView } from './components'
 
 // Types
 export type {

@@ -137,4 +137,22 @@ export const dispatchService = {
     await dispatchService.issueDepartureOrder(id, passengerCount)
     return dispatchService.recordExit(id)
   },
+
+  update: async (
+    id: string,
+    data: {
+      vehicleId?: string
+      driverId?: string
+      routeId?: string
+      entryTime?: string
+      notes?: string
+    }
+  ): Promise<DispatchRecord> => {
+    const response = await api.put<DispatchRecord>(`/dispatch/${id}`, data)
+    return response.data
+  },
+
+  delete: async (id: string): Promise<void> => {
+    await api.delete(`/dispatch/${id}`)
+  },
 }

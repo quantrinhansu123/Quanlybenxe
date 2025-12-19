@@ -6,12 +6,14 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select } from "@/components/ui/select"
-import { vehicleService } from "@/services/vehicle.service"
-import { operatorService } from "@/services/operator.service"
+import { Autocomplete } from "@/components/ui/autocomplete"
+import { vehicleService } from "../api"
+import { operatorService } from "@/features/fleet/operators/api"
 import { provinceService, type Province } from "@/services/province.service"
-import type { Vehicle, VehicleInput, Operator } from "@/types"
+import type { Vehicle, VehicleInput } from "../types"
+import type { Operator } from "@/features/fleet/operators/types"
 import { Eye, EyeOff, Upload } from "lucide-react"
-import { useState, useEffect } from "react"
+import { useState, useEffect, useMemo } from "react"
 import api from "@/lib/api"
 
 const vehicleSchema = z.object({
@@ -108,6 +110,14 @@ export function VehicleForm({
     }
   }
 
+  // Convert operators to autocomplete options
+  const operatorOptions = useMemo(() => {
+    return operators.map(op => ({
+      value: op.id,
+      label: op.name
+    }))
+  }, [operators])
+
   // Helper function to format date for input type="date"
   const formatDateForInput = (dateString: string | undefined | null): string => {
     if (!dateString) return ""
@@ -144,13 +154,13 @@ export function VehicleForm({
           // Upload to Cloudinary via backend
           const formData = new FormData()
           formData.append('image', file) // Changed from 'file' to 'image'
-          
+
           const response = await api.post<{ url: string }>('/upload', formData, {
             headers: {
               'Content-Type': 'multipart/form-data',
             },
           })
-          
+
           setVehicleImage(response.data.url)
           setValue("imageUrl", response.data.url)
           toast.success('Upload ảnh thành công')
@@ -205,7 +215,7 @@ export function VehicleForm({
     if (vehicle) {
       const operatorId = vehicle.operatorId ? String(vehicle.operatorId) : ""
       const vehicleTypeId = vehicle.vehicleTypeId ? String(vehicle.vehicleTypeId) : ""
-      
+
       const formValues = {
         plateNumber: vehicle.plateNumber || "",
         operatorId: operatorId,
@@ -229,7 +239,7 @@ export function VehicleForm({
       // Reset form values
       reset(formValues)
       setVehicleImage(vehicle.imageUrl || null)
-      
+
     } else {
       // Reset to default for create mode
       reset({
@@ -249,15 +259,15 @@ export function VehicleForm({
         ...data,
         imageUrl: vehicleImage || "",
       }
-      
+
       // Remove undefined cargo dimensions
       if (submitData.cargoLength === undefined) delete submitData.cargoLength
       if (submitData.cargoWidth === undefined) delete submitData.cargoWidth
       if (submitData.cargoHeight === undefined) delete submitData.cargoHeight
-      
+
       // Note: operatorId và vehicleTypeId cần được gửi đi kể cả khi rỗng để backend có thể cập nhật/xóa
       // Không xóa các field này như các optional fields khác
-      
+
       // Remove empty strings for optional fields
       if (submitData.chassisNumber === "") delete submitData.chassisNumber
       if (submitData.engineNumber === "") delete submitData.engineNumber
@@ -315,19 +325,14 @@ export function VehicleForm({
                     name="operatorId"
                     control={control}
                     render={({ field }) => (
-                      <Select
+                      <Autocomplete
                         id="operatorId"
-                        className="h-11"
-                        {...field}
+                        options={operatorOptions}
                         value={field.value || ""}
-                      >
-                        <option value="">Chọn nhà xe</option>
-                        {operators.map((op) => (
-                          <option key={op.id} value={op.id}>
-                            {op.name}
-                          </option>
-                        ))}
-                      </Select>
+                        onChange={field.onChange}
+                        placeholder="Chọn hoặc nhập tên nhà xe..."
+                        className="h-11"
+                      />
                     )}
                   />
                   {errors.operatorId && (
@@ -599,7 +604,7 @@ export function VehicleForm({
         <div className="col-span-4">
           <div>
             <h3 className="text-base font-semibold mb-4">Ảnh chụp của xe</h3>
-            <div 
+            <div
               className="w-full h-[300px] bg-gray-100 rounded-lg flex flex-col items-center justify-center text-gray-400 relative overflow-hidden cursor-pointer hover:bg-gray-200 transition-colors"
               onClick={handleImageClick}
             >

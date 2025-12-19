@@ -42,23 +42,20 @@ const formatDate = (dateString: string | undefined | null): string => {
   }
 }
 
-// Helper function to get status badge variant
-const getStatusVariant = (status: string): "active" | "inactive" | "maintenance" => {
-  if (status === "active") return "active"
-  if (status === "expired" || status === "revoked") return "inactive"
-  return "maintenance" // For pending, replaced, or unknown statuses
-}
-
 // Helper function to translate status to Vietnamese
 const translateStatus = (status: string): string => {
   const statusMap: Record<string, string> = {
-    active: "Hiệu lực",
-    expired: "Hết hiệu lực",
-    revoked: "Thu hồi",
-    replaced: "Đã thay thế",
-    pending: "Chờ xử lý"
+    trong_ben: "Trong bến",
+    dang_chay: "Đang chạy"
   }
   return statusMap[status] || status
+}
+
+// Helper function to get status badge variant
+const getStatusVariant = (status: string): "active" | "inactive" | "maintenance" => {
+  if (status === "trong_ben") return "active"  // Green for in station
+  if (status === "dang_chay") return "maintenance"  // Orange for running
+  return "inactive"
 }
 
 export default function QuanLyPhuHieuXe() {
@@ -93,7 +90,6 @@ export default function QuanLyPhuHieuXe() {
   }
 
   // Get unique values for filters
-  const statuses = Array.from(new Set(badges.map((b) => b.status).filter(Boolean))).sort()
   const badgeTypes = Array.from(new Set(badges.map((b) => b.badge_type).filter(Boolean))).sort()
   const badgeColors = Array.from(new Set(badges.map((b) => b.badge_color).filter(Boolean))).sort()
 
@@ -109,8 +105,8 @@ export default function QuanLyPhuHieuXe() {
       if (!matchesSearch) return false
     }
 
-    // Status filter
-    if (filterStatus && badge.status !== filterStatus) {
+    // Status filter (based on operational_status: trong_ben/dang_chay)
+    if (filterStatus && badge.operational_status !== filterStatus) {
       return false
     }
 
@@ -165,7 +161,7 @@ export default function QuanLyPhuHieuXe() {
       badge.badge_color,
       badge.issue_date,
       badge.expiry_date,
-      badge.status,
+      translateStatus(badge.operational_status),
       badge.file_code,
       badge.issue_type,
       badge.notes || "",
@@ -224,11 +220,8 @@ export default function QuanLyPhuHieuXe() {
                   onChange={(e) => setFilterStatus(e.target.value)}
                 >
                   <option value="">Tất cả trạng thái</option>
-                  {statuses.map((status) => (
-                    <option key={status} value={status}>
-                      {status}
-                    </option>
-                  ))}
+                  <option value="trong_ben">Trong bến</option>
+                  <option value="dang_chay">Đang chạy</option>
                 </Select>
               </div>
               <div className="space-y-2">
@@ -321,9 +314,9 @@ export default function QuanLyPhuHieuXe() {
                     {formatDate(badge.expiry_date)}
                   </TableCell>
                   <TableCell className="text-center">
-                    <StatusBadge 
-                      status={getStatusVariant(badge.status)}
-                      label={translateStatus(badge.status)}
+                    <StatusBadge
+                      status={getStatusVariant(badge.operational_status)}
+                      label={translateStatus(badge.operational_status)}
                     />
                   </TableCell>
                   <TableCell className="text-center">
@@ -439,9 +432,9 @@ export default function QuanLyPhuHieuXe() {
                 </div>
                 <div className="space-y-2">
                   <Label className="text-sm font-semibold">Trạng thái</Label>
-                  <StatusBadge 
-                    status={getStatusVariant(selectedBadge.status)}
-                    label={translateStatus(selectedBadge.status)}
+                  <StatusBadge
+                    status={getStatusVariant(selectedBadge.operational_status)}
+                    label={translateStatus(selectedBadge.operational_status)}
                   />
                 </div>
                 <div className="space-y-2">

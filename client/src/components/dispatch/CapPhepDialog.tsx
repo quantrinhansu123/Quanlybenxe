@@ -11,6 +11,9 @@ import {
   ChevronRight,
   CheckCircle,
   X as XIcon,
+  AlertCircle,
+  Clock,
+  FileX,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -21,6 +24,7 @@ import { routeService } from "@/services/route.service";
 import { scheduleService } from "@/services/schedule.service";
 import { dispatchService } from "@/services/dispatch.service";
 import { vehicleService } from "@/services/vehicle.service";
+import { vehicleBadgeService, type VehicleBadge } from "@/services/vehicle-badge.service";
 import { serviceChargeService } from "@/services/service-charge.service";
 import { KiemTraGiayToDialog } from "./KiemTraGiayToDialog";
 import { LyDoKhongDuDieuKienDialog } from "./LyDoKhongDuDieuKienDialog";
@@ -83,7 +87,7 @@ export function CapPhepDialog({
 
   const [routes, setRoutes] = useState<Route[]>([]);
   const [schedules, setSchedules] = useState<Schedule[]>([]);
-  const [vehicles, setVehicles] = useState<Vehicle[]>([]);
+  const [vehicleBadges, setVehicleBadges] = useState<VehicleBadge[]>([]);
   const [drivers, setDrivers] = useState<Driver[]>([]);
   const [serviceCharges, setServiceCharges] = useState<ServiceCharge[]>([]);
   const [selectedVehicle, setSelectedVehicle] = useState<Vehicle | null>(null);
@@ -156,12 +160,12 @@ export function CapPhepDialog({
 
   const loadInitialData = async () => {
     try {
-      const [routesData, vehiclesData] = await Promise.all([
+      const [routesData, badgesData] = await Promise.all([
         routeService.getAll(undefined, undefined, true),
-        vehicleService.getAll(undefined, true),
+        vehicleBadgeService.getAll(),
       ]);
       setRoutes(routesData);
-      setVehicles(vehiclesData);
+      setVehicleBadges(badgesData);
 
       if (record.vehicleId) {
         const vehicle = await vehicleService.getById(record.vehicleId);
@@ -436,29 +440,66 @@ export function CapPhepDialog({
     }
   };
 
-  const checkAllDocumentsValid = (): boolean => {
-    if (!selectedVehicle?.documents) return false;
+  // Document status types for better UX
+  type DocumentStatus = 'valid' | 'expired' | 'expiring_soon' | 'missing';
 
-    const docs = selectedVehicle.documents;
+  interface DocumentCheckResult {
+    name: string;
+    status: DocumentStatus;
+    expiryDate?: string;
+    daysRemaining?: number;
+  }
+
+  const getDocumentStatus = (expiryDate?: string): { status: DocumentStatus; daysRemaining?: number } => {
+    if (!expiryDate) return { status: 'missing' };
+
     const today = new Date();
     today.setHours(0, 0, 0, 0);
+    const expiry = new Date(expiryDate);
+    expiry.setHours(0, 0, 0, 0);
 
-    const registrationValid = docs.registration?.expiryDate
-      ? new Date(docs.registration.expiryDate) >= today
-      : false;
-    const permitValid = docs.operation_permit?.expiryDate
-      ? new Date(docs.operation_permit.expiryDate) >= today
-      : false;
-    const inspectionValid = docs.inspection?.expiryDate
-      ? new Date(docs.inspection.expiryDate) >= today
-      : false;
-    const insuranceValid = docs.insurance?.expiryDate
-      ? new Date(docs.insurance.expiryDate) >= today
-      : false;
+    const diffTime = expiry.getTime() - today.getTime();
+    const daysRemaining = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
 
-    return (
-      registrationValid && permitValid && inspectionValid && insuranceValid
-    );
+    if (daysRemaining < 0) return { status: 'expired', daysRemaining };
+    if (daysRemaining <= 30) return { status: 'expiring_soon', daysRemaining };
+    return { status: 'valid', daysRemaining };
+  };
+
+  const getDocumentsCheckResults = (): DocumentCheckResult[] => {
+    const docs = selectedVehicle?.documents;
+
+    const documentTypes = [
+      { key: 'registration', name: 'Đăng ký xe', data: docs?.registration },
+      { key: 'operation_permit', name: 'Giấy phép KD vận tải', data: docs?.operation_permit },
+      { key: 'inspection', name: 'Đăng kiểm xe', data: docs?.inspection },
+      { key: 'insurance', name: 'Bảo hiểm xe', data: docs?.insurance },
+    ];
+
+    return documentTypes.map(({ name, data }) => {
+      const { status, daysRemaining } = getDocumentStatus(data?.expiryDate);
+      return {
+        name,
+        status,
+        expiryDate: data?.expiryDate,
+        daysRemaining,
+      };
+    });
+  };
+
+  const checkAllDocumentsValid = (): boolean => {
+    const results = getDocumentsCheckResults();
+    return results.every(r => r.status === 'valid' || r.status === 'expiring_soon');
+  };
+
+  const getOverallStatus = (): { isValid: boolean; validCount: number; totalCount: number } => {
+    const results = getDocumentsCheckResults();
+    const validCount = results.filter(r => r.status === 'valid' || r.status === 'expiring_soon').length;
+    return {
+      isValid: validCount === results.length,
+      validCount,
+      totalCount: results.length,
+    };
   };
 
   const handleDocumentDialogSuccess = () => {
@@ -587,12 +628,39 @@ export function CapPhepDialog({
                     disabled={readOnly}
                   >
                     <option value="">--</option>
-                    {vehicles.map((v) => (
-                      <option key={v.id} value={v.id}>
-                        {v.plateNumber}
-                      </option>
-                    ))}
+                    {vehicleBadges
+                      .filter(badge => badge.license_plate_sheet && badge.status === 'active')
+                      .map((badge) => (
+                        <option
+                          key={badge.id}
+                          value={badge.id}
+                          className={badge.operational_status === 'dang_chay' ? 'text-orange-600' : 'text-green-600'}
+                        >
+                          {badge.license_plate_sheet} {badge.operational_status === 'dang_chay' ? '(Đang chạy)' : '(Sẵn sàng)'}
+                        </option>
+                      ))}
                   </Select>
+                  {/* Warning indicator for selected vehicle */}
+                  {replacementVehicleId && (() => {
+                    const selectedBadge = vehicleBadges.find(b => b.id === replacementVehicleId);
+                    if (selectedBadge?.operational_status === 'dang_chay') {
+                      return (
+                        <div className="flex items-center gap-1.5 mt-1.5 text-orange-600 text-xs">
+                          <AlertTriangle className="h-3.5 w-3.5" />
+                          <span>Xe đang chạy - Không sẵn sàng để đi thay</span>
+                        </div>
+                      );
+                    }
+                    if (selectedBadge?.operational_status === 'trong_ben') {
+                      return (
+                        <div className="flex items-center gap-1.5 mt-1.5 text-green-600 text-xs">
+                          <CheckCircle className="h-3.5 w-3.5" />
+                          <span>Xe đang trong bến - Sẵn sàng đi thay</span>
+                        </div>
+                      );
+                    }
+                    return null;
+                  })()}
                 </div>
               </div>
 
@@ -987,36 +1055,124 @@ export function CapPhepDialog({
                 </div>
               </div>
 
-              {/* Điều kiện thông tin xe */}
-              <div className="border border-gray-200 rounded-lg p-4 bg-white">
-                <div className="flex items-center justify-between mb-2">
-                  <Label className="font-semibold">
-                    Điều kiện thông tin xe
-                  </Label>
+              {/* Điều kiện thông tin xe - Detailed View */}
+              <div className="border border-gray-200 rounded-lg bg-white overflow-hidden">
+                {/* Header with overall status */}
+                <div className="flex items-center justify-between px-4 py-3 bg-gray-50 border-b">
+                  <div className="flex items-center gap-2">
+                    <Label className="font-semibold text-gray-900">
+                      Điều kiện thông tin xe
+                    </Label>
+                    {(() => {
+                      const { isValid, validCount, totalCount } = getOverallStatus();
+                      return (
+                        <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
+                          isValid
+                            ? 'bg-green-100 text-green-700'
+                            : 'bg-red-100 text-red-700'
+                        }`}>
+                          {validCount}/{totalCount}
+                        </span>
+                      );
+                    })()}
+                  </div>
                   <Button
                     type="button"
                     variant="ghost"
                     size="sm"
                     onClick={() => setDocumentDialogOpen(true)}
+                    className="h-8 w-8 p-0"
+                    title="Cập nhật giấy tờ"
                   >
                     <Pencil className="h-4 w-4" />
                   </Button>
                 </div>
-                {checkAllDocumentsValid() ? (
-                  <div className="flex items-center gap-2 text-green-600">
-                    <CheckCircle className="h-5 w-5" />
-                    <span className="text-sm font-medium">
-                      Giấy tờ đủ điều kiện
-                    </span>
-                  </div>
-                ) : (
-                  <div className="flex items-center gap-2 text-red-600">
-                    <XIcon className="h-5 w-5" />
-                    <span className="text-sm font-medium">
-                      Không đủ điều kiện
-                    </span>
-                  </div>
-                )}
+
+                {/* Document list with individual status */}
+                <div className="divide-y divide-gray-100">
+                  {getDocumentsCheckResults().map((doc, index) => (
+                    <div
+                      key={index}
+                      className={`flex items-center justify-between px-4 py-2.5 ${
+                        doc.status === 'expired' ? 'bg-red-50' :
+                        doc.status === 'missing' ? 'bg-gray-50' :
+                        doc.status === 'expiring_soon' ? 'bg-yellow-50' : ''
+                      }`}
+                    >
+                      <div className="flex items-center gap-2">
+                        {/* Status Icon */}
+                        {doc.status === 'valid' && (
+                          <CheckCircle className="h-4 w-4 text-green-500 flex-shrink-0" />
+                        )}
+                        {doc.status === 'expiring_soon' && (
+                          <Clock className="h-4 w-4 text-yellow-500 flex-shrink-0" />
+                        )}
+                        {doc.status === 'expired' && (
+                          <AlertCircle className="h-4 w-4 text-red-500 flex-shrink-0" />
+                        )}
+                        {doc.status === 'missing' && (
+                          <FileX className="h-4 w-4 text-gray-400 flex-shrink-0" />
+                        )}
+
+                        {/* Document name */}
+                        <span className={`text-sm ${
+                          doc.status === 'missing' ? 'text-gray-500' : 'text-gray-700'
+                        }`}>
+                          {doc.name}
+                        </span>
+                      </div>
+
+                      {/* Status text */}
+                      <div className="text-right">
+                        {doc.status === 'valid' && doc.daysRemaining && (
+                          <span className="text-xs text-green-600">
+                            Còn {doc.daysRemaining} ngày
+                          </span>
+                        )}
+                        {doc.status === 'expiring_soon' && doc.daysRemaining !== undefined && (
+                          <span className="text-xs text-yellow-600 font-medium">
+                            {doc.daysRemaining === 0
+                              ? 'Hết hạn hôm nay!'
+                              : `Còn ${doc.daysRemaining} ngày`}
+                          </span>
+                        )}
+                        {doc.status === 'expired' && doc.daysRemaining && (
+                          <span className="text-xs text-red-600 font-medium">
+                            Hết hạn {Math.abs(doc.daysRemaining)} ngày
+                          </span>
+                        )}
+                        {doc.status === 'missing' && (
+                          <span className="text-xs text-gray-400">
+                            Chưa có
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+
+                {/* Summary footer */}
+                <div className={`px-4 py-2.5 border-t ${
+                  checkAllDocumentsValid()
+                    ? 'bg-green-50 border-green-100'
+                    : 'bg-red-50 border-red-100'
+                }`}>
+                  {checkAllDocumentsValid() ? (
+                    <div className="flex items-center gap-2 text-green-700">
+                      <CheckCircle className="h-4 w-4" />
+                      <span className="text-sm font-medium">
+                        Đủ điều kiện cấp phép
+                      </span>
+                    </div>
+                  ) : (
+                    <div className="flex items-center gap-2 text-red-700">
+                      <XIcon className="h-4 w-4" />
+                      <span className="text-sm font-medium">
+                        Không đủ điều kiện - Cần bổ sung giấy tờ
+                      </span>
+                    </div>
+                  )}
+                </div>
               </div>
 
               {/* Kiểm tra GSHT */}

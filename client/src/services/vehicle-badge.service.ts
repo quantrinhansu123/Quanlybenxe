@@ -1,5 +1,7 @@
 import api from '@/lib/api'
 
+export type OperationalStatus = 'trong_ben' | 'dang_chay'
+
 export interface VehicleBadge {
   id: string
   badge_color: string
@@ -31,6 +33,7 @@ export interface VehicleBadge {
   vehicle_id: string
   vehicle_type: string
   warn_duplicate_plate: boolean
+  operational_status: OperationalStatus  // 'trong_ben' (in station) or 'dang_chay' (running)
 }
 
 export const vehicleBadgeService = {

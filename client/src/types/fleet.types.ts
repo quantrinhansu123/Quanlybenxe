@@ -176,6 +176,8 @@ export interface DriverInput {
 
 // ==================== Vehicle Badge Types ====================
 
+export type OperationalStatus = 'trong_ben' | 'dang_chay'
+
 export interface VehicleBadge {
   id: string
   badge_color: string
@@ -205,4 +207,5 @@ export interface VehicleBadge {
   status: string
   vehicle_id: string
   warn_duplicate_plate: boolean
+  operational_status: OperationalStatus  // 'trong_ben' (in station) or 'dang_chay' (running)
 }

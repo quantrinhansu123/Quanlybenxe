@@ -24,14 +24,17 @@ interface ChoXeVaoBenDialogProps {
   onClose: () => void
   onSuccess?: () => void
   open?: boolean
+  editRecord?: DispatchRecord | null  // For edit mode
 }
 
-export function ChoXeVaoBenDialog({ 
-  vehicleOptions, 
+export function ChoXeVaoBenDialog({
+  vehicleOptions,
   onClose,
   onSuccess,
-  open = true
+  open = true,
+  editRecord = null
 }: ChoXeVaoBenDialogProps) {
+  const isEditMode = !!editRecord
   const [vehicleId, setVehicleId] = useState("")
   const [vehicleSearchQuery, setVehicleSearchQuery] = useState("")
   const [showVehicleDropdown, setShowVehicleDropdown] = useState(false)
@@ -134,6 +137,24 @@ export function ChoXeVaoBenDialog({
       setSchedules([])
     }
   }, [routeId])
+
+  // Pre-fill form when in edit mode
+  useEffect(() => {
+    if (isEditMode && editRecord) {
+      setVehicleId(editRecord.vehicleId)
+      setVehicleSearchQuery(editRecord.vehiclePlateNumber || '')
+      setRouteId(editRecord.routeId || '')
+      if (editRecord.entryTime) {
+        setEntryDateTime(new Date(editRecord.entryTime))
+      }
+      // Load driver info
+      if (editRecord.driverId) {
+        driverService.getById(editRecord.driverId).then(driver => {
+          setSelectedDriver(driver)
+        }).catch(console.error)
+      }
+    }
+  }, [isEditMode, editRecord])
 
   const loadRoutes = async () => {
     try {
@@ -248,6 +269,21 @@ export function ChoXeVaoBenDialog({
     try {
       const entryShiftId = getShiftIdFromCurrentShift()
 
+      // Edit mode - update existing record
+      if (isEditMode && editRecord) {
+        await dispatchService.update(editRecord.id, {
+          vehicleId,
+          driverId: selectedDriver.id,
+          routeId: routeId || undefined,
+          entryTime: entryTimeISO,
+        })
+        toast.success("Cập nhật thông tin thành công!")
+        onSuccess?.()
+        onClose()
+        return
+      }
+
+      // Create mode - create new record
       const dispatchData: DispatchInput = {
         vehicleId,
         driverId: selectedDriver.id,
@@ -258,7 +294,7 @@ export function ChoXeVaoBenDialog({
       }
 
       const result = await dispatchService.create(dispatchData)
-      
+
       // If passenger drop is confirmed, record it with routeId if provided
       let updatedRecord = result
       if (confirmPassengerDrop && passengersArrived) {
@@ -334,18 +370,20 @@ export function ChoXeVaoBenDialog({
             <div className="flex items-center justify-between pb-5 border-b">
               <div className="flex items-center gap-8">
                 <h1 className="text-2xl font-bold text-gray-900">
-                  Cho xe vào bến
+                  {isEditMode ? "Sửa thông tin điều độ" : "Cho xe vào bến"}
                 </h1>
-                <div className="flex items-center space-x-2">
-                  <Checkbox
-                    id="performPermitAfterEntry"
-                    checked={performPermitAfterEntry}
-                    onChange={(e) => setPerformPermitAfterEntry(e.target.checked)}
-                  />
-                  <Label htmlFor="performPermitAfterEntry" className="cursor-pointer text-sm font-medium">
-                    Thực hiện Cấp phép lên nốt sau khi Cho xe vào bến
-                  </Label>
-                </div>
+                {!isEditMode && (
+                  <div className="flex items-center space-x-2">
+                    <Checkbox
+                      id="performPermitAfterEntry"
+                      checked={performPermitAfterEntry}
+                      onChange={(e) => setPerformPermitAfterEntry(e.target.checked)}
+                    />
+                    <Label htmlFor="performPermitAfterEntry" className="cursor-pointer text-sm font-medium">
+                      Thực hiện Cấp phép lên nốt sau khi Cho xe vào bến
+                    </Label>
+                  </div>
+                )}
               </div>
               <div className="flex items-center gap-3">
                 <Button 

@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react"
+import { useState, useEffect, useRef } from "react"
 import { useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { z } from "zod"
@@ -70,8 +70,9 @@ export function DriverForm({ driver, mode, onClose }: DriverFormProps) {
   const [isLoadingProvinces, setIsLoadingProvinces] = useState(false)
   const [isLoadingDistricts, setIsLoadingDistricts] = useState(false)
   const [isLoadingWards, setIsLoadingWards] = useState(false)
-  const [selectedProvinceCode, setSelectedProvinceCode] = useState<number | null>(null)
-  const [selectedDistrictCode, setSelectedDistrictCode] = useState<number | null>(null)
+  const [selectedProvinceCode, setSelectedProvinceCode] = useState<string | null>(null)
+  const [selectedDistrictCode, setSelectedDistrictCode] = useState<string | null>(null)
+  const isInitialMount = useRef(true)
   
   const {
     register,
@@ -105,23 +106,25 @@ export function DriverForm({ driver, mode, onClose }: DriverFormProps) {
   const watchDistrict = watch("district")
 
   // Load provinces từ API
-  const loadProvinces = async (apiVersion: boolean) => {
+  const loadProvinces = async (apiVersion: boolean): Promise<Province[]> => {
     setIsLoadingProvinces(true)
     try {
       const data = apiVersion
         ? await provinceService.getProvincesV2()
         : await provinceService.getProvincesV1()
       setProvinces(data)
+      return data
     } catch (error) {
       console.error("Failed to load provinces:", error)
       toast.error("Không thể tải danh sách tỉnh thành. Vui lòng thử lại sau.")
+      return []
     } finally {
       setIsLoadingProvinces(false)
     }
   }
 
   // Load districts khi chọn province
-  const loadDistricts = async (provinceCode: number, apiVersion: boolean): Promise<District[]> => {
+  const loadDistricts = async (provinceCode: string, apiVersion: boolean): Promise<District[]> => {
     if (!provinceCode) {
       setDistricts([])
       return []
@@ -131,12 +134,12 @@ export function DriverForm({ driver, mode, onClose }: DriverFormProps) {
     try {
       let result: District[] = []
       if (apiVersion) {
-        // V2: depth=2 trả về wards (phường/xã) trực tiếp từ province
+        // V2: Lấy phường/xã trực tiếp từ province (không có cấp quận/huyện)
         const wards = await provinceService.getWardsByProvinceV2(provinceCode)
         result = wards.map(w => ({ code: w.code, name: w.name }))
         setDistricts(result)
       } else {
-        // V1: depth=2 trả về districts (quận/huyện)
+        // V1: Lấy quận/huyện từ province
         result = await provinceService.getDistrictsByProvinceV1(provinceCode)
         setDistricts(result)
       }
@@ -152,15 +155,16 @@ export function DriverForm({ driver, mode, onClose }: DriverFormProps) {
   }
 
   // Load wards khi chọn district (chỉ cho v1)
-  const loadWards = async (districtCode: number) => {
-    if (!districtCode) {
+  // Sử dụng API từ addresskit.cas.so để lấy dữ liệu chính xác từ Cục Thống Kê
+  const loadWards = async (provinceCode: string, districtCode: string) => {
+    if (!provinceCode || !districtCode) {
       setWards([])
       return
     }
 
     setIsLoadingWards(true)
     try {
-      const data = await provinceService.getWardsByDistrictV1(districtCode)
+      const data = await provinceService.getWardsByDistrictV1(provinceCode, districtCode)
       setWards(data)
     } catch (error) {
       console.error("Failed to load wards:", error)
@@ -174,77 +178,41 @@ export function DriverForm({ driver, mode, onClose }: DriverFormProps) {
   useEffect(() => {
     loadOperators()
     const initProvinces = async () => {
-      await loadProvinces(useApiV2)
+      const loadedProvinces = await loadProvinces(useApiV2)
       if (driver) {
         const operatorIds = driver.operatorIds || (driver.operatorId ? [driver.operatorId] : [])
         setSelectedOperatorIds(operatorIds)
         setValue("operatorIds", operatorIds)
         setImageUrl(driver.imageUrl || "")
-        // Parse address nếu có (sau khi provinces đã load)
-        if (driver.address) {
-          parseAddressToForm(driver.address)
+
+        // Load districts và wards dựa trên dữ liệu driver đã có
+        if (driver.province && loadedProvinces.length > 0) {
+          const province = loadedProvinces.find(p => p.name === driver.province)
+          if (province) {
+            setSelectedProvinceCode(province.code)
+            const loadedDistricts = await loadDistricts(province.code, useApiV2)
+
+            // V1: Load wards nếu có district
+            if (!useApiV2 && driver.district && loadedDistricts.length > 0) {
+              const district = loadedDistricts.find(d => d.name === driver.district)
+              if (district) {
+                setSelectedDistrictCode(district.code)
+                await loadWards(province.code, district.code)
+              }
+            }
+          }
         }
       }
     }
     initProvinces()
-  }, [driver, setValue])
+  }, [driver])
 
-  // Parse address khi edit
-  const parseAddressToForm = async (addressValue: string) => {
-    const addressParts = addressValue.split(",").map(s => s.trim()).filter(Boolean)
-    
-    let addressDetail = ""
-    let wardName = ""
-    let districtName = ""
-    let provinceName = ""
-    
-    if (addressParts.length > 0) {
-      if (addressParts.length >= 1) {
-        provinceName = addressParts[addressParts.length - 1]
-      }
-      
-      if (useApiV2) {
-        if (addressParts.length >= 2) {
-          wardName = addressParts[addressParts.length - 2]
-          if (addressParts.length >= 3) {
-            addressDetail = addressParts.slice(0, -2).join(", ")
-          }
-        }
-      } else {
-        if (addressParts.length >= 3) {
-          wardName = addressParts[addressParts.length - 3]
-          districtName = addressParts[addressParts.length - 2]
-          if (addressParts.length >= 4) {
-            addressDetail = addressParts.slice(0, -3).join(", ")
-          }
-        } else if (addressParts.length === 2) {
-          districtName = addressParts[addressParts.length - 2]
-        }
-      }
-    }
-    
-    setValue("province", provinceName)
-    setValue("district", useApiV2 ? wardName : districtName)
-    setValue("ward", useApiV2 ? "" : wardName)
-    setValue("address", addressDetail)
-    
-    // Load districts và wards nếu có province
-    const province = provinces.find(p => p.name === provinceName)
-    if (province) {
-      setSelectedProvinceCode(province.code)
-      const loadedDistricts = await loadDistricts(province.code, useApiV2)
-      if (!useApiV2 && districtName) {
-        const district = loadedDistricts.find(d => d.name === districtName)
-        if (district) {
-          setSelectedDistrictCode(district.code)
-          await loadWards(district.code)
-        }
-      }
-    }
-  }
-
-  // Reload provinces khi đổi API version
+  // Reload provinces khi đổi API version (skip initial mount)
   useEffect(() => {
+    if (isInitialMount.current) {
+      isInitialMount.current = false
+      return
+    }
     loadProvinces(useApiV2)
     setDistricts([])
     setWards([])
@@ -277,18 +245,18 @@ export function DriverForm({ driver, mode, onClose }: DriverFormProps) {
 
   // Khi chọn district từ dropdown (chỉ cho v1)
   useEffect(() => {
-    if (!useApiV2 && watchDistrict) {
+    if (!useApiV2 && watchDistrict && selectedProvinceCode) {
       const district = districts.find(d => d.name === watchDistrict)
       if (district && district.code !== selectedDistrictCode) {
         setSelectedDistrictCode(district.code)
-        loadWards(district.code)
+        loadWards(selectedProvinceCode, district.code)
         setValue("ward", "")
       }
     } else if (useApiV2) {
       setWards([])
       setSelectedDistrictCode(null)
     }
-  }, [watchDistrict, districts, selectedDistrictCode, useApiV2, setValue])
+  }, [watchDistrict, selectedProvinceCode, districts, selectedDistrictCode, useApiV2, setValue])
 
   const loadOperators = async () => {
     try {
