@@ -5,45 +5,7 @@
  * to reduce the number of queries needed when reading dispatch data.
  */
 
-import { firebase, db } from '../config/database.js'
-
-/**
- * Fetches vehicle data from Firebase RTDB vehicle badges as fallback
- * when vehicle is not found in Supabase vehicles table
- */
-async function fetchVehicleFromBadges(vehicleId: string): Promise<{
-  plateNumber: string
-  operatorId: string | null
-  operatorName: string | null
-  operatorCode: string | null
-} | null> {
-  try {
-    if (!db) return null
-
-    const snapshot = await db.ref('datasheet/PHUHIEUXE').once('value')
-    const badgesData = snapshot.val()
-
-    if (!badgesData) return null
-
-    // Try to find badge by vehicle_id or by matching ID
-    for (const key of Object.keys(badgesData)) {
-      const badge = badgesData[key]
-      if (badge.ID_PhuHieu === vehicleId || key === vehicleId) {
-        return {
-          plateNumber: badge.BienSoXe || '',
-          operatorId: badge.Ref_GPKD || null,
-          operatorName: null, // Not available in badge data
-          operatorCode: null,
-        }
-      }
-    }
-
-    return null
-  } catch (error) {
-    console.error('Error fetching vehicle from badges:', error)
-    return null
-  }
-}
+import { firebase } from '../config/database.js'
 
 export interface DenormalizedVehicleData {
   plateNumber: string
@@ -104,16 +66,10 @@ export async function fetchDenormalizedData(params: {
       .single() : Promise.resolve({ data: null })
   ])
 
-  let vehicle = vehicleResult.data
+  const vehicle = vehicleResult.data
   const driver = driverResult.data
   const route = routeResult.data
   const user = userResult.data
-
-  // Fallback: If vehicle not found in Supabase, try Firebase vehicle badges
-  let vehicleFromBadge: Awaited<ReturnType<typeof fetchVehicleFromBadges>> = null
-  if (!vehicle || !vehicle.plate_number) {
-    vehicleFromBadge = await fetchVehicleFromBadges(params.vehicleId)
-  }
 
   // Handle operator data (can be array or object depending on Firebase query builder)
   const operatorData = vehicle?.operators
@@ -127,10 +83,10 @@ export async function fetchDenormalizedData(params: {
 
   return {
     vehicle: {
-      plateNumber: vehicle?.plate_number || vehicleFromBadge?.plateNumber || '',
-      operatorId: vehicle?.operator_id || vehicleFromBadge?.operatorId || null,
-      operatorName: operatorData?.name || vehicleFromBadge?.operatorName || null,
-      operatorCode: operatorData?.code || vehicleFromBadge?.operatorCode || null,
+      plateNumber: vehicle?.plate_number || '',
+      operatorId: vehicle?.operator_id || null,
+      operatorName: operatorData?.name || null,
+      operatorCode: operatorData?.code || null,
     },
     driver: {
       fullName: driver?.full_name || '',
