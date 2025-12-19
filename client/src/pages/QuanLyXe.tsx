@@ -29,7 +29,12 @@ import { format, isValid, parseISO } from "date-fns"
 
 // Helper functions to extract display values
 const getVehicleTypeName = (vehicle: Vehicle): string => {
-  return vehicle.vehicleType?.name || vehicle.vehicleTypeId || ""
+  // Only return name, not ID (IDs look ugly in UI)
+  return vehicle.vehicleType?.name || ""
+}
+
+const getOperatorName = (vehicle: Vehicle): string => {
+  return vehicle.operator?.name || ""
 }
 
 // Helper function to format date (supports DD/MM/YYYY and ISO formats)
@@ -78,12 +83,13 @@ export default function QuanLyXe() {
   const vehicleTypes = Array.from(
     new Set(vehicles.map(getVehicleTypeName).filter(Boolean))
   ).sort()
-  const operators = Array.from(
-    new Set(vehicles.map((v: any) => v.operator?.name).filter(Boolean))
+  const operatorNames = Array.from(
+    new Set(vehicles.map(getOperatorName).filter(Boolean))
   ).sort()
 
   const filteredVehicles = vehicles.filter((vehicle: any) => {
     const vehicleTypeName = getVehicleTypeName(vehicle)
+    const operatorName = getOperatorName(vehicle)
 
     // Search filter - search by plate number, chassis number, operator name
     if (searchQuery) {
@@ -91,7 +97,7 @@ export default function QuanLyXe() {
       const matchesSearch =
         (vehicle.plateNumber?.toLowerCase() || "").includes(query) ||
         (vehicle.chassisNumber?.toLowerCase() || "").includes(query) ||
-        (vehicle.operator?.name?.toLowerCase() || "").includes(query) ||
+        operatorName.toLowerCase().includes(query) ||
         vehicleTypeName.toLowerCase().includes(query)
       if (!matchesSearch) return false
     }
@@ -102,7 +108,7 @@ export default function QuanLyXe() {
     }
 
     // Operator filter
-    if (filterOperator && vehicle.operator?.name !== filterOperator) {
+    if (filterOperator && operatorName !== filterOperator) {
       return false
     }
 
@@ -203,7 +209,7 @@ export default function QuanLyXe() {
                   onChange={(e) => setFilterOperator(e.target.value)}
                 >
                   <option value="">Tất cả đơn vị</option>
-                  {operators.map((op) => (
+                  {operatorNames.map((op) => (
                     <option key={op} value={op}>
                       {op}
                     </option>
@@ -269,7 +275,7 @@ export default function QuanLyXe() {
                     {vehicle.seatCapacity || "N/A"}
                   </TableCell>
                   <TableCell className="text-center">
-                    {vehicle.operator?.name || "N/A"}
+                    {getOperatorName(vehicle) || "N/A"}
                   </TableCell>
                   <TableCell className="text-center">
                     {formatDate(vehicle.inspectionExpiryDate)}
