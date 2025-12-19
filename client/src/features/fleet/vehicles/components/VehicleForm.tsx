@@ -223,6 +223,7 @@ export function VehicleForm({
     setValue,
     reset,
     control,
+    watch,
     formState: { errors },
   } = useForm<VehicleFormData>({
     resolver: zodResolver(vehicleSchema),
@@ -293,6 +294,23 @@ export function VehicleForm({
       setVehicleImage(null)
     }
   }, [vehicle, reset, setValue, operators.length])
+
+  // Watch vehicleTypeId and auto-fill seat/bed capacity when changed (only in create mode)
+  const watchedVehicleTypeId = watch("vehicleTypeId")
+  useEffect(() => {
+    // Only auto-fill in create mode to avoid overwriting user edits
+    if (mode === "create" && watchedVehicleTypeId && vehicleTypes.length > 0) {
+      const selectedType = vehicleTypes.find(vt => vt.id === watchedVehicleTypeId)
+      if (selectedType) {
+        if (selectedType.defaultSeatCapacity !== null && selectedType.defaultSeatCapacity !== undefined) {
+          setValue("seatCapacity", selectedType.defaultSeatCapacity)
+        }
+        if (selectedType.defaultBedCapacity !== null && selectedType.defaultBedCapacity !== undefined) {
+          setValue("bedCapacity", selectedType.defaultBedCapacity)
+        }
+      }
+    }
+  }, [watchedVehicleTypeId, vehicleTypes, mode, setValue])
 
   const onSubmit = async (data: VehicleFormData) => {
     try {

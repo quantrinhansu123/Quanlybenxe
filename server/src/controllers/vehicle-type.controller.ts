@@ -5,6 +5,8 @@ import { z } from 'zod'
 const vehicleTypeSchema = z.object({
   name: z.string().min(1, 'Name is required'),
   description: z.string().optional(),
+  defaultSeatCapacity: z.number().int().min(0).optional(),
+  defaultBedCapacity: z.number().int().min(0).optional(),
 })
 
 export const getAllVehicleTypes = async (_req: Request, res: Response) => {
@@ -20,6 +22,8 @@ export const getAllVehicleTypes = async (_req: Request, res: Response) => {
       id: vt.id,
       name: vt.name,
       description: vt.description,
+      defaultSeatCapacity: vt.default_seat_capacity ?? null,
+      defaultBedCapacity: vt.default_bed_capacity ?? null,
       createdAt: vt.created_at,
     }))
 
@@ -48,6 +52,8 @@ export const getVehicleTypeById = async (req: Request, res: Response) => {
       id: data.id,
       name: data.name,
       description: data.description,
+      defaultSeatCapacity: data.default_seat_capacity ?? null,
+      defaultBedCapacity: data.default_bed_capacity ?? null,
       createdAt: data.created_at,
     })
   } catch (error: any) {
@@ -64,6 +70,8 @@ export const createVehicleType = async (req: Request, res: Response) => {
       .insert({
         name: validated.name,
         description: validated.description || null,
+        default_seat_capacity: validated.defaultSeatCapacity ?? null,
+        default_bed_capacity: validated.defaultBedCapacity ?? null,
       })
       .select()
       .single()
@@ -74,6 +82,8 @@ export const createVehicleType = async (req: Request, res: Response) => {
       id: data.id,
       name: data.name,
       description: data.description,
+      defaultSeatCapacity: data.default_seat_capacity ?? null,
+      defaultBedCapacity: data.default_bed_capacity ?? null,
       createdAt: data.created_at,
     })
   } catch (error: any) {
@@ -92,6 +102,8 @@ export const updateVehicleType = async (req: Request, res: Response) => {
     const updateData: any = {}
     if (validated.name) updateData.name = validated.name
     if (validated.description !== undefined) updateData.description = validated.description || null
+    if (validated.defaultSeatCapacity !== undefined) updateData.default_seat_capacity = validated.defaultSeatCapacity
+    if (validated.defaultBedCapacity !== undefined) updateData.default_bed_capacity = validated.defaultBedCapacity
 
     const { data, error } = await firebase
       .from('vehicle_types')
@@ -109,6 +121,8 @@ export const updateVehicleType = async (req: Request, res: Response) => {
       id: data.id,
       name: data.name,
       description: data.description,
+      defaultSeatCapacity: data.default_seat_capacity ?? null,
+      defaultBedCapacity: data.default_bed_capacity ?? null,
       createdAt: data.created_at,
     })
   } catch (error: any) {

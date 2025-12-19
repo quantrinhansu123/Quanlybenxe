@@ -45,6 +45,8 @@ export interface VehicleType {
   id: string
   name: string
   description?: string
+  defaultSeatCapacity?: number | null
+  defaultBedCapacity?: number | null
   createdAt?: string
 }
 
