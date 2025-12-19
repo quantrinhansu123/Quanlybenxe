@@ -10,6 +10,7 @@ import { Autocomplete } from "@/components/ui/autocomplete"
 import { vehicleService } from "../api"
 import { operatorService } from "@/features/fleet/operators/api"
 import { provinceService, type Province } from "@/services/province.service"
+import { vehicleBadgeService, type VehicleBadge } from "@/services/vehicle-badge.service"
 import type { Vehicle, VehicleInput } from "../types"
 import type { Operator } from "@/features/fleet/operators/types"
 import { Eye, EyeOff, Upload } from "lucide-react"
@@ -79,10 +80,12 @@ export function VehicleForm({
   const [isUploading, setIsUploading] = useState(false)
   const [operators, setOperators] = useState<Operator[]>([])
   const [provinces, setProvinces] = useState<Province[]>([])
+  const [vehicleBadges, setVehicleBadges] = useState<VehicleBadge[]>([])
 
   useEffect(() => {
     loadOperators()
     loadProvinces()
+    loadVehicleBadges()
   }, [])
 
   useEffect(() => {
@@ -110,6 +113,15 @@ export function VehicleForm({
     }
   }
 
+  const loadVehicleBadges = async () => {
+    try {
+      const data = await vehicleBadgeService.getAll()
+      setVehicleBadges(data)
+    } catch (error) {
+      console.error("Failed to load vehicle badges:", error)
+    }
+  }
+
   // Convert operators to autocomplete options
   const operatorOptions = useMemo(() => {
     return operators.map(op => ({
@@ -117,6 +129,24 @@ export function VehicleForm({
       label: op.name
     }))
   }, [operators])
+
+  // Convert vehicle badges to plate number autocomplete options
+  const plateNumberOptions = useMemo(() => {
+    // Get unique plate numbers and include badge info in label
+    const uniquePlates = new Map<string, VehicleBadge>()
+    vehicleBadges.forEach(badge => {
+      if (badge.license_plate_sheet && !uniquePlates.has(badge.license_plate_sheet)) {
+        uniquePlates.set(badge.license_plate_sheet, badge)
+      }
+    })
+    
+    return Array.from(uniquePlates.entries()).map(([plate, badge]) => ({
+      value: plate,
+      label: badge.badge_type 
+        ? `${plate} (${badge.badge_type}${badge.badge_color ? ' - ' + badge.badge_color : ''})`
+        : plate
+    }))
+  }, [vehicleBadges])
 
   // Helper function to format date for input type="date"
   const formatDateForInput = (dateString: string | undefined | null): string => {
@@ -343,16 +373,24 @@ export function VehicleForm({
 
               {/* Hàng 1: Biển kiểm soát, Số ghế, Số giường */}
               <div className="grid grid-cols-12 gap-4">
-                {/* Biển kiểm soát - bằng với số khung */}
+                {/* Biển kiểm soát - Autocomplete từ phù hiệu xe */}
                 <div className="space-y-2 col-span-6">
                   <Label htmlFor="plateNumber" className="text-sm">
                     Biển kiểm soát (*)
                   </Label>
-                  <Input
-                    id="plateNumber"
-                    className="h-11"
-                    placeholder="Biển kiểm soát (*)"
-                    {...register("plateNumber")}
+                  <Controller
+                    name="plateNumber"
+                    control={control}
+                    render={({ field }) => (
+                      <Autocomplete
+                        id="plateNumber"
+                        options={plateNumberOptions}
+                        value={field.value || ""}
+                        onChange={field.onChange}
+                        placeholder="Nhập hoặc chọn biển số..."
+                        className="h-11"
+                      />
+                    )}
                   />
                   {errors.plateNumber && (
                     <p className="text-sm text-red-600">{errors.plateNumber.message}</p>
