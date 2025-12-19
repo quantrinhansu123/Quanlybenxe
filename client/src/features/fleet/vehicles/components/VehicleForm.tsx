@@ -8,10 +8,11 @@ import { Label } from "@/components/ui/label"
 import { Select } from "@/components/ui/select"
 import { Autocomplete } from "@/components/ui/autocomplete"
 import { vehicleService } from "../api"
+import { vehicleTypeService } from "../api/vehicleTypeApi"
 import { operatorService } from "@/features/fleet/operators/api"
 import { provinceService, type Province } from "@/services/province.service"
 import { vehicleBadgeService, type VehicleBadge } from "@/services/vehicle-badge.service"
-import type { Vehicle, VehicleInput } from "../types"
+import type { Vehicle, VehicleInput, VehicleType } from "../types"
 import type { Operator } from "@/features/fleet/operators/types"
 import { Eye, EyeOff, Upload } from "lucide-react"
 import { useState, useEffect, useMemo } from "react"
@@ -81,11 +82,13 @@ export function VehicleForm({
   const [operators, setOperators] = useState<Operator[]>([])
   const [provinces, setProvinces] = useState<Province[]>([])
   const [vehicleBadges, setVehicleBadges] = useState<VehicleBadge[]>([])
+  const [vehicleTypes, setVehicleTypes] = useState<VehicleType[]>([])
 
   useEffect(() => {
     loadOperators()
     loadProvinces()
     loadVehicleBadges()
+    loadVehicleTypes()
   }, [])
 
   useEffect(() => {
@@ -119,6 +122,15 @@ export function VehicleForm({
       setVehicleBadges(data)
     } catch (error) {
       console.error("Failed to load vehicle badges:", error)
+    }
+  }
+
+  const loadVehicleTypes = async () => {
+    try {
+      const data = await vehicleTypeService.getAll()
+      setVehicleTypes(data)
+    } catch (error) {
+      console.error("Failed to load vehicle types:", error)
     }
   }
 
@@ -345,9 +357,9 @@ export function VehicleForm({
             </div>
 
             <div className="space-y-4">
-              {/* Hàng 0: Nhà xe */}
-              <div className="grid grid-cols-12 gap-4">
-                <div className="space-y-2 col-span-12">
+              {/* Hàng 0: Nhà xe + Loại xe */}
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
                   <Label htmlFor="operatorId" className="text-sm">
                     Nhà xe
                   </Label>
@@ -367,6 +379,26 @@ export function VehicleForm({
                   />
                   {errors.operatorId && (
                     <p className="text-sm text-red-600">{errors.operatorId.message}</p>
+                  )}
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="vehicleTypeId" className="text-sm">
+                    Loại xe
+                  </Label>
+                  <Select
+                    id="vehicleTypeId"
+                    className="h-11"
+                    {...register("vehicleTypeId")}
+                  >
+                    <option value="">Chọn loại xe</option>
+                    {vehicleTypes.map((vt) => (
+                      <option key={vt.id} value={vt.id}>
+                        {vt.name}
+                      </option>
+                    ))}
+                  </Select>
+                  {errors.vehicleTypeId && (
+                    <p className="text-sm text-red-600">{errors.vehicleTypeId.message}</p>
                   )}
                 </div>
               </div>
