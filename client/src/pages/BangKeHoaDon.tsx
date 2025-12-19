@@ -96,10 +96,8 @@ export default function BangKeHoaDon() {
               : 10;
 
           // Get shift from metadata or default
-          const shift =
-            dispatch?.metadata?.shift ||
-            dispatch?.metadata?.paymentShift ||
-            "-";
+          const metadata = (dispatch?.metadata || {}) as Record<string, unknown>;
+          const shift = String(metadata.shift || metadata.paymentShift || "-");
 
           // Map payment method
           const paymentMethodMap: Record<string, string> = {

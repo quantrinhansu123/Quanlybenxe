@@ -117,10 +117,10 @@ export default function BaoCaoTinhHinhHoatDongMau3() {
         // Calculate THỰC HIỆN (Actual)
         // Tổng số xe - count unique vehicles
         item.thucHien.tongSoXe = 1; // Will be recalculated after grouping
-        
+
         // Tổng số ghế - seat capacity (from vehicle metadata or default)
-        const metadata = record.metadata || {};
-        const seatCount = metadata.seatCount || record.seatCount || 0;
+        const metadata = (record.metadata || {}) as Record<string, unknown>;
+        const seatCount = Number(metadata.seatCount) || record.seatCount || 0;
         item.thucHien.tongSoGhe += seatCount;
 
         // Lượt xe xuất bến - departure trips

@@ -1,5 +1,7 @@
 import { initializeApp, getApps, cert, App } from 'firebase-admin/app'
 import { getDatabase, Database } from 'firebase-admin/database'
+import { readFileSync } from 'fs'
+import { resolve } from 'path'
 import dotenv from 'dotenv'
 
 dotenv.config()
@@ -22,7 +24,8 @@ function initializeFirebase(): Database {
 
     try {
       if (serviceAccountPath) {
-        const serviceAccount = require(serviceAccountPath)
+        const absolutePath = resolve(process.cwd(), serviceAccountPath)
+        const serviceAccount = JSON.parse(readFileSync(absolutePath, 'utf-8'))
         app = initializeApp({
           credential: cert(serviceAccount),
           databaseURL: firebaseDatabaseURL

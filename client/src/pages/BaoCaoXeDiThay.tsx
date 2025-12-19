@@ -88,9 +88,10 @@ export default function BaoCaoXeDiThay() {
         const plateNumber = record.vehiclePlateNumber || "-";
         const operatorName = record.vehicle?.operator?.name || "-";
         const routeName = record.routeName || "-";
-        
+
         // Check if record has replacement vehicle info in metadata
-        const replacementVehicleId = record.metadata?.replacementVehicleId;
+        const metadata = (record.metadata || {}) as Record<string, unknown>;
+        const replacementVehicleId = metadata.replacementVehicleId as string | undefined;
         const replacementDate = record.entryTime || record.createdAt || "";
         
         if (replacementVehicleId) {

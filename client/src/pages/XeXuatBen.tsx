@@ -134,21 +134,25 @@ export default function XeXuatBen() {
 
     try {
       // Prepare data for Excel
-      const excelData = filteredRecords.map((item, index) => ({
-        "STT": index + 1,
-        "Biển số xe": item.vehiclePlateNumber || "-",
-        "Tên luồng tuyến": item.routeName || "-",
-        "Thời gian vào bến": item.entryTime ? format(new Date(item.entryTime), "dd/MM/yyyy HH:mm") : "-",
-        "Giờ XB kế hoạch": item.plannedDepartureTime ? format(new Date(item.plannedDepartureTime), "dd/MM/yyyy HH:mm") : "-",
-        "Giờ cấp phép lên nốt": item.boardingPermitTime ? format(new Date(item.boardingPermitTime), "dd/MM/yyyy HH:mm") : "-",
-        "Người cấp lệnh": item.departureOrderBy || item.boardingPermitBy || "-",
-        "Số khách": item.passengersDeparting ?? item.passengersArrived ?? item.seatCount ?? "-",
-        "Thời gian ra bến": item.exitTime ? format(new Date(item.exitTime), "dd/MM/yyyy HH:mm") : "-",
-        "Thời gian đồng bộ dữ liệu": item.metadata?.syncTime ? format(new Date(item.metadata.syncTime), "dd/MM/yyyy HH:mm") : "-",
-        "Người đồng bộ dữ liệu": item.metadata?.syncBy || "-",
-        "Thông tin đồng bộ dữ liệu": item.metadata?.syncInfo || "-",
-        "Trạng thái": statusLabelMap[item.currentStatus] || item.currentStatus || "-",
-      }));
+      const excelData = filteredRecords.map((item, index) => {
+        const itemMetadata = (item.metadata || {}) as Record<string, unknown>;
+        const syncTimeStr = itemMetadata.syncTime as string | undefined;
+        return {
+          "STT": index + 1,
+          "Biển số xe": item.vehiclePlateNumber || "-",
+          "Tên luồng tuyến": item.routeName || "-",
+          "Thời gian vào bến": item.entryTime ? format(new Date(item.entryTime), "dd/MM/yyyy HH:mm") : "-",
+          "Giờ XB kế hoạch": item.plannedDepartureTime ? format(new Date(item.plannedDepartureTime), "dd/MM/yyyy HH:mm") : "-",
+          "Giờ cấp phép lên nốt": item.boardingPermitTime ? format(new Date(item.boardingPermitTime), "dd/MM/yyyy HH:mm") : "-",
+          "Người cấp lệnh": item.departureOrderBy || item.boardingPermitBy || "-",
+          "Số khách": item.passengersDeparting ?? item.passengersArrived ?? item.seatCount ?? "-",
+          "Thời gian ra bến": item.exitTime ? format(new Date(item.exitTime), "dd/MM/yyyy HH:mm") : "-",
+          "Thời gian đồng bộ dữ liệu": syncTimeStr ? format(new Date(syncTimeStr), "dd/MM/yyyy HH:mm") : "-",
+          "Người đồng bộ dữ liệu": String(itemMetadata.syncBy || "-"),
+          "Thông tin đồng bộ dữ liệu": String(itemMetadata.syncInfo || "-"),
+          "Trạng thái": statusLabelMap[item.currentStatus] || item.currentStatus || "-",
+        };
+      });
 
       // Create workbook and worksheet
       const ws = XLSX.utils.json_to_sheet(excelData);
@@ -280,33 +284,37 @@ export default function XeXuatBen() {
                   </TableRow>
                 ) : (
                   <>
-                    {filteredRecords.map((item) => (
-                      <TableRow key={item.id}>
-                        <TableCell className="font-semibold">
-                          {item.vehiclePlateNumber || "-"}
-                        </TableCell>
-                        <TableCell>{item.routeName || "-"}</TableCell>
-                        <TableCell>{renderTime(item.entryTime)}</TableCell>
-                        <TableCell>{renderTime(item.plannedDepartureTime)}</TableCell>
-                        <TableCell>{renderTime(item.boardingPermitTime)}</TableCell>
-                        <TableCell>
-                          {item.departureOrderBy || item.boardingPermitBy || "-"}
-                        </TableCell>
-                        <TableCell>
-                          {item.passengersDeparting ??
-                            item.passengersArrived ??
-                            item.seatCount ??
-                            "-"}
-                        </TableCell>
-                        <TableCell>{renderTime(item.exitTime)}</TableCell>
-                        <TableCell>{renderTime(item.metadata?.syncTime)}</TableCell>
-                        <TableCell>{item.metadata?.syncBy || "-"}</TableCell>
-                        <TableCell>{item.metadata?.syncInfo || "-"}</TableCell>
-                        <TableCell>
-                          {statusLabelMap[item.currentStatus] || item.currentStatus || "-"}
-                        </TableCell>
-                      </TableRow>
-                    ))}
+                    {filteredRecords.map((item) => {
+                      const meta = (item.metadata || {}) as Record<string, unknown>;
+                      const syncTimeStr = meta.syncTime as string | undefined;
+                      return (
+                        <TableRow key={item.id}>
+                          <TableCell className="font-semibold">
+                            {item.vehiclePlateNumber || "-"}
+                          </TableCell>
+                          <TableCell>{item.routeName || "-"}</TableCell>
+                          <TableCell>{renderTime(item.entryTime)}</TableCell>
+                          <TableCell>{renderTime(item.plannedDepartureTime)}</TableCell>
+                          <TableCell>{renderTime(item.boardingPermitTime)}</TableCell>
+                          <TableCell>
+                            {item.departureOrderBy || item.boardingPermitBy || "-"}
+                          </TableCell>
+                          <TableCell>
+                            {item.passengersDeparting ??
+                              item.passengersArrived ??
+                              item.seatCount ??
+                              "-"}
+                          </TableCell>
+                          <TableCell>{renderTime(item.exitTime)}</TableCell>
+                          <TableCell>{renderTime(syncTimeStr)}</TableCell>
+                          <TableCell>{String(meta.syncBy || "-")}</TableCell>
+                          <TableCell>{String(meta.syncInfo || "-")}</TableCell>
+                          <TableCell>
+                            {statusLabelMap[item.currentStatus] || item.currentStatus || "-"}
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })}
                     <TableRow className="bg-gray-50 font-semibold">
                       <TableCell colSpan={12}>{`Tổng: ${filteredRecords.length} xe`}</TableCell>
                     </TableRow>

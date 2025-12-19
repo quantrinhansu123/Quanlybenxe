@@ -96,22 +96,25 @@ export default function BaoCaoXeRaVaoBen() {
       }
 
       // Map to vehicle entry/exit data
-      const result = vehicleFilteredRecords.map((record) => ({
-        plateNumber: record.vehiclePlateNumber || "-",
-        entryPlateNumber: record.metadata?.entryPlateNumber || record.vehiclePlateNumber || "-",
-        operatorName: record.vehicle?.operator?.name || "-",
-        routeName: record.routeName || "-",
-        entryTime: record.entryTime || "-",
-        entryShift: record.metadata?.entryShift || "-",
-        plannedDepartureTime: record.plannedDepartureTime || "-",
-        actualDepartureTime: record.metadata?.actualDepartureTime || "-",
-        exitTime: record.exitTime || "-",
-        exitShift: record.metadata?.exitShift || "-",
-        vehicleStatus: getVehicleStatus(record),
-        hasBoardingPermit: record.boardingPermitTime ? "Có" : "Không",
-        isTemporaryExit: record.metadata?.isTemporaryExit ? "Có" : "Không",
-        hasImages: record.metadata?.hasImages ? "Có" : "Không",
-      }));
+      const result = vehicleFilteredRecords.map((record) => {
+        const metadata = (record.metadata || {}) as Record<string, unknown>;
+        return {
+          plateNumber: record.vehiclePlateNumber || "-",
+          entryPlateNumber: String(metadata.entryPlateNumber || record.vehiclePlateNumber || "-"),
+          operatorName: record.vehicle?.operator?.name || "-",
+          routeName: record.routeName || "-",
+          entryTime: record.entryTime || "-",
+          entryShift: String(metadata.entryShift || "-"),
+          plannedDepartureTime: record.plannedDepartureTime || "-",
+          actualDepartureTime: String(metadata.actualDepartureTime || "-"),
+          exitTime: record.exitTime || "-",
+          exitShift: String(metadata.exitShift || "-"),
+          vehicleStatus: getVehicleStatus(record),
+          hasBoardingPermit: record.boardingPermitTime ? "Có" : "Không",
+          isTemporaryExit: metadata.isTemporaryExit ? "Có" : "Không",
+          hasImages: metadata.hasImages ? "Có" : "Không",
+        };
+      });
 
       setData(result);
     } catch (error) {

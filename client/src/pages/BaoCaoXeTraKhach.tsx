@@ -194,8 +194,10 @@ export default function BaoCaoXeTraKhach() {
             bValue = b.permitStatus === "approved" ? "Đã ký" : b.permitStatus === "rejected" ? "Từ chối" : "-";
             break;
           case "syncStatus":
-            aValue = a.metadata?.syncStatus || (a.metadata?.syncTime ? "Đã đồng bộ" : "Chưa đồng bộ");
-            bValue = b.metadata?.syncStatus || (b.metadata?.syncTime ? "Đã đồng bộ" : "Chưa đồng bộ");
+            const aMetadata = (a.metadata || {}) as Record<string, unknown>;
+            const bMetadata = (b.metadata || {}) as Record<string, unknown>;
+            aValue = String(aMetadata.syncStatus || (aMetadata.syncTime ? "Đã đồng bộ" : "Chưa đồng bộ"));
+            bValue = String(bMetadata.syncStatus || (bMetadata.syncTime ? "Đã đồng bộ" : "Chưa đồng bộ"));
             break;
           default:
             return 0;
@@ -242,20 +244,23 @@ export default function BaoCaoXeTraKhach() {
 
     try {
       // Prepare data for Excel
-      const excelData = filteredRecords.map((item, index) => ({
-        "STT": index + 1,
-        "Biển số": item.vehiclePlateNumber || "-",
-        "Biển số khi vào": item.vehiclePlateNumber || "-",
-        "Mã lệnh trả khách": item.transportOrderCode || item.id.substring(0, 8) || "-",
-        "Tên đơn vị": item.vehicle?.operator?.name || "-",
-        "Tên luồng tuyến": item.routeName || "-",
-        "Loại tuyến": "-",
-        "Người xác nhận trả khách": item.passengerDropBy || "-",
-        "Thời gian trả khách": item.passengerDropTime ? format(new Date(item.passengerDropTime), "dd/MM/yyyy HH:mm") : "-",
-        "Số khách": item.passengersArrived ?? item.seatCount ?? "-",
-        "Trạng thái ký lệnh vận chuyển": item.permitStatus === "approved" ? "Đã ký" : item.permitStatus === "rejected" ? "Từ chối" : "-",
-        "Trạng thái đồng bộ dữ liệu": item.metadata?.syncStatus || (item.metadata?.syncTime ? "Đã đồng bộ" : "Chưa đồng bộ"),
-      }));
+      const excelData = filteredRecords.map((item, index) => {
+        const itemMetadata = (item.metadata || {}) as Record<string, unknown>;
+        return {
+          "STT": index + 1,
+          "Biển số": item.vehiclePlateNumber || "-",
+          "Biển số khi vào": item.vehiclePlateNumber || "-",
+          "Mã lệnh trả khách": item.transportOrderCode || item.id.substring(0, 8) || "-",
+          "Tên đơn vị": item.vehicle?.operator?.name || "-",
+          "Tên luồng tuyến": item.routeName || "-",
+          "Loại tuyến": "-",
+          "Người xác nhận trả khách": item.passengerDropBy || "-",
+          "Thời gian trả khách": item.passengerDropTime ? format(new Date(item.passengerDropTime), "dd/MM/yyyy HH:mm") : "-",
+          "Số khách": item.passengersArrived ?? item.seatCount ?? "-",
+          "Trạng thái ký lệnh vận chuyển": item.permitStatus === "approved" ? "Đã ký" : item.permitStatus === "rejected" ? "Từ chối" : "-",
+          "Trạng thái đồng bộ dữ liệu": String(itemMetadata.syncStatus || (itemMetadata.syncTime ? "Đã đồng bộ" : "Chưa đồng bộ")),
+        };
+      });
 
       // Create workbook and worksheet
       const ws = XLSX.utils.json_to_sheet(excelData);
@@ -497,11 +502,14 @@ export default function BaoCaoXeTraKhach() {
                           {item.passengersArrived ?? item.seatCount ?? "-"}
                         </TableCell>
                         <TableCell>
-                          {item.permitStatus === "approved" ? "Đã ký" : 
+                          {item.permitStatus === "approved" ? "Đã ký" :
                            item.permitStatus === "rejected" ? "Từ chối" : "-"}
                         </TableCell>
                         <TableCell>
-                          {item.metadata?.syncStatus || (item.metadata?.syncTime ? "Đã đồng bộ" : "Chưa đồng bộ")}
+                          {(() => {
+                            const meta = (item.metadata || {}) as Record<string, unknown>;
+                            return String(meta.syncStatus || (meta.syncTime ? "Đã đồng bộ" : "Chưa đồng bộ"));
+                          })()}
                         </TableCell>
                       </TableRow>
                     ))}

@@ -114,8 +114,8 @@ export default function BaoCaoTinhHinhHoatDongMau1() {
         const item = grouped.get(key)!;
 
         // Extract metadata and fees
-        const metadata = record.metadata || {};
-        const fees = metadata.fees || {};
+        const metadata = (record.metadata || {}) as Record<string, unknown>;
+        const fees = (metadata.fees || {}) as Record<string, unknown>;
         const paymentAmount = record.paymentAmount || 0;
 
         // Calculate THỰC HIỆN (Performed)
@@ -123,19 +123,19 @@ export default function BaoCaoTinhHinhHoatDongMau1() {
         item.thucHien.luotXe += 1;
 
         // Tải trọng - load capacity (from vehicle or metadata)
-        const loadCapacity = metadata.loadCapacity || 0;
+        const loadCapacity = Number(metadata.loadCapacity) || 0;
         item.thucHien.taiTrong += loadCapacity;
 
         // Lệ phí - fees (ra vào bến, lưu bến, etc.)
-        const lePhi = fees.raVaoBen || fees.luuBen || 0;
+        const lePhi = Number(fees.raVaoBen) || Number(fees.luuBen) || 0;
         item.thucHien.lePhi += lePhi;
 
         // Hoa hồng - commission
-        const hoaHong = fees.hoaHongVe || 0;
+        const hoaHong = Number(fees.hoaHongVe) || 0;
         item.thucHien.hoaHong += hoaHong;
 
         // Lưu đậu - parking/waiting fee
-        const luuDau = fees.luuBen || fees.dauDem || 0;
+        const luuDau = Number(fees.luuBen) || Number(fees.dauDem) || 0;
         item.thucHien.luuDau += luuDau;
 
         // Doanh thu - revenue
@@ -143,7 +143,7 @@ export default function BaoCaoTinhHinhHoatDongMau1() {
 
         // Calculate TRUY THU (Collected/Retroactive)
         // Truy thu chuyến - retroactive charge per trip
-        const truyThuChuyen = fees.truyThuChuyen || 0;
+        const truyThuChuyen = Number(fees.truyThuChuyen) || 0;
         if (truyThuChuyen > 0) {
           item.truyThu.luotXe += 1;
           item.truyThu.lePhi += truyThuChuyen;
@@ -151,10 +151,10 @@ export default function BaoCaoTinhHinhHoatDongMau1() {
         }
 
         // Truy thu tháng - retroactive monthly charge
-        const truyThuThang = fees.truyThuThang || 0;
+        const truyThuThang = Number(fees.truyThuThang) || 0;
         if (truyThuThang > 0) {
           item.truyThu.lePhi += truyThuThang;
-          item.truyThu.hoaHong += fees.hhTruyThuThang || 0;
+          item.truyThu.hoaHong += Number(fees.hhTruyThuThang) || 0;
           item.truyThu.doanhThu += truyThuThang;
         }
 

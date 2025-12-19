@@ -95,7 +95,8 @@ export default function BaoCaoXeTangCuong() {
       const reinforcementRecords = filteredRecords.filter(
         (record) => {
           // If metadata has reinforcement flag, use it
-          if (record.metadata?.isReinforcement === true || record.metadata?.reinforcementDate) {
+          const metadata = (record.metadata || {}) as Record<string, unknown>;
+          if (metadata.isReinforcement === true || metadata.reinforcementDate) {
             return true;
           }
           // For now, show all records (can be adjusted based on actual data structure)
@@ -105,34 +106,37 @@ export default function BaoCaoXeTangCuong() {
       );
 
       // Map to reinforcement vehicle data
-      const result = reinforcementRecords.map((record) => ({
-        plateNumber: record.vehiclePlateNumber || "-",
-        operatorName: record.vehicle?.operator?.name || "-",
-        routeName: record.routeName || "-",
-        routeType: record.route?.routeType || "-",
-        transportOrderCode: record.transportOrderCode || "-",
-        reinforcementDate: record.metadata?.reinforcementDate || record.entryTime || "-",
-        entryTime: record.entryTime || "-",
-        entryBy: record.entryBy || "-",
-        permitTime: record.boardingPermitTime || "-",
-        permitBy: record.boardingPermitBy || "-",
-        permitShift: record.metadata?.permitShift || "-",
-        paymentTime: record.paymentTime || "-",
-        paymentBy: record.paymentBy || "-",
-        departureOrderTime: record.departureOrderTime || "-",
-        departureOrderBy: record.departureOrderBy || "-",
-        departureOrderShift: record.metadata?.departureOrderShift || "-",
-        exitTime: record.exitTime || "-",
-        plannedDepartureTime: record.plannedDepartureTime || "-",
-        actualDepartureTime: record.metadata?.actualDepartureTime || "-",
-        exitBy: record.exitBy || "-",
-        passengersDeparting: record.passengersDeparting || 0,
-        drivers: record.driverName || "-",
-        parkingLocation: record.metadata?.parkingLocation || "-",
-        notes: record.notes || "-",
-        permitStatus: getPermitStatusLabel(record.permitStatus),
-        syncStatus: getSyncStatus(record),
-      }));
+      const result = reinforcementRecords.map((record) => {
+        const metadata = (record.metadata || {}) as Record<string, unknown>;
+        return {
+          plateNumber: record.vehiclePlateNumber || "-",
+          operatorName: record.vehicle?.operator?.name || "-",
+          routeName: record.routeName || "-",
+          routeType: record.route?.routeType || "-",
+          transportOrderCode: record.transportOrderCode || "-",
+          reinforcementDate: String(metadata.reinforcementDate || record.entryTime || "-"),
+          entryTime: record.entryTime || "-",
+          entryBy: record.entryBy || "-",
+          permitTime: record.boardingPermitTime || "-",
+          permitBy: record.boardingPermitBy || "-",
+          permitShift: String(metadata.permitShift || "-"),
+          paymentTime: record.paymentTime || "-",
+          paymentBy: record.paymentBy || "-",
+          departureOrderTime: record.departureOrderTime || "-",
+          departureOrderBy: record.departureOrderBy || "-",
+          departureOrderShift: String(metadata.departureOrderShift || "-"),
+          exitTime: record.exitTime || "-",
+          plannedDepartureTime: record.plannedDepartureTime || "-",
+          actualDepartureTime: String(metadata.actualDepartureTime || "-"),
+          exitBy: record.exitBy || "-",
+          passengersDeparting: record.passengersDeparting || 0,
+          drivers: record.driverName || "-",
+          parkingLocation: String(metadata.parkingLocation || "-"),
+          notes: record.notes || "-",
+          permitStatus: getPermitStatusLabel(record.permitStatus),
+          syncStatus: getSyncStatus(record),
+        };
+      });
 
       setData(result);
     } catch (error) {

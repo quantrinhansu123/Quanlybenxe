@@ -116,9 +116,9 @@ export default function BangKeDoanhThu02() {
         const item = grouped.get(key)!;
 
         // Get vehicle type from metadata or vehicle info
-        const metadata = record.metadata || {};
-        const seatCount = metadata.seatCount || record.seatCount || 0;
-        const vehicleType = metadata.vehicleType || "seat"; // "seat" or "bed"
+        const metadata = (record.metadata || {}) as Record<string, unknown>;
+        const seatCount = Number(metadata.seatCount) || record.seatCount || 0;
+        const vehicleType = String(metadata.vehicleType || "seat"); // "seat" or "bed"
 
         // Set load capacity based on vehicle type
         if (vehicleType === "bed") {

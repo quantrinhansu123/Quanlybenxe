@@ -93,33 +93,36 @@ export default function BaoCaoXeKhongDuDieuKien() {
       );
 
       // Map to ineligible vehicle data
-      const result = ineligibleRecords.map((record) => ({
-        plateNumber: record.vehiclePlateNumber || "-",
-        operatorName: record.vehicle?.operator?.name || "-",
-        routeName: record.routeName || "-",
-        routeType: record.route?.routeType || "-",
-        transportOrderCode: record.transportOrderCode || "-",
-        entryTime: record.entryTime || "-",
-        entryBy: record.entryBy || "-",
-        permitTime: record.boardingPermitTime || "-",
-        permitShift: record.metadata?.permitShift || "-",
-        paymentTime: record.paymentTime || "-",
-        paymentBy: record.paymentBy || "-",
-        departureOrderTime: record.departureOrderTime || "-",
-        departureOrderBy: record.departureOrderBy || "-",
-        departureOrderShift: record.metadata?.departureOrderShift || "-",
-        plannedDepartureTime: record.plannedDepartureTime || "-",
-        actualDepartureTime: record.metadata?.actualDepartureTime || "-",
-        exitTime: record.exitTime || "-",
-        exitBy: record.exitBy || "-",
-        drivers: record.driverName || "-",
-        rejectionReason: record.rejectionReason || "-",
-        parkingLocation: record.metadata?.parkingLocation || "-",
-        notes: record.notes || "-",
-        hasImages: record.metadata?.hasImages ? "Có" : "Không",
-        permitStatus: getPermitStatusLabel(record.permitStatus),
-        syncStatus: getSyncStatus(record),
-      }));
+      const result = ineligibleRecords.map((record) => {
+        const metadata = (record.metadata || {}) as Record<string, unknown>;
+        return {
+          plateNumber: record.vehiclePlateNumber || "-",
+          operatorName: record.vehicle?.operator?.name || "-",
+          routeName: record.routeName || "-",
+          routeType: record.route?.routeType || "-",
+          transportOrderCode: record.transportOrderCode || "-",
+          entryTime: record.entryTime || "-",
+          entryBy: record.entryBy || "-",
+          permitTime: record.boardingPermitTime || "-",
+          permitShift: String(metadata.permitShift || "-"),
+          paymentTime: record.paymentTime || "-",
+          paymentBy: record.paymentBy || "-",
+          departureOrderTime: record.departureOrderTime || "-",
+          departureOrderBy: record.departureOrderBy || "-",
+          departureOrderShift: String(metadata.departureOrderShift || "-"),
+          plannedDepartureTime: record.plannedDepartureTime || "-",
+          actualDepartureTime: String(metadata.actualDepartureTime || "-"),
+          exitTime: record.exitTime || "-",
+          exitBy: record.exitBy || "-",
+          drivers: record.driverName || "-",
+          rejectionReason: record.rejectionReason || "-",
+          parkingLocation: String(metadata.parkingLocation || "-"),
+          notes: record.notes || "-",
+          hasImages: metadata.hasImages ? "Có" : "Không",
+          permitStatus: getPermitStatusLabel(record.permitStatus),
+          syncStatus: getSyncStatus(record),
+        };
+      });
 
       setData(result);
     } catch (error) {

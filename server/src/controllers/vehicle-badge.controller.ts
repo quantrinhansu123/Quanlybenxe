@@ -23,7 +23,7 @@ const mapFirebaseDataToBadge = (firebaseData: any) => {
     badge_number: firebaseData.SoPhuHieu || '',
     license_plate_sheet: firebaseData.BienSoXe || '',
     badge_type: firebaseData.LoaiPH || '',
-    badge_color: '', // Not available in datasheet
+    badge_color: firebaseData.MauPhuHieu || '',
     issue_date: firebaseData.NgayCap || '',
     expiry_date: firebaseData.NgayHetHan || '',
     status: status,
@@ -33,9 +33,10 @@ const mapFirebaseDataToBadge = (firebaseData: any) => {
     issuing_authority_ref: firebaseData.Ref_DonViCapPhuHieu || '',
     vehicle_id: '',
     route_id: '',
-    bus_route_ref: '',
+    bus_route_ref: firebaseData.TuyenDuong || '',
+    vehicle_type: firebaseData.LoaiXe || '',
     notes: '',
-    created_at: new Date().toISOString(),
+    created_at: firebaseData.created_at || new Date().toISOString(),
     created_by: '',
     email_notification_sent: false,
     notification_ref: '',
@@ -55,8 +56,8 @@ export const getAllVehicleBadges = async (req: Request, res: Response): Promise<
   try {
     const { status, badgeType, badgeColor, vehicleId, routeId } = req.query
 
-    // Get data from Firebase datasheet/PHUHIEUXE path
-    const snapshot = await db!.ref('datasheet/PHUHIEUXE').once('value')
+    // Get data from Firebase vehicle_badges path
+    const snapshot = await db!.ref('vehicle_badges').once('value')
     const firebaseData = snapshot.val()
 
     if (!firebaseData) {
@@ -104,8 +105,8 @@ export const getVehicleBadgeById = async (req: Request, res: Response): Promise<
   try {
     const { id } = req.params
 
-    // Get data from Firebase datasheet/PHUHIEUXE path
-    const snapshot = await db!.ref('datasheet/PHUHIEUXE').once('value')
+    // Get data from Firebase vehicle_badges path
+    const snapshot = await db!.ref('vehicle_badges').once('value')
     const firebaseData = snapshot.val()
 
     if (!firebaseData) {
@@ -137,8 +138,8 @@ export const getVehicleBadgeById = async (req: Request, res: Response): Promise<
 
 export const getVehicleBadgeStats = async (_req: Request, res: Response): Promise<void> => {
   try {
-    // Get data from Firebase datasheet/PHUHIEUXE path
-    const snapshot = await db!.ref('datasheet/PHUHIEUXE').once('value')
+    // Get data from Firebase vehicle_badges path
+    const snapshot = await db!.ref('vehicle_badges').once('value')
     const firebaseData = snapshot.val()
 
     if (!firebaseData) {

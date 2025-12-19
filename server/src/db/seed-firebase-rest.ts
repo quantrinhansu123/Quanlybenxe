@@ -315,6 +315,103 @@ async function seedFirebaseRest() {
     console.log(`✅ Đã tạo ${vehicleDocuments.length} vehicle documents\n`)
 
     // ============================================
+    // 5B. VEHICLE BADGES (Phù hiệu xe)
+    // ============================================
+    console.log('🏷️  Đang tạo Vehicle Badges...')
+    const vehicleBadges = [
+      {
+        ID_PhuHieu: generateId(),
+        SoPhuHieu: 'PH-2024-001',
+        BienSoXe: '51B-123.45',
+        LoaiPH: 'Xe buýt tuyến cố định',
+        MauPhuHieu: 'Xanh',
+        NgayCap: dateString(-180),
+        NgayHetHan: dateString(180),
+        TrangThai: 'Còn hiệu lực',
+        MaHoSo: 'HS-001',
+        LoaiCap: 'Cấp mới',
+        Ref_GPKD: 'GPKD-FUTA-001',
+        Ref_DonViCapPhuHieu: 'Sở GTVT TP.HCM',
+        TuyenDuong: 'TP.HCM - Đà Lạt',
+        LoaiXe: 'Xe buýt',
+        created_at: now()
+      },
+      {
+        ID_PhuHieu: generateId(),
+        SoPhuHieu: 'PH-2024-002',
+        BienSoXe: '51B-678.90',
+        LoaiPH: 'Xe buýt tuyến cố định',
+        MauPhuHieu: 'Xanh',
+        NgayCap: dateString(-120),
+        NgayHetHan: dateString(240),
+        TrangThai: 'Còn hiệu lực',
+        MaHoSo: 'HS-002',
+        LoaiCap: 'Cấp mới',
+        Ref_GPKD: 'GPKD-FUTA-001',
+        Ref_DonViCapPhuHieu: 'Sở GTVT TP.HCM',
+        TuyenDuong: 'TP.HCM - Vũng Tàu',
+        LoaiXe: 'Xe buýt',
+        created_at: now()
+      },
+      {
+        ID_PhuHieu: generateId(),
+        SoPhuHieu: 'PH-2024-003',
+        BienSoXe: '51B-111.22',
+        LoaiPH: 'Xe buýt tuyến cố định',
+        MauPhuHieu: 'Vàng',
+        NgayCap: dateString(-90),
+        NgayHetHan: dateString(270),
+        TrangThai: 'Còn hiệu lực',
+        MaHoSo: 'HS-003',
+        LoaiCap: 'Cấp mới',
+        Ref_GPKD: 'GPKD-TB-001',
+        Ref_DonViCapPhuHieu: 'Sở GTVT TP.HCM',
+        TuyenDuong: 'TP.HCM - Đà Lạt',
+        LoaiXe: 'Xe buýt',
+        created_at: now()
+      },
+      {
+        ID_PhuHieu: generateId(),
+        SoPhuHieu: 'PH-2024-004',
+        BienSoXe: '51B-333.44',
+        LoaiPH: 'Xe buýt tuyến cố định',
+        MauPhuHieu: 'Xanh',
+        NgayCap: dateString(-60),
+        NgayHetHan: dateString(25),
+        TrangThai: 'Còn hiệu lực',
+        MaHoSo: 'HS-004',
+        LoaiCap: 'Gia hạn',
+        Ref_GPKD: 'GPKD-KUMHO-001',
+        Ref_DonViCapPhuHieu: 'Sở GTVT TP.HCM',
+        TuyenDuong: 'TP.HCM - Cần Thơ',
+        LoaiXe: 'Xe buýt',
+        created_at: now()
+      },
+      {
+        ID_PhuHieu: generateId(),
+        SoPhuHieu: 'PH-2023-099',
+        BienSoXe: '51B-999.88',
+        LoaiPH: 'Xe buýt tuyến cố định',
+        MauPhuHieu: 'Đỏ',
+        NgayCap: dateString(-400),
+        NgayHetHan: dateString(-30),
+        TrangThai: 'Hết hiệu lực',
+        MaHoSo: 'HS-099',
+        LoaiCap: 'Cấp mới',
+        Ref_GPKD: 'GPKD-FUTA-001',
+        Ref_DonViCapPhuHieu: 'Sở GTVT TP.HCM',
+        TuyenDuong: 'TP.HCM - Đà Lạt',
+        LoaiXe: 'Xe buýt',
+        created_at: now()
+      },
+    ]
+
+    for (const badge of vehicleBadges) {
+      await firebaseSet(`vehicle_badges/${badge.ID_PhuHieu}`, badge)
+    }
+    console.log(`✅ Đã tạo ${vehicleBadges.length} vehicle badges\n`)
+
+    // ============================================
     // 6. DRIVERS
     // ============================================
     console.log('👨‍✈️ Đang tạo Drivers...')
@@ -981,6 +1078,7 @@ async function seedFirebaseRest() {
     console.log(`   - ${operators.length} operators`)
     console.log(`   - ${vehicles.length} vehicles`)
     console.log(`   - ${vehicleDocuments.length} vehicle documents`)
+    console.log(`   - ${vehicleBadges.length} vehicle badges`)
     console.log(`   - ${drivers.length} drivers`)
     console.log(`   - ${locations.length} locations`)
     console.log(`   - ${routes.length} routes`)

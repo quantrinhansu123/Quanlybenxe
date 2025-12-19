@@ -354,10 +354,11 @@ export default function DieuDo() {
   ) => {
     if (status !== "in-station") return null;
 
-    const electronicStatus = record.metadata?.electronicOrderStatus;
+    const metadata = (record.metadata || {}) as Record<string, unknown>;
+    const electronicStatus = metadata.electronicOrderStatus as string | undefined;
     const electronicCode =
-      record.metadata?.electronicOrderCode || record.transportOrderCode;
-    const electronicUrl = record.metadata?.electronicOrderUrl;
+      String(metadata.electronicOrderCode || record.transportOrderCode || "");
+    const electronicUrl = metadata.electronicOrderUrl as string | undefined;
 
     if (electronicStatus === "loading") {
       return (

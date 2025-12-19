@@ -177,14 +177,12 @@ export default function QuanLyDichVu() {
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead className="text-center sticky left-0 bg-white z-10">Mã dịch vụ</TableHead>
-                <TableHead className="text-center">Tên dịch vụ</TableHead>
+                <TableHead className="text-center sticky left-0 bg-white z-10">Tên dịch vụ</TableHead>
                 <TableHead className="text-center">Đơn vị tính</TableHead>
                 <TableHead className="text-center">Phần trăm thuế</TableHead>
                 <TableHead className="text-center">Loại vật tư/hàng hóa</TableHead>
                 <TableHead className="text-center">Sử dụng công thức tính số lượng</TableHead>
                 <TableHead className="text-center">Sử dụng công thức tính đơn giá</TableHead>
-                <TableHead className="text-center">Thứ tự hiển thị</TableHead>
                 <TableHead className="text-center">Mặc định chọn</TableHead>
                 <TableHead className="text-center">Tự động tính số lượng</TableHead>
                 <TableHead className="text-center sticky right-0 bg-white z-10">Trạng thái</TableHead>
@@ -194,13 +192,13 @@ export default function QuanLyDichVu() {
             <TableBody>
               {isLoading ? (
                 <TableRow>
-                  <TableCell colSpan={12} className="text-center py-8">
+                  <TableCell colSpan={10} className="text-center py-8">
                     Đang tải...
                   </TableCell>
                 </TableRow>
               ) : filteredServices.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={12} className="text-center py-8 text-gray-500">
+                  <TableCell colSpan={10} className="text-center py-8 text-gray-500">
                     Không có dữ liệu
                   </TableCell>
                 </TableRow>
@@ -208,9 +206,8 @@ export default function QuanLyDichVu() {
                 filteredServices.map((service) => (
                   <TableRow key={service.id}>
                     <TableCell className="font-medium text-center sticky left-0 bg-white z-10">
-                      {service.code}
+                      {service.name}
                     </TableCell>
-                    <TableCell className="text-center">{service.name}</TableCell>
                     <TableCell className="text-center">{service.unit}</TableCell>
                     <TableCell className="text-center">{service.taxPercentage}%</TableCell>
                     <TableCell className="text-center">{service.materialType}</TableCell>
@@ -220,7 +217,6 @@ export default function QuanLyDichVu() {
                     <TableCell className="text-center">
                       {service.usePriceFormula ? "✓" : "✗"}
                     </TableCell>
-                    <TableCell className="text-center">{service.displayOrder}</TableCell>
                     <TableCell className="text-center">
                       {service.isDefault ? "✓" : "✗"}
                     </TableCell>

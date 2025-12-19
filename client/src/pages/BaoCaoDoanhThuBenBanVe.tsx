@@ -114,44 +114,44 @@ export default function BaoCaoDoanhThuBenBanVe() {
         
         // Count vehicles
         item.vehicleCount += 1;
-        
+
         // Extract fee details from metadata or use payment amount as base
-        const metadata = record.metadata || {};
-        const fees = metadata.fees || {};
-        
+        const metadata = (record.metadata || {}) as Record<string, unknown>;
+        const fees = (metadata.fees || {}) as Record<string, unknown>;
+
         // Ra vào bến - base fee for entry/exit
-        item.raVaoBen += fees.raVaoBen || 0;
-        
+        item.raVaoBen += Number(fees.raVaoBen) || 0;
+
         // Hoa hồng vé - commission from ticket sales
-        item.hoaHongVe += fees.hoaHongVe || 0;
-        
+        item.hoaHongVe += Number(fees.hoaHongVe) || 0;
+
         // Đậu dêm - overnight parking fee
-        item.dauDem += fees.dauDem || 0;
-        
+        item.dauDem += Number(fees.dauDem) || 0;
+
         // Vệ sinh taxi - taxi cleaning fee
-        item.veSinhTaxi += fees.veSinhTaxi || 0;
-        
+        item.veSinhTaxi += Number(fees.veSinhTaxi) || 0;
+
         // Lưu bến - station storage fee
-        item.luuBen += fees.luuBen || 0;
-        
+        item.luuBen += Number(fees.luuBen) || 0;
+
         // Vệ sinh xe HD - HD vehicle cleaning fee
-        item.veSinhXeHD += fees.veSinhXeHD || 0;
-        
+        item.veSinhXeHD += Number(fees.veSinhXeHD) || 0;
+
         // Truy thu chuyến - retroactive charge per trip
-        item.truyThuChuyen += fees.truyThuChuyen || 0;
-        
+        item.truyThuChuyen += Number(fees.truyThuChuyen) || 0;
+
         // Truy thu tháng - retroactive monthly charge
-        item.truyThuThang += fees.truyThuThang || 0;
-        
+        item.truyThuThang += Number(fees.truyThuThang) || 0;
+
         // HH Truy thu tháng - commission on retroactive monthly charge
-        item.hhTruyThuThang += fees.hhTruyThuThang || 0;
-        
+        item.hhTruyThuThang += Number(fees.hhTruyThuThang) || 0;
+
         // Nợ cũ - old debt
-        item.noCu += fees.noCu || 0;
-        
+        item.noCu += Number(fees.noCu) || 0;
+
         // Phụ thu - additional charges
-        item.phuThu += fees.phuThu || 0;
-        
+        item.phuThu += Number(fees.phuThu) || 0;
+
         // If no detailed fees in metadata, use payment amount as raVaoBen
         if (!metadata.fees && record.paymentAmount) {
           item.raVaoBen += record.paymentAmount;

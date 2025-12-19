@@ -1,91 +1,84 @@
-import { useEffect } from "react"
+import { lazy, Suspense } from "react"
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom"
 import { ToastContainer } from "react-toastify"
 import "react-toastify/dist/ReactToastify.css"
-import { useAuthStore } from "@/store/auth.store"
-import { useUIStore } from "@/store/ui.store"
+import { ProtectedRoute } from "@/features/auth"
 import { MainLayout } from "@/components/layout/MainLayout"
 import { PublicLayout } from "@/components/layout/PublicLayout"
-import Login from "@/pages/Login"
-import Register from "@/pages/Register"
-import HomePage from "@/pages/HomePage"
-import Dashboard from "@/pages/Dashboard"
-import DieuDo from "@/pages/DieuDo"
-import ThanhToan from "@/pages/ThanhToan"
-import TaoMoiDonHang from "@/pages/TaoMoiDonHang"
-import QuanLyXe from "@/pages/QuanLyXe"
-import QuanLyLaiXe from "@/pages/QuanLyLaiXe"
-import QuanLyDonViVanTai from "@/pages/QuanLyDonViVanTai"
-import QuanLyTuyen from "@/pages/QuanLyTuyen"
-import QuanLyBenDen from "@/pages/QuanLyBenDen"
-import QuanLyDichVu from "@/pages/QuanLyDichVu"
-import QuanLyBieuThuc from "@/pages/QuanLyBieuThuc"
-import QuanLyPhuHieuXe from "@/pages/QuanLyPhuHieuXe"
-import DanhSachCaTruc from "@/pages/DanhSachCaTruc"
-import BaoCao from "@/pages/BaoCao"
-import Profile from "@/pages/Profile"
-import BangGiaVeDienTu from "@/pages/pricing/BangGiaVeDienTu"
-import BangGiaLenhVanChuyen from "@/pages/pricing/BangGiaLenhVanChuyen"
-import BangGiaChuKySo from "@/pages/pricing/BangGiaChuKySo"
-import BangGiaHoaDonDienTu from "@/pages/pricing/BangGiaHoaDonDienTu"
-import HuongDanBanVeUyThac from "@/pages/guide/HuongDanBanVeUyThac"
-import LienHe from "@/pages/LienHe"
-import XeXuatBen from "@/pages/XeXuatBen"
-import XeTraKhach from "@/pages/XeTraKhach"
-import XeKhongDuDieuKien from "@/pages/XeKhongDuDieuKien"
-import BaoCaoXeTraKhach from "@/pages/BaoCaoXeTraKhach"
-import BaoCaoTheoDoiLenhXuatBen from "@/pages/BaoCaoTheoDoiLenhXuatBen"
-import BaoCaoTongHopTuyen from "@/pages/BaoCaoTongHopTuyen"
-import BaoCaoTongHop from "@/pages/BaoCaoTongHop"
-import BaoCaoDoanhThuBenBanVe from "@/pages/BaoCaoDoanhThuBenBanVe"
-import BaoCaoCapPhepRaBen from "@/pages/BaoCaoCapPhepRaBen"
-import BaoCaoTheoDoiLenhTraKhach from "@/pages/BaoCaoTheoDoiLenhTraKhach"
-import BaoCaoNhatTrinhXe from "@/pages/BaoCaoNhatTrinhXe"
-import BaoCaoXeDiThay from "@/pages/BaoCaoXeDiThay"
-import BaoCaoXeKhongDuDieuKien from "@/pages/BaoCaoXeKhongDuDieuKien"
-import BaoCaoXeRaVaoBen from "@/pages/BaoCaoXeRaVaoBen"
-import BaoCaoXeTangCuong from "@/pages/BaoCaoXeTangCuong"
-import BaoCaoChamCongDangTai from "@/pages/BaoCaoChamCongDangTai"
-import BaoCaoLichSuGiayTo from "@/pages/BaoCaoLichSuGiayTo"
-import LapBaoCao from "@/pages/LapBaoCao"
-import BaoCaoTinhHinhHoatDongMau1 from "@/pages/BaoCaoTinhHinhHoatDongMau1"
-import BaoCaoTinhHinhHoatDongMau3 from "@/pages/BaoCaoTinhHinhHoatDongMau3"
-import BangKeDoanhThu from "@/pages/BangKeDoanhThu"
-import BangKeDoanhThu02 from "@/pages/BangKeDoanhThu02"
-import BangKeHoaDon from "@/pages/BangKeHoaDon"
+import { PageLoader } from "@/components/common/PageLoader"
 
-function ProtectedRoute({ children }: { children: React.ReactNode }) {
-  const { isAuthenticated, isLoading, checkAuth } = useAuthStore()
-  const { initializeShiftIfNeeded } = useUIStore()
+// ============================================
+// LAZY LOADED PAGES - Grouped by Feature Domain
+// ============================================
 
-  useEffect(() => {
-    checkAuth()
-  }, [checkAuth])
+// Auth Pages
+const Login = lazy(() => import("@/pages/Login"))
+const Register = lazy(() => import("@/pages/Register"))
 
-  // Tự động set shift theo giờ hiện tại khi đăng nhập lần đầu
-  useEffect(() => {
-    if (isAuthenticated && !isLoading) {
-      initializeShiftIfNeeded()
-    }
-  }, [isAuthenticated, isLoading, initializeShiftIfNeeded])
+// Public Pages
+const HomePage = lazy(() => import("@/pages/HomePage"))
+const LienHe = lazy(() => import("@/pages/LienHe"))
 
-  if (isLoading) {
-    return (
-      <div className="flex h-screen items-center justify-center">
-        <div className="text-center">
-          <div className="mb-4 h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent mx-auto" />
-          <p className="text-gray-600">Đang tải...</p>
-        </div>
-      </div>
-    )
-  }
+// Dashboard
+const Dashboard = lazy(() => import("@/pages/Dashboard"))
+const Profile = lazy(() => import("@/pages/Profile"))
 
-  if (!isAuthenticated) {
-    return <Navigate to="/login" replace />
-  }
+// Dispatch (Dieu Do) Feature
+const DieuDo = lazy(() => import("@/pages/DieuDo"))
+const ThanhToan = lazy(() => import("@/pages/ThanhToan"))
+const TaoMoiDonHang = lazy(() => import("@/pages/TaoMoiDonHang"))
+const XeXuatBen = lazy(() => import("@/pages/XeXuatBen"))
+const XeTraKhach = lazy(() => import("@/pages/XeTraKhach"))
+const XeKhongDuDieuKien = lazy(() => import("@/pages/XeKhongDuDieuKien"))
 
-  return <>{children}</>
-}
+// Fleet Management Feature
+const QuanLyXe = lazy(() => import("@/pages/QuanLyXe"))
+const QuanLyLaiXe = lazy(() => import("@/pages/QuanLyLaiXe"))
+const QuanLyDonViVanTai = lazy(() => import("@/pages/QuanLyDonViVanTai"))
+const QuanLyPhuHieuXe = lazy(() => import("@/pages/QuanLyPhuHieuXe"))
+
+// Route & Location Management
+const QuanLyTuyen = lazy(() => import("@/pages/QuanLyTuyen"))
+const QuanLyBenDen = lazy(() => import("@/pages/QuanLyBenDen"))
+
+// Service & Formula Management
+const QuanLyDichVu = lazy(() => import("@/pages/QuanLyDichVu"))
+const QuanLyBieuThuc = lazy(() => import("@/pages/QuanLyBieuThuc"))
+
+// Shift Management
+const DanhSachCaTruc = lazy(() => import("@/pages/DanhSachCaTruc"))
+
+// Reports Feature
+const BaoCao = lazy(() => import("@/pages/BaoCao"))
+const BaoCaoXeTraKhach = lazy(() => import("@/pages/BaoCaoXeTraKhach"))
+const BaoCaoTheoDoiLenhXuatBen = lazy(() => import("@/pages/BaoCaoTheoDoiLenhXuatBen"))
+const BaoCaoTongHopTuyen = lazy(() => import("@/pages/BaoCaoTongHopTuyen"))
+const BaoCaoTongHop = lazy(() => import("@/pages/BaoCaoTongHop"))
+const BaoCaoDoanhThuBenBanVe = lazy(() => import("@/pages/BaoCaoDoanhThuBenBanVe"))
+const BaoCaoCapPhepRaBen = lazy(() => import("@/pages/BaoCaoCapPhepRaBen"))
+const BaoCaoTheoDoiLenhTraKhach = lazy(() => import("@/pages/BaoCaoTheoDoiLenhTraKhach"))
+const BaoCaoNhatTrinhXe = lazy(() => import("@/pages/BaoCaoNhatTrinhXe"))
+const BaoCaoXeDiThay = lazy(() => import("@/pages/BaoCaoXeDiThay"))
+const BaoCaoXeKhongDuDieuKien = lazy(() => import("@/pages/BaoCaoXeKhongDuDieuKien"))
+const BaoCaoXeRaVaoBen = lazy(() => import("@/pages/BaoCaoXeRaVaoBen"))
+const BaoCaoXeTangCuong = lazy(() => import("@/pages/BaoCaoXeTangCuong"))
+const BaoCaoChamCongDangTai = lazy(() => import("@/pages/BaoCaoChamCongDangTai"))
+const BaoCaoLichSuGiayTo = lazy(() => import("@/pages/BaoCaoLichSuGiayTo"))
+const LapBaoCao = lazy(() => import("@/pages/LapBaoCao"))
+const BaoCaoTinhHinhHoatDongMau1 = lazy(() => import("@/pages/BaoCaoTinhHinhHoatDongMau1"))
+const BaoCaoTinhHinhHoatDongMau3 = lazy(() => import("@/pages/BaoCaoTinhHinhHoatDongMau3"))
+const BangKeDoanhThu = lazy(() => import("@/pages/BangKeDoanhThu"))
+const BangKeDoanhThu02 = lazy(() => import("@/pages/BangKeDoanhThu02"))
+const BangKeHoaDon = lazy(() => import("@/pages/BangKeHoaDon"))
+
+// Pricing Pages
+const BangGiaVeDienTu = lazy(() => import("@/pages/pricing/BangGiaVeDienTu"))
+const BangGiaLenhVanChuyen = lazy(() => import("@/pages/pricing/BangGiaLenhVanChuyen"))
+const BangGiaChuKySo = lazy(() => import("@/pages/pricing/BangGiaChuKySo"))
+const BangGiaHoaDonDienTu = lazy(() => import("@/pages/pricing/BangGiaHoaDonDienTu"))
+
+// Guide Pages
+const HuongDanBanVeUyThac = lazy(() => import("@/pages/guide/HuongDanBanVeUyThac"))
 
 function App() {
   return (
@@ -103,13 +96,26 @@ function App() {
         theme="light"
       />
       <Routes>
-        <Route path="/login" element={<Login />} />
-        <Route path="/register" element={<Register />} />
+        {/* Auth Routes */}
+        <Route path="/login" element={
+          <Suspense fallback={<PageLoader />}>
+            <Login />
+          </Suspense>
+        } />
+        <Route path="/register" element={
+          <Suspense fallback={<PageLoader />}>
+            <Register />
+          </Suspense>
+        } />
+
+        {/* Public Home */}
         <Route
           path="/"
           element={
             <PublicLayout>
-              <HomePage />
+              <Suspense fallback={<PageLoader />}>
+                <HomePage />
+              </Suspense>
             </PublicLayout>
           }
         />
@@ -117,22 +123,30 @@ function App() {
           path="/home"
           element={<Navigate to="/" replace />}
         />
+
+        {/* Dashboard */}
         <Route
           path="/dashboard"
           element={
             <ProtectedRoute>
               <MainLayout>
-                <Dashboard />
+                <Suspense fallback={<PageLoader />}>
+                  <Dashboard />
+                </Suspense>
               </MainLayout>
             </ProtectedRoute>
           }
         />
+
+        {/* Dispatch Feature */}
         <Route
           path="/dieu-do"
           element={
             <ProtectedRoute>
               <MainLayout disablePadding>
-                <DieuDo />
+                <Suspense fallback={<PageLoader />}>
+                  <DieuDo />
+                </Suspense>
               </MainLayout>
             </ProtectedRoute>
           }
@@ -142,7 +156,9 @@ function App() {
           element={
             <ProtectedRoute>
               <MainLayout>
-                <ThanhToan />
+                <Suspense fallback={<PageLoader />}>
+                  <ThanhToan />
+                </Suspense>
               </MainLayout>
             </ProtectedRoute>
           }
@@ -152,7 +168,9 @@ function App() {
           element={
             <ProtectedRoute>
               <MainLayout>
-                <ThanhToan />
+                <Suspense fallback={<PageLoader />}>
+                  <ThanhToan />
+                </Suspense>
               </MainLayout>
             </ProtectedRoute>
           }
@@ -162,7 +180,9 @@ function App() {
           element={
             <ProtectedRoute>
               <MainLayout>
-                <TaoMoiDonHang />
+                <Suspense fallback={<PageLoader />}>
+                  <TaoMoiDonHang />
+                </Suspense>
               </MainLayout>
             </ProtectedRoute>
           }
@@ -172,7 +192,9 @@ function App() {
           element={
             <ProtectedRoute>
               <MainLayout>
-                <XeXuatBen />
+                <Suspense fallback={<PageLoader />}>
+                  <XeXuatBen />
+                </Suspense>
               </MainLayout>
             </ProtectedRoute>
           }
@@ -182,7 +204,9 @@ function App() {
           element={
             <ProtectedRoute>
               <MainLayout>
-                <XeTraKhach />
+                <Suspense fallback={<PageLoader />}>
+                  <XeTraKhach />
+                </Suspense>
               </MainLayout>
             </ProtectedRoute>
           }
@@ -192,17 +216,23 @@ function App() {
           element={
             <ProtectedRoute>
               <MainLayout>
-                <XeKhongDuDieuKien />
+                <Suspense fallback={<PageLoader />}>
+                  <XeKhongDuDieuKien />
+                </Suspense>
               </MainLayout>
             </ProtectedRoute>
           }
         />
+
+        {/* Fleet Management */}
         <Route
           path="/quan-ly-xe"
           element={
             <ProtectedRoute>
               <MainLayout>
-                <QuanLyXe />
+                <Suspense fallback={<PageLoader />}>
+                  <QuanLyXe />
+                </Suspense>
               </MainLayout>
             </ProtectedRoute>
           }
@@ -212,7 +242,9 @@ function App() {
           element={
             <ProtectedRoute>
               <MainLayout>
-                <QuanLyLaiXe />
+                <Suspense fallback={<PageLoader />}>
+                  <QuanLyLaiXe />
+                </Suspense>
               </MainLayout>
             </ProtectedRoute>
           }
@@ -222,47 +254,9 @@ function App() {
           element={
             <ProtectedRoute>
               <MainLayout>
-                <QuanLyDonViVanTai />
-              </MainLayout>
-            </ProtectedRoute>
-          }
-        />
-        <Route
-          path="/quan-ly-tuyen"
-          element={
-            <ProtectedRoute>
-              <MainLayout>
-                <QuanLyTuyen />
-              </MainLayout>
-            </ProtectedRoute>
-          }
-        />
-        <Route
-          path="/quan-ly-ben-den"
-          element={
-            <ProtectedRoute>
-              <MainLayout>
-                <QuanLyBenDen />
-              </MainLayout>
-            </ProtectedRoute>
-          }
-        />
-        <Route
-          path="/quan-ly-dich-vu"
-          element={
-            <ProtectedRoute>
-              <MainLayout>
-                <QuanLyDichVu />
-              </MainLayout>
-            </ProtectedRoute>
-          }
-        />
-        <Route
-          path="/quan-ly-bieu-thuc"
-          element={
-            <ProtectedRoute>
-              <MainLayout>
-                <QuanLyBieuThuc />
+                <Suspense fallback={<PageLoader />}>
+                  <QuanLyDonViVanTai />
+                </Suspense>
               </MainLayout>
             </ProtectedRoute>
           }
@@ -272,27 +266,89 @@ function App() {
           element={
             <ProtectedRoute>
               <MainLayout>
-                <QuanLyPhuHieuXe />
+                <Suspense fallback={<PageLoader />}>
+                  <QuanLyPhuHieuXe />
+                </Suspense>
               </MainLayout>
             </ProtectedRoute>
           }
         />
+
+        {/* Route & Location Management */}
+        <Route
+          path="/quan-ly-tuyen"
+          element={
+            <ProtectedRoute>
+              <MainLayout>
+                <Suspense fallback={<PageLoader />}>
+                  <QuanLyTuyen />
+                </Suspense>
+              </MainLayout>
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/quan-ly-ben-den"
+          element={
+            <ProtectedRoute>
+              <MainLayout>
+                <Suspense fallback={<PageLoader />}>
+                  <QuanLyBenDen />
+                </Suspense>
+              </MainLayout>
+            </ProtectedRoute>
+          }
+        />
+
+        {/* Service & Formula Management */}
+        <Route
+          path="/quan-ly-dich-vu"
+          element={
+            <ProtectedRoute>
+              <MainLayout>
+                <Suspense fallback={<PageLoader />}>
+                  <QuanLyDichVu />
+                </Suspense>
+              </MainLayout>
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/quan-ly-bieu-thuc"
+          element={
+            <ProtectedRoute>
+              <MainLayout>
+                <Suspense fallback={<PageLoader />}>
+                  <QuanLyBieuThuc />
+                </Suspense>
+              </MainLayout>
+            </ProtectedRoute>
+          }
+        />
+
+        {/* Shift Management */}
         <Route
           path="/danh-sach-ca-truc"
           element={
             <ProtectedRoute>
               <MainLayout>
-                <DanhSachCaTruc />
+                <Suspense fallback={<PageLoader />}>
+                  <DanhSachCaTruc />
+                </Suspense>
               </MainLayout>
             </ProtectedRoute>
           }
         />
+
+        {/* Reports Feature */}
         <Route
           path="/bao-cao"
           element={
             <ProtectedRoute>
               <MainLayout>
-                <BaoCao />
+                <Suspense fallback={<PageLoader />}>
+                  <BaoCao />
+                </Suspense>
               </MainLayout>
             </ProtectedRoute>
           }
@@ -302,7 +358,9 @@ function App() {
           element={
             <ProtectedRoute>
               <MainLayout>
-                <BaoCaoXeTraKhach />
+                <Suspense fallback={<PageLoader />}>
+                  <BaoCaoXeTraKhach />
+                </Suspense>
               </MainLayout>
             </ProtectedRoute>
           }
@@ -312,7 +370,9 @@ function App() {
           element={
             <ProtectedRoute>
               <MainLayout>
-                <BaoCaoTheoDoiLenhXuatBen />
+                <Suspense fallback={<PageLoader />}>
+                  <BaoCaoTheoDoiLenhXuatBen />
+                </Suspense>
               </MainLayout>
             </ProtectedRoute>
           }
@@ -322,7 +382,9 @@ function App() {
           element={
             <ProtectedRoute>
               <MainLayout>
-                <BaoCaoTongHopTuyen />
+                <Suspense fallback={<PageLoader />}>
+                  <BaoCaoTongHopTuyen />
+                </Suspense>
               </MainLayout>
             </ProtectedRoute>
           }
@@ -332,7 +394,9 @@ function App() {
           element={
             <ProtectedRoute>
               <MainLayout>
-                <BaoCaoTongHop />
+                <Suspense fallback={<PageLoader />}>
+                  <BaoCaoTongHop />
+                </Suspense>
               </MainLayout>
             </ProtectedRoute>
           }
@@ -342,7 +406,9 @@ function App() {
           element={
             <ProtectedRoute>
               <MainLayout>
-                <BaoCaoDoanhThuBenBanVe />
+                <Suspense fallback={<PageLoader />}>
+                  <BaoCaoDoanhThuBenBanVe />
+                </Suspense>
               </MainLayout>
             </ProtectedRoute>
           }
@@ -352,7 +418,9 @@ function App() {
           element={
             <ProtectedRoute>
               <MainLayout>
-                <BaoCaoCapPhepRaBen />
+                <Suspense fallback={<PageLoader />}>
+                  <BaoCaoCapPhepRaBen />
+                </Suspense>
               </MainLayout>
             </ProtectedRoute>
           }
@@ -362,7 +430,9 @@ function App() {
           element={
             <ProtectedRoute>
               <MainLayout>
-                <BaoCaoTheoDoiLenhTraKhach />
+                <Suspense fallback={<PageLoader />}>
+                  <BaoCaoTheoDoiLenhTraKhach />
+                </Suspense>
               </MainLayout>
             </ProtectedRoute>
           }
@@ -372,7 +442,9 @@ function App() {
           element={
             <ProtectedRoute>
               <MainLayout>
-                <BaoCaoNhatTrinhXe />
+                <Suspense fallback={<PageLoader />}>
+                  <BaoCaoNhatTrinhXe />
+                </Suspense>
               </MainLayout>
             </ProtectedRoute>
           }
@@ -382,7 +454,9 @@ function App() {
           element={
             <ProtectedRoute>
               <MainLayout>
-                <BaoCaoXeDiThay />
+                <Suspense fallback={<PageLoader />}>
+                  <BaoCaoXeDiThay />
+                </Suspense>
               </MainLayout>
             </ProtectedRoute>
           }
@@ -392,7 +466,9 @@ function App() {
           element={
             <ProtectedRoute>
               <MainLayout>
-                <BaoCaoXeKhongDuDieuKien />
+                <Suspense fallback={<PageLoader />}>
+                  <BaoCaoXeKhongDuDieuKien />
+                </Suspense>
               </MainLayout>
             </ProtectedRoute>
           }
@@ -402,7 +478,9 @@ function App() {
           element={
             <ProtectedRoute>
               <MainLayout>
-                <BaoCaoXeRaVaoBen />
+                <Suspense fallback={<PageLoader />}>
+                  <BaoCaoXeRaVaoBen />
+                </Suspense>
               </MainLayout>
             </ProtectedRoute>
           }
@@ -412,7 +490,9 @@ function App() {
           element={
             <ProtectedRoute>
               <MainLayout>
-                <BaoCaoXeTangCuong />
+                <Suspense fallback={<PageLoader />}>
+                  <BaoCaoXeTangCuong />
+                </Suspense>
               </MainLayout>
             </ProtectedRoute>
           }
@@ -422,7 +502,9 @@ function App() {
           element={
             <ProtectedRoute>
               <MainLayout>
-                <BaoCaoChamCongDangTai />
+                <Suspense fallback={<PageLoader />}>
+                  <BaoCaoChamCongDangTai />
+                </Suspense>
               </MainLayout>
             </ProtectedRoute>
           }
@@ -432,7 +514,9 @@ function App() {
           element={
             <ProtectedRoute>
               <MainLayout>
-                <BaoCaoLichSuGiayTo />
+                <Suspense fallback={<PageLoader />}>
+                  <BaoCaoLichSuGiayTo />
+                </Suspense>
               </MainLayout>
             </ProtectedRoute>
           }
@@ -442,7 +526,9 @@ function App() {
           element={
             <ProtectedRoute>
               <MainLayout>
-                <LapBaoCao />
+                <Suspense fallback={<PageLoader />}>
+                  <LapBaoCao />
+                </Suspense>
               </MainLayout>
             </ProtectedRoute>
           }
@@ -452,7 +538,9 @@ function App() {
           element={
             <ProtectedRoute>
               <MainLayout disablePadding>
-                <BaoCaoTinhHinhHoatDongMau1 />
+                <Suspense fallback={<PageLoader />}>
+                  <BaoCaoTinhHinhHoatDongMau1 />
+                </Suspense>
               </MainLayout>
             </ProtectedRoute>
           }
@@ -462,7 +550,9 @@ function App() {
           element={
             <ProtectedRoute>
               <MainLayout disablePadding>
-                <BaoCaoTinhHinhHoatDongMau3 />
+                <Suspense fallback={<PageLoader />}>
+                  <BaoCaoTinhHinhHoatDongMau3 />
+                </Suspense>
               </MainLayout>
             </ProtectedRoute>
           }
@@ -472,7 +562,9 @@ function App() {
           element={
             <ProtectedRoute>
               <MainLayout disablePadding>
-                <BangKeDoanhThu />
+                <Suspense fallback={<PageLoader />}>
+                  <BangKeDoanhThu />
+                </Suspense>
               </MainLayout>
             </ProtectedRoute>
           }
@@ -482,7 +574,9 @@ function App() {
           element={
             <ProtectedRoute>
               <MainLayout disablePadding>
-                <BangKeDoanhThu02 />
+                <Suspense fallback={<PageLoader />}>
+                  <BangKeDoanhThu02 />
+                </Suspense>
               </MainLayout>
             </ProtectedRoute>
           }
@@ -492,26 +586,36 @@ function App() {
           element={
             <ProtectedRoute>
               <MainLayout>
-                <BangKeHoaDon />
+                <Suspense fallback={<PageLoader />}>
+                  <BangKeHoaDon />
+                </Suspense>
               </MainLayout>
             </ProtectedRoute>
           }
         />
+
+        {/* Profile */}
         <Route
           path="/profile"
           element={
             <ProtectedRoute>
               <PublicLayout>
-                <Profile />
+                <Suspense fallback={<PageLoader />}>
+                  <Profile />
+                </Suspense>
               </PublicLayout>
             </ProtectedRoute>
           }
         />
+
+        {/* Pricing Pages */}
         <Route
           path="/pricing/electronic-ticket"
           element={
             <PublicLayout>
-              <BangGiaVeDienTu />
+              <Suspense fallback={<PageLoader />}>
+                <BangGiaVeDienTu />
+              </Suspense>
             </PublicLayout>
           }
         />
@@ -519,7 +623,9 @@ function App() {
           path="/pricing/dispatch-order"
           element={
             <PublicLayout>
-              <BangGiaLenhVanChuyen />
+              <Suspense fallback={<PageLoader />}>
+                <BangGiaLenhVanChuyen />
+              </Suspense>
             </PublicLayout>
           }
         />
@@ -527,7 +633,9 @@ function App() {
           path="/pricing/icorp-signature"
           element={
             <PublicLayout>
-              <BangGiaChuKySo />
+              <Suspense fallback={<PageLoader />}>
+                <BangGiaChuKySo />
+              </Suspense>
             </PublicLayout>
           }
         />
@@ -535,22 +643,36 @@ function App() {
           path="/pricing/icorp-invoice"
           element={
             <PublicLayout>
-              <BangGiaHoaDonDienTu />
+              <Suspense fallback={<PageLoader />}>
+                <BangGiaHoaDonDienTu />
+              </Suspense>
             </PublicLayout>
           }
         />
+
+        {/* Guide Pages */}
         <Route
           path="/guide/bus-station/consignment"
-          element={<HuongDanBanVeUyThac />}
+          element={
+            <Suspense fallback={<PageLoader />}>
+              <HuongDanBanVeUyThac />
+            </Suspense>
+          }
         />
+
+        {/* Contact */}
         <Route
           path="/lien-he"
           element={
             <PublicLayout>
-              <LienHe />
+              <Suspense fallback={<PageLoader />}>
+                <LienHe />
+              </Suspense>
             </PublicLayout>
           }
         />
+
+        {/* Fallback */}
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </BrowserRouter>
@@ -558,4 +680,3 @@ function App() {
 }
 
 export default App
-

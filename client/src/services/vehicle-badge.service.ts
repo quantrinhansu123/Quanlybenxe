@@ -14,6 +14,7 @@ export interface VehicleBadge {
   file_code: string
   issue_date: string
   issue_type: string
+  issuing_authority_ref: string
   license_plate_sheet: string
   notes: string
   notification_ref: string
@@ -28,6 +29,7 @@ export interface VehicleBadge {
   route_id: string
   status: string
   vehicle_id: string
+  vehicle_type: string
   warn_duplicate_plate: boolean
 }
 
