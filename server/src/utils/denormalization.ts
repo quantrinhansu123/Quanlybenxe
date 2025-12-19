@@ -47,9 +47,10 @@ export async function fetchDenormalizedData(params: {
   routeId?: string | null
   userId?: string | null
 }): Promise<DenormalizedData> {
+  // Fetch base entities first
   const [vehicleResult, driverResult, routeResult, userResult] = await Promise.all([
     firebase.from('vehicles')
-      .select('id, plate_number, operator_id, operators:operator_id(id, name, code)')
+      .select('id, plate_number, operator_id')
       .eq('id', params.vehicleId)
       .single(),
     firebase.from('drivers')
@@ -57,7 +58,7 @@ export async function fetchDenormalizedData(params: {
       .eq('id', params.driverId)
       .single(),
     params.routeId ? firebase.from('routes')
-      .select('id, route_name, route_type, destination:destination_id(id, name, code)')
+      .select('id, route_name, route_type, destination_id')
       .eq('id', params.routeId)
       .single() : Promise.resolve({ data: null }),
     params.userId ? firebase.from('users')
@@ -71,15 +72,19 @@ export async function fetchDenormalizedData(params: {
   const route = routeResult.data
   const user = userResult.data
 
-  // Handle operator data (can be array or object depending on Firebase query builder)
-  const operatorData = vehicle?.operators
-    ? (Array.isArray(vehicle.operators) ? vehicle.operators[0] : vehicle.operators)
-    : null
+  // Manual join: fetch operator and destination separately (Firebase RTDB doesn't support joins)
+  let operatorData = null
+  let destinationData = null
 
-  // Handle destination data
-  const destinationData = route?.destination
-    ? (Array.isArray(route.destination) ? route.destination[0] : route.destination)
-    : null
+  if (vehicle?.operator_id) {
+    const { data: op } = await firebase.from('operators').select('id, name, code').eq('id', vehicle.operator_id).single()
+    operatorData = op
+  }
+
+  if (route?.destination_id) {
+    const { data: dest } = await firebase.from('destinations').select('id, name, code').eq('id', route.destination_id).single()
+    destinationData = dest
+  }
 
   return {
     vehicle: {

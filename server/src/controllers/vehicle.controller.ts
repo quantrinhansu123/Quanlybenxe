@@ -324,14 +324,23 @@ export const createVehicle = async (req: Request, res: Response) => {
         notes: notes || null,
         is_active: true,
       })
-      .select(`
-        *,
-        operators:operator_id(id, name, code),
-        vehicle_types:vehicle_type_id(id, name)
-      `)
+      .select('*')
       .single()
 
     if (vehicleError) throw vehicleError
+
+    // Fetch operator and vehicle_type for manual join
+    let operator = null
+    let vehicleType = null
+    
+    if (vehicle.operator_id) {
+      const { data: op } = await firebase.from('operators').select('*').eq('id', vehicle.operator_id).single()
+      operator = op
+    }
+    if (vehicle.vehicle_type_id) {
+      const { data: vt } = await firebase.from('vehicle_types').select('*').eq('id', vehicle.vehicle_type_id).single()
+      vehicleType = vt
+    }
 
     // Insert documents
     if (documents) {
@@ -382,15 +391,15 @@ export const createVehicle = async (req: Request, res: Response) => {
       id: vehicle.id,
       plateNumber: vehicle.plate_number,
       vehicleTypeId: vehicle.vehicle_type_id,
-      vehicleType: (vehicle as any).vehicle_types ? {
-        id: (vehicle as any).vehicle_types.id,
-        name: (vehicle as any).vehicle_types.name,
+      vehicleType: vehicleType ? {
+        id: vehicleType.id,
+        name: vehicleType.name,
       } : undefined,
       operatorId: vehicle.operator_id,
-      operator: (vehicle as any).operators ? {
-        id: (vehicle as any).operators.id,
-        name: (vehicle as any).operators.name,
-        code: (vehicle as any).operators.code,
+      operator: operator ? {
+        id: operator.id,
+        name: operator.name,
+        code: operator.code,
       } : undefined,
       seatCapacity: vehicle.seat_capacity,
       bedCapacity: vehicle.bed_capacity,
@@ -544,26 +553,31 @@ export const updateVehicle = async (req: AuthRequest, res: Response) => {
     // Fetch updated vehicle
     const { data: vehicle } = await firebase
       .from('vehicles')
-      .select(`
-        *,
-        operators:operator_id(id, name, code),
-        vehicle_types:vehicle_type_id(id, name)
-      `)
+      .select('*')
       .eq('id', id)
       .single()
 
+    // Fetch operator and vehicle_type for manual join
+    let operator = null
+    let vehicleType = null
+    
+    if (vehicle?.operator_id) {
+      const { data: op } = await firebase.from('operators').select('*').eq('id', vehicle.operator_id).single()
+      operator = op
+    }
+    if (vehicle?.vehicle_type_id) {
+      const { data: vt } = await firebase.from('vehicle_types').select('*').eq('id', vehicle.vehicle_type_id).single()
+      vehicleType = vt
+    }
+
     // Sync denormalized data to dispatch_records if plate_number or operator changed
     if (updateData.plate_number || updateData.operator_id !== undefined) {
-      const operatorData = vehicle.operators
-        ? (Array.isArray(vehicle.operators) ? vehicle.operators[0] : vehicle.operators)
-        : null
-
       // Run sync in background (non-blocking)
       syncVehicleChanges(id, {
         plateNumber: vehicle.plate_number,
         operatorId: vehicle.operator_id,
-        operatorName: operatorData?.name || null,
-        operatorCode: operatorData?.code || null,
+        operatorName: operator?.name || null,
+        operatorCode: operator?.code || null,
       }).catch((err) => {
         console.error('[Vehicle Update] Failed to sync denormalized data:', err)
       })
@@ -592,15 +606,15 @@ export const updateVehicle = async (req: AuthRequest, res: Response) => {
       id: vehicle.id,
       plateNumber: vehicle.plate_number,
       vehicleTypeId: vehicle.vehicle_type_id,
-      vehicleType: (vehicle as any).vehicle_types ? {
-        id: (vehicle as any).vehicle_types.id,
-        name: (vehicle as any).vehicle_types.name,
+      vehicleType: vehicleType ? {
+        id: vehicleType.id,
+        name: vehicleType.name,
       } : undefined,
       operatorId: vehicle.operator_id,
-      operator: (vehicle as any).operators ? {
-        id: (vehicle as any).operators.id,
-        name: (vehicle as any).operators.name,
-        code: (vehicle as any).operators.code,
+      operator: operator ? {
+        id: operator.id,
+        name: operator.name,
+        code: operator.code,
       } : undefined,
       seatCapacity: vehicle.seat_capacity,
       bedCapacity: vehicle.bed_capacity,
