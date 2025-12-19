@@ -1,8 +1,49 @@
 import { Request, Response } from 'express'
 import { AuthRequest } from '../middleware/auth.js'
-import { firebase } from '../config/database.js'
+import { firebase, db } from '../config/database.js'
 import { z } from 'zod'
 import { syncVehicleChanges } from '../utils/denormalization-sync.js'
+
+/**
+ * Fetches vehicle data from Firebase RTDB vehicle badges as fallback
+ */
+async function getVehicleFromBadges(vehicleId: string) {
+  try {
+    if (!db) return null
+
+    const snapshot = await db.ref('datasheet/PHUHIEUXE').once('value')
+    const badgesData = snapshot.val()
+
+    if (!badgesData) return null
+
+    // Try to find badge by ID
+    for (const key of Object.keys(badgesData)) {
+      const badge = badgesData[key]
+      if (badge.ID_PhuHieu === vehicleId || key === vehicleId) {
+        return {
+          id: badge.ID_PhuHieu || key,
+          plateNumber: badge.BienSoXe || '',
+          vehicleType: badge.LoaiXe || null,
+          seatCapacity: 0,
+          bedCapacity: 0,
+          isActive: badge.TrangThai?.toLowerCase()?.includes('hiệu lực') || true,
+          notes: badge.GhiChu || null,
+          badgeNumber: badge.SoPhuHieu || '',
+          badgeType: badge.LoaiPH || '',
+          badgeColor: badge.MauPhuHieu || '',
+          issueDate: badge.NgayCap || '',
+          expiryDate: badge.NgayHetHan || '',
+          status: badge.TrangThai || '',
+        }
+      }
+    }
+
+    return null
+  } catch (error) {
+    console.error('Error fetching vehicle from badges:', error)
+    return null
+  }
+}
 
 const vehicleSchema = z.object({
   plateNumber: z.string().min(1, 'Plate number is required'),
@@ -176,10 +217,44 @@ export const getAllVehicles = async (req: Request, res: Response) => {
   }
 }
 
+// Helper to check if string is valid UUID format
+function isValidUUID(str: string): boolean {
+  const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
+  return uuidRegex.test(str)
+}
+
 export const getVehicleById = async (req: Request, res: Response) => {
   try {
     const { id } = req.params
 
+    // TÌM TRỰC TIẾP TRONG FIREBASE VEHICLE BADGES TRƯỚC
+    const badgeVehicle = await getVehicleFromBadges(id)
+    if (badgeVehicle) {
+      return res.json({
+        id: badgeVehicle.id,
+        plateNumber: badgeVehicle.plateNumber,
+        vehicleType: badgeVehicle.vehicleType ? { name: badgeVehicle.vehicleType } : undefined,
+        seatCapacity: badgeVehicle.seatCapacity,
+        bedCapacity: badgeVehicle.bedCapacity,
+        isActive: badgeVehicle.isActive,
+        notes: badgeVehicle.notes,
+        // Badge specific fields
+        badgeNumber: badgeVehicle.badgeNumber,
+        badgeType: badgeVehicle.badgeType,
+        badgeColor: badgeVehicle.badgeColor,
+        issueDate: badgeVehicle.issueDate,
+        expiryDate: badgeVehicle.expiryDate,
+        status: badgeVehicle.status,
+        documents: {},
+      })
+    }
+
+    // Skip Supabase query if ID is not a valid UUID (Firebase IDs are not UUIDs)
+    if (!isValidUUID(id)) {
+      return res.status(404).json({ error: 'Vehicle not found' })
+    }
+
+    // Fallback: Tìm trong Supabase vehicles table
     const { data: vehicle, error: vehicleError } = await firebase
       .from('vehicles')
       .select(`
@@ -190,8 +265,7 @@ export const getVehicleById = async (req: Request, res: Response) => {
       .eq('id', id)
       .single()
 
-    if (vehicleError) throw vehicleError
-    if (!vehicle) {
+    if (vehicleError || !vehicle) {
       return res.status(404).json({ error: 'Vehicle not found' })
     }
 
@@ -235,18 +309,18 @@ export const getVehicleById = async (req: Request, res: Response) => {
       engineNumber: vehicle.engine_number,
       color: vehicle.color,
       imageUrl: vehicle.image_url,
-      
+
       insuranceExpiryDate: vehicle.insurance_expiry_date,
       inspectionExpiryDate: vehicle.inspection_expiry_date,
-      
+
       cargoLength: vehicle.cargo_length,
       cargoWidth: vehicle.cargo_width,
       cargoHeight: vehicle.cargo_height,
-      
+
       gpsProvider: vehicle.gps_provider,
       gpsUsername: vehicle.gps_username,
       gpsPassword: vehicle.gps_password,
-      
+
       province: vehicle.province,
 
       isActive: vehicle.is_active,

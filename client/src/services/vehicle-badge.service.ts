@@ -57,6 +57,16 @@ export const vehicleBadgeService = {
     }
   },
 
+  getByPlateNumber: async (plateNumber: string): Promise<VehicleBadge | null> => {
+    try {
+      const response = await api.get<VehicleBadge>(`/vehicle-badges/by-plate/${encodeURIComponent(plateNumber)}`)
+      return response.data
+    } catch (error) {
+      console.error('Error fetching vehicle badge by plate number:', error)
+      return null
+    }
+  },
+
   getStats: async (): Promise<{
     total: number
     active: number

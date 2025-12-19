@@ -21,78 +21,68 @@ export const getAllDrivers = async (req: Request, res: Response) => {
   try {
     const { operatorId, isActive } = req.query
 
-    let query = firebase
+    // Load all drivers first
+    let driversQuery = firebase
       .from('drivers')
-      .select(`
-        *,
-        operators:operator_id(id, name, code),
-        driver_operators(
-          operator_id,
-          is_primary,
-          operators:operator_id(id, name, code)
-        )
-      `)
+      .select('*')
       .order('created_at', { ascending: false })
 
-    if (operatorId) {
-      // Filter by operator through junction table or primary operator
-      // First, get driver IDs from junction table
-      const { data: junctionDrivers } = await firebase
-        .from('driver_operators')
-        .select('driver_id')
-        .eq('operator_id', operatorId as string)
-      
-      const junctionDriverIds = junctionDrivers?.map((d: any) => d.driver_id) || []
-      
-      // Get driver IDs that have this operator as primary
-      const { data: primaryDrivers } = await firebase
-        .from('drivers')
-        .select('id')
-        .eq('operator_id', operatorId as string)
-      
-      const primaryDriverIds = primaryDrivers?.map((d: any) => d.id) || []
-      
-      // Combine all driver IDs and filter
-      const allDriverIds = [...new Set([...primaryDriverIds, ...junctionDriverIds])]
-      
-      if (allDriverIds.length > 0) {
-        query = query.in('id', allDriverIds)
-      } else {
-        // No drivers found, return empty result
-        query = query.eq('id', '00000000-0000-0000-0000-000000000000') // Non-existent ID to return empty
-      }
-    }
     if (isActive !== undefined) {
-      query = query.eq('is_active', isActive === 'true')
+      driversQuery = driversQuery.eq('is_active', isActive === 'true')
     }
 
-    const { data, error } = await query
+    const { data: driversData, error: driversError } = await driversQuery
+    if (driversError) throw driversError
 
-    if (error) throw error
+    // Load operators for lookup
+    const { data: operatorsData } = await firebase
+      .from('operators')
+      .select('id, name, code')
 
-    const drivers = data.map((driver: any) => {
-      // Get primary operator from operator_id (backward compatibility)
-      const primaryOperator = driver.operators ? {
-        id: driver.operators.id,
-        name: driver.operators.name,
-        code: driver.operators.code,
+    const operatorsMap = new Map((operatorsData || []).map((op: any) => [op.id, op]))
+
+    // Load junction table for multi-operator relationships
+    const { data: junctionData } = await firebase
+      .from('driver_operators')
+      .select('*')
+
+    // Create a map of driver_id -> operator relationships
+    const driverOperatorsMap = new Map<string, any[]>()
+    ;(junctionData || []).forEach((junction: any) => {
+      const list = driverOperatorsMap.get(junction.driver_id) || []
+      list.push(junction)
+      driverOperatorsMap.set(junction.driver_id, list)
+    })
+
+    // Map drivers with operator info
+    let drivers = (driversData || []).map((driver: any) => {
+      // Get primary operator from operator_id
+      const primaryOperatorData = driver.operator_id ? operatorsMap.get(driver.operator_id) : null
+      const primaryOperator = primaryOperatorData ? {
+        id: primaryOperatorData.id,
+        name: primaryOperatorData.name,
+        code: primaryOperatorData.code,
       } : undefined
 
       // Get all operators from junction table
-      const allOperators = driver.driver_operators?.map((do_rel: any) => ({
-        id: do_rel.operators?.id,
-        name: do_rel.operators?.name,
-        code: do_rel.operators?.code,
-        isPrimary: do_rel.is_primary,
-      })).filter((op: any) => op.id) || []
+      const junctionRecords = driverOperatorsMap.get(driver.id) || []
+      const allOperators = junctionRecords.map((junction: any) => {
+        const opData = operatorsMap.get(junction.operator_id)
+        return opData ? {
+          id: opData.id,
+          name: opData.name,
+          code: opData.code,
+          isPrimary: junction.is_primary,
+        } : null
+      }).filter((op: any) => op !== null)
 
-      // If no operators from junction table, use primary operator
-      const operators = allOperators.length > 0 ? allOperators : (primaryOperator ? [primaryOperator] : [])
+      // Merge operators: use junction table if available, otherwise use primary
+      const operators = allOperators.length > 0 ? allOperators : (primaryOperator ? [{ ...primaryOperator, isPrimary: true }] : [])
 
       return {
         id: driver.id,
-        operatorId: driver.operator_id, // Keep for backward compatibility
-        operator: primaryOperator, // Keep for backward compatibility
+        operatorId: driver.operator_id,
+        operator: primaryOperator,
         operatorIds: operators.map((op: any) => op.id),
         operators: operators,
         fullName: driver.full_name,
@@ -110,6 +100,18 @@ export const getAllDrivers = async (req: Request, res: Response) => {
         updatedAt: driver.updated_at,
       }
     })
+
+    // Filter by operatorId if provided
+    if (operatorId) {
+      const opId = operatorId as string
+      drivers = drivers.filter((driver: any) => {
+        // Check direct operator_id
+        if (driver.operatorId === opId) return true
+        // Check junction table operators
+        if (driver.operatorIds.includes(opId)) return true
+        return false
+      })
+    }
 
     return res.json(drivers)
   } catch (error) {

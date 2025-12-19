@@ -349,6 +349,9 @@ export const issuePermit = async (req: AuthRequest, res: Response) => {
     const { transportOrderCode, plannedDepartureTime, seatCount, permitStatus, rejectionReason, routeId, scheduleId, replacementVehicleId, permitShiftId } = req.body
     const userId = req.user?.id
 
+    console.log('[issuePermit] Record ID:', id)
+    console.log('[issuePermit] Request body:', { transportOrderCode, plannedDepartureTime, seatCount, permitStatus, routeId, scheduleId })
+
     if (!transportOrderCode && permitStatus !== 'rejected') {
       return res.status(400).json({ error: 'Transport order code is required for approval' })
     }
@@ -415,12 +418,16 @@ export const issuePermit = async (req: AuthRequest, res: Response) => {
       updateData.rejection_reason = rejectionReason || null
     }
 
+    console.log('[issuePermit] Updating record with data:', JSON.stringify(updateData, null, 2))
+
     const { data, error } = await firebase
       .from('dispatch_records')
       .update(updateData)
       .eq('id', id)
       .select('*')
       .single()
+
+    console.log('[issuePermit] Update result - data:', data ? 'found' : 'null', 'error:', error)
 
     if (error) throw error
     if (!data) {
@@ -429,7 +436,14 @@ export const issuePermit = async (req: AuthRequest, res: Response) => {
 
     return res.json({ message: 'Permit processed', dispatch: data })
   } catch (error: any) {
-    console.error('Error issuing permit:', error)
+    console.error('[issuePermit] Error:', error)
+    // Check for duplicate key error (unique constraint violation)
+    if (error.code === '23505' || error.message?.includes('duplicate key')) {
+      return res.status(400).json({
+        error: 'Mã lệnh vận chuyển đã tồn tại. Vui lòng chọn mã khác.',
+        code: '23505'
+      })
+    }
     return res.status(500).json({ error: error.message || 'Failed to issue permit' })
   }
 }

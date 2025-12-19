@@ -430,9 +430,3 @@ export const firebase = {
     return { data: null, error: { message: 'RPC not supported in Firebase Realtime Database' } }
   }
 }
-
-// Backward compatibility aliases (deprecated - will be removed in future version)
-/** @deprecated Use 'firebase' instead */
-export const supabase = firebase
-/** @deprecated Use 'firebase' instead */
-export const supabaseAnon = firebase

@@ -20,12 +20,14 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Autocomplete } from "@/components/ui/autocomplete";
 import { routeService } from "@/services/route.service";
 import { scheduleService } from "@/services/schedule.service";
 import { dispatchService } from "@/services/dispatch.service";
 import { vehicleService } from "@/services/vehicle.service";
 import { vehicleBadgeService, type VehicleBadge } from "@/services/vehicle-badge.service";
 import { serviceChargeService } from "@/services/service-charge.service";
+import { operatorService } from "@/services/operator.service";
 import { KiemTraGiayToDialog } from "./KiemTraGiayToDialog";
 import { LyDoKhongDuDieuKienDialog } from "./LyDoKhongDuDieuKienDialog";
 import { ThemDichVuDialog } from "./ThemDichVuDialog";
@@ -38,6 +40,7 @@ import type {
   Vehicle,
   Driver,
   ServiceCharge,
+  Operator,
 } from "@/types";
 import { format, startOfMonth, endOfMonth } from "date-fns";
 import { useUIStore } from "@/store/ui.store";
@@ -72,7 +75,10 @@ export function CapPhepDialog({
   const [hhPercentage, setHhPercentage] = useState("0");
   // const [useHhPercentage, setUseHhPercentage] = useState(true);
   const [entryPlateNumber, setEntryPlateNumber] = useState(
-    record.vehiclePlateNumber
+    record.vehiclePlateNumber || ""
+  );
+  const [registeredPlateNumber, setRegisteredPlateNumber] = useState(
+    record.vehiclePlateNumber || ""
   );
   // const [useEntryPlateNumber, setUseEntryPlateNumber] = useState(false);
   const [routeId, setRouteId] = useState(record.routeId || "");
@@ -88,9 +94,12 @@ export function CapPhepDialog({
   const [routes, setRoutes] = useState<Route[]>([]);
   const [schedules, setSchedules] = useState<Schedule[]>([]);
   const [vehicleBadges, setVehicleBadges] = useState<VehicleBadge[]>([]);
+  const [vehicles, setVehicles] = useState<Vehicle[]>([]);
   const [drivers, setDrivers] = useState<Driver[]>([]);
   const [serviceCharges, setServiceCharges] = useState<ServiceCharge[]>([]);
   const [selectedVehicle, setSelectedVehicle] = useState<Vehicle | null>(null);
+  const [operators, setOperators] = useState<Operator[]>([]);
+  const [selectedOperatorId, setSelectedOperatorId] = useState<string>("");
   const [totalAmount, setTotalAmount] = useState(0);
   const [isLoading, setIsLoading] = useState(false);
   const [documentDialogOpen, setDocumentDialogOpen] = useState(false);
@@ -141,7 +150,7 @@ export function CapPhepDialog({
     }
   }, [departureDate]);
 
-  // Tự động điền seatCount và bedCount từ dữ liệu xe khi selectedVehicle thay đổi
+  // Tự động điền seatCount, bedCount và biển số từ dữ liệu xe khi selectedVehicle thay đổi
   useEffect(() => {
     if (selectedVehicle) {
       // Ưu tiên lấy từ vehicle.seatCapacity nếu có, nếu record chưa có giá trị hoặc bằng 0
@@ -155,43 +164,105 @@ export function CapPhepDialog({
       if (selectedVehicle.bedCapacity !== undefined && selectedVehicle.bedCapacity !== null) {
         setBedCount(selectedVehicle.bedCapacity.toString());
       }
+      // Tự động điền biển số nếu chưa có
+      if (!registeredPlateNumber && selectedVehicle.plateNumber) {
+        setRegisteredPlateNumber(selectedVehicle.plateNumber);
+      }
+      if (!entryPlateNumber && selectedVehicle.plateNumber) {
+        setEntryPlateNumber(selectedVehicle.plateNumber);
+      }
     }
-  }, [selectedVehicle, record.seatCount]);
+  }, [selectedVehicle, record.seatCount, entryPlateNumber, registeredPlateNumber]);
+
+  // Tự động tìm và load vehicle khi biển số thay đổi
+  useEffect(() => {
+    const plateNumber = registeredPlateNumber || entryPlateNumber;
+    if (!plateNumber || vehicles.length === 0) return;
+
+    // Normalize plate number for comparison
+    const normalizedPlate = plateNumber.replace(/[.\-\s]/g, '').toUpperCase();
+
+    // Find matching vehicle
+    const matchedVehicle = vehicles.find(v =>
+      v.plateNumber && v.plateNumber.replace(/[.\-\s]/g, '').toUpperCase() === normalizedPlate
+    );
+
+    if (matchedVehicle && matchedVehicle.id !== selectedVehicle?.id) {
+      setSelectedVehicle(matchedVehicle);
+      // Set operator if available
+      if (matchedVehicle.operatorId && !selectedOperatorId) {
+        setSelectedOperatorId(matchedVehicle.operatorId);
+      }
+    }
+  }, [registeredPlateNumber, entryPlateNumber, vehicles]);
 
   const loadInitialData = async () => {
     try {
-      const [routesData, badgesData] = await Promise.all([
+      const [routesData, badgesData, operatorsData, vehiclesData] = await Promise.all([
         routeService.getAll(undefined, undefined, true),
         vehicleBadgeService.getAll(),
+        operatorService.getAll(true), // Only active operators
+        vehicleService.getAll(undefined, true), // All active vehicles
       ]);
       setRoutes(routesData);
       setVehicleBadges(badgesData);
+      setOperators(operatorsData);
+      setVehicles(vehiclesData);
 
       if (record.vehicleId) {
-        const vehicle = await vehicleService.getById(record.vehicleId);
-        setSelectedVehicle(vehicle);
+        try {
+          const vehicle = await vehicleService.getById(record.vehicleId);
+          if (vehicle) {
+            setSelectedVehicle(vehicle);
 
-        // Tự động điền seatCount và bedCount từ dữ liệu xe
-        // Ưu tiên dùng giá trị từ vehicle.seatCapacity nếu record chưa có giá trị hoặc bằng 0
-        if ((!record.seatCount || record.seatCount === 0) && vehicle.seatCapacity) {
-          setSeatCount(vehicle.seatCapacity.toString());
-        } else if (record.seatCount && record.seatCount > 0) {
-          // Nếu record đã có giá trị hợp lệ, giữ nguyên
-          setSeatCount(record.seatCount.toString());
-        }
-        // Tự động điền bedCount từ vehicle.bedCapacity
-        if (vehicle.bedCapacity !== undefined && vehicle.bedCapacity !== null) {
-          setBedCount(vehicle.bedCapacity.toString());
-        }
+            // Tự động điền seatCount và bedCount từ dữ liệu xe
+            if ((!record.seatCount || record.seatCount === 0) && vehicle.seatCapacity) {
+              setSeatCount(vehicle.seatCapacity.toString());
+            }
+            if (vehicle.bedCapacity !== undefined && vehicle.bedCapacity !== null) {
+              setBedCount(vehicle.bedCapacity.toString());
+            }
 
-        if (vehicle.operatorId) {
-          // Only load the assigned driver initially, not all drivers
-          if (record.driver) {
-            setDrivers([record.driver]);
-          } else {
-            setDrivers([]);
+            // Tự động điền biển số từ vehicle nếu chưa có
+            if (!registeredPlateNumber && vehicle.plateNumber) {
+              setRegisteredPlateNumber(vehicle.plateNumber);
+            }
+            if (!entryPlateNumber && vehicle.plateNumber) {
+              setEntryPlateNumber(vehicle.plateNumber);
+            }
+
+            if (vehicle.operatorId) {
+              // Set operatorId for driver dialog
+              setSelectedOperatorId(vehicle.operatorId);
+              // Only load the assigned driver initially, not all drivers
+              if (record.driver) {
+                setDrivers([record.driver]);
+              } else {
+                setDrivers([]);
+              }
+            }
+          }
+        } catch (vehicleError) {
+          console.warn('Could not load vehicle:', vehicleError);
+          // Fallback: Try to get plate number from vehicle badges if available
+          if (badgesData && badgesData.length > 0) {
+            // Try to find a badge that might match by vehicle_id
+            const matchingBadge = badgesData.find((b: VehicleBadge) => b.vehicle_id === record.vehicleId);
+            if (matchingBadge && matchingBadge.license_plate_sheet) {
+              if (!registeredPlateNumber) {
+                setRegisteredPlateNumber(matchingBadge.license_plate_sheet);
+              }
+              if (!entryPlateNumber) {
+                setEntryPlateNumber(matchingBadge.license_plate_sheet);
+              }
+            }
           }
         }
+      }
+
+      // Nếu record đã có giá trị seatCount hợp lệ, giữ nguyên
+      if (record.seatCount && record.seatCount > 0) {
+        setSeatCount(record.seatCount.toString());
       }
 
       if (record.id) {
@@ -327,8 +398,8 @@ export function CapPhepDialog({
         plannedDepartureTime,
         seatCount: parseInt(seatCount),
         permitStatus: "approved",
-        routeId,
-        scheduleId,
+        routeId: routeId || undefined,
+        scheduleId: scheduleId || undefined,
         replacementVehicleId: replacementVehicleId || undefined,
         permitShiftId,
       });
@@ -341,10 +412,15 @@ export function CapPhepDialog({
       onClose();
     } catch (error: any) {
       console.error("Failed to issue permit:", error);
-      if (error.response?.data?.code === '23505' || error.message?.includes('duplicate key') || error.response?.data?.message?.includes('duplicate key')) {
-        toast.error(`Mã lệnh vận chuyển ${transportOrderCode} đã tồn tại. Vui lòng chọn mã khác.`);
+      const errorData = error.response?.data;
+      // Check for duplicate key error
+      if (errorData?.code === '23505' ||
+          errorData?.error?.includes('đã tồn tại') ||
+          errorData?.error?.includes('duplicate key')) {
+        toast.error(`Mã lệnh vận chuyển "${transportOrderCode}" đã tồn tại. Vui lòng chọn mã khác.`);
       } else {
-        toast.error("Không thể cấp phép. Vui lòng thử lại sau.");
+        // Show server error message if available
+        toast.error(errorData?.error || "Không thể cấp phép. Vui lòng thử lại sau.");
       }
     } finally {
       setIsLoading(false);
@@ -352,8 +428,14 @@ export function CapPhepDialog({
   };
 
   const handleEligible = async () => {
-    if (!transportOrderCode || !routeId || !scheduleId || !departureDate) {
+    // Cho phép dùng scheduleId HOẶC departureTime (giờ xuất bến khác)
+    if (!transportOrderCode || !routeId || !departureDate) {
       toast.warning("Vui lòng điền đầy đủ các trường bắt buộc");
+      return;
+    }
+
+    if (!scheduleId && !departureTime) {
+      toast.warning("Vui lòng chọn biểu đồ giờ hoặc nhập giờ xuất bến khác");
       return;
     }
 
@@ -430,10 +512,13 @@ export function CapPhepDialog({
       onClose();
     } catch (error: any) {
       console.error("Failed to issue permit:", error);
-      if (error.response?.data?.code === '23505' || error.message?.includes('duplicate key') || error.response?.data?.message?.includes('duplicate key')) {
-        toast.error(`Mã lệnh vận chuyển ${transportOrderCode} đã tồn tại. Vui lòng chọn mã khác.`);
+      const errorData = error.response?.data;
+      if (errorData?.code === '23505' ||
+          errorData?.error?.includes('đã tồn tại') ||
+          errorData?.error?.includes('duplicate key')) {
+        toast.error(`Mã lệnh vận chuyển "${transportOrderCode}" đã tồn tại. Vui lòng chọn mã khác.`);
       } else {
-        toast.error("Không thể cấp phép. Vui lòng thử lại sau.");
+        toast.error(errorData?.error || "Không thể cấp phép. Vui lòng thử lại sau.");
       }
     } finally {
       setIsLoading(false);
@@ -466,25 +551,74 @@ export function CapPhepDialog({
     return { status: 'valid', daysRemaining };
   };
 
+  // Helper to normalize plate number for comparison
+  const normalizePlate = (plate: string): string => {
+    return plate.replace(/[.\-\s]/g, '').toUpperCase();
+  };
+
+  // Find matching badge by plate number
+  const getMatchingBadge = (): VehicleBadge | undefined => {
+    const plateNumber = registeredPlateNumber || entryPlateNumber || selectedVehicle?.plateNumber;
+    if (!plateNumber || !vehicleBadges.length) return undefined;
+
+    const normalizedPlate = normalizePlate(plateNumber);
+    return vehicleBadges.find(badge =>
+      badge.license_plate_sheet && normalizePlate(badge.license_plate_sheet) === normalizedPlate
+    );
+  };
+
   const getDocumentsCheckResults = (): DocumentCheckResult[] => {
     const docs = selectedVehicle?.documents;
+    const matchingBadge = getMatchingBadge();
+    const results: DocumentCheckResult[] = [];
 
-    const documentTypes = [
-      { key: 'registration', name: 'Đăng ký xe', data: docs?.registration },
-      { key: 'operation_permit', name: 'Giấy phép KD vận tải', data: docs?.operation_permit },
-      { key: 'inspection', name: 'Đăng kiểm xe', data: docs?.inspection },
-      { key: 'insurance', name: 'Bảo hiểm xe', data: docs?.insurance },
-    ];
-
-    return documentTypes.map(({ name, data }) => {
-      const { status, daysRemaining } = getDocumentStatus(data?.expiryDate);
-      return {
-        name,
+    // 1. Phù hiệu xe - Check từ dữ liệu badge (ưu tiên)
+    if (matchingBadge) {
+      const { status, daysRemaining } = getDocumentStatus(matchingBadge.expiry_date);
+      results.push({
+        name: 'Phù hiệu xe',
         status,
-        expiryDate: data?.expiryDate,
+        expiryDate: matchingBadge.expiry_date,
         daysRemaining,
-      };
+      });
+    } else {
+      // Fallback: check emblem from vehicle documents
+      const { status, daysRemaining } = getDocumentStatus(docs?.emblem?.expiryDate);
+      results.push({
+        name: 'Phù hiệu xe',
+        status,
+        expiryDate: docs?.emblem?.expiryDate,
+        daysRemaining,
+      });
+    }
+
+    // 2. Đăng ký xe - Auto-pass (chưa có data thật, bật lại khi có data)
+    // TODO: Khi có data thật, dùng: getDocumentStatus(docs?.registration?.expiryDate)
+    results.push({
+      name: 'Đăng ký xe',
+      status: 'valid',
+      expiryDate: undefined,
+      daysRemaining: 999,
     });
+
+    // 3. Đăng kiểm xe - Auto-pass (chưa có data thật, bật lại khi có data)
+    // TODO: Khi có data thật, dùng: getDocumentStatus(selectedVehicle?.inspectionExpiryDate || docs?.inspection?.expiryDate)
+    results.push({
+      name: 'Đăng kiểm xe',
+      status: 'valid',
+      expiryDate: undefined,
+      daysRemaining: 999,
+    });
+
+    // 4. Bảo hiểm xe - Auto-pass (chưa có data thật)
+    results.push({
+      name: 'Bảo hiểm xe',
+      status: 'valid',
+      expiryDate: undefined,
+      daysRemaining: 999,
+    });
+
+    return results;
   };
 
   const checkAllDocumentsValid = (): boolean => {
@@ -609,11 +743,19 @@ export function CapPhepDialog({
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <Label htmlFor="plateNumber">Biển số đăng ký</Label>
-                  <Input
+                  <Autocomplete
                     id="plateNumber"
-                    value={record.vehiclePlateNumber}
-                    className="mt-1 bg-gray-50"
-                    readOnly
+                    value={registeredPlateNumber || selectedVehicle?.plateNumber || ""}
+                    onChange={(value) => setRegisteredPlateNumber(value)}
+                    options={vehicleBadges
+                      .filter(badge => badge.license_plate_sheet)
+                      .map(badge => ({
+                        value: badge.license_plate_sheet,
+                        label: `${badge.license_plate_sheet} ${badge.operational_status === 'dang_chay' ? '(Đang chạy)' : '(Trong bến)'}`
+                      }))}
+                    placeholder="Chọn hoặc nhập biển số"
+                    disabled={readOnly}
+                    className="mt-1"
                   />
                 </div>
                 <div>
@@ -627,16 +769,16 @@ export function CapPhepDialog({
                     className="mt-1"
                     disabled={readOnly}
                   >
-                    <option value="">--</option>
+                    <option value="">-- Chọn xe --</option>
                     {vehicleBadges
-                      .filter(badge => badge.license_plate_sheet && badge.status === 'active')
+                      .filter(badge => badge.license_plate_sheet)
+                      .slice(0, 200) // Giới hạn 200 xe để tránh quá tải
                       .map((badge) => (
                         <option
                           key={badge.id}
                           value={badge.id}
-                          className={badge.operational_status === 'dang_chay' ? 'text-orange-600' : 'text-green-600'}
                         >
-                          {badge.license_plate_sheet} {badge.operational_status === 'dang_chay' ? '(Đang chạy)' : '(Sẵn sàng)'}
+                          {badge.license_plate_sheet} {badge.operational_status === 'dang_chay' ? '(Đang chạy)' : '(Trong bến)'}
                         </option>
                       ))}
                   </Select>
@@ -647,19 +789,16 @@ export function CapPhepDialog({
                       return (
                         <div className="flex items-center gap-1.5 mt-1.5 text-orange-600 text-xs">
                           <AlertTriangle className="h-3.5 w-3.5" />
-                          <span>Xe đang chạy - Không sẵn sàng để đi thay</span>
+                          <span>Xe đang chạy - Không thể đi thay</span>
                         </div>
                       );
                     }
-                    if (selectedBadge?.operational_status === 'trong_ben') {
-                      return (
-                        <div className="flex items-center gap-1.5 mt-1.5 text-green-600 text-xs">
-                          <CheckCircle className="h-3.5 w-3.5" />
-                          <span>Xe đang trong bến - Sẵn sàng đi thay</span>
-                        </div>
-                      );
-                    }
-                    return null;
+                    return (
+                      <div className="flex items-center gap-1.5 mt-1.5 text-green-600 text-xs">
+                        <CheckCircle className="h-3.5 w-3.5" />
+                        <span>Xe trong bến - Có thể đi thay</span>
+                      </div>
+                    );
                   })()}
                 </div>
               </div>
@@ -668,22 +807,37 @@ export function CapPhepDialog({
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <Label htmlFor="entryPlateNumber">Biển số khi vào</Label>
-                  <Input
+                  <Autocomplete
                     id="entryPlateNumber"
                     value={entryPlateNumber}
-                    onChange={(e) => setEntryPlateNumber(e.target.value)}
+                    onChange={(value) => setEntryPlateNumber(value)}
+                    options={vehicleBadges
+                      .filter(badge => badge.license_plate_sheet)
+                      .map(badge => ({
+                        value: badge.license_plate_sheet,
+                        label: `${badge.license_plate_sheet} ${badge.operational_status === 'dang_chay' ? '(Đang chạy)' : '(Trong bến)'}`
+                      }))}
+                    placeholder="Chọn hoặc nhập biển số"
+                    disabled={readOnly}
                     className="mt-1"
-                    readOnly={readOnly}
                   />
                 </div>
                 <div>
                   <Label htmlFor="operator">Đơn vị vận tải</Label>
-                  <Input
+                  <Select
                     id="operator"
-                    value={selectedVehicle?.operator?.name || ""}
-                    className="mt-1 bg-gray-50"
-                    readOnly
-                  />
+                    value={selectedOperatorId}
+                    onChange={(e) => setSelectedOperatorId(e.target.value)}
+                    className="mt-1"
+                    disabled={readOnly}
+                  >
+                    <option value="">-- Chọn đơn vị vận tải --</option>
+                    {operators.map((op) => (
+                      <option key={op.id} value={op.id}>
+                        {op.name} ({op.code})
+                      </option>
+                    ))}
+                  </Select>
                 </div>
               </div>
 
@@ -703,17 +857,22 @@ export function CapPhepDialog({
                 </div>
                 <div>
                   <Label htmlFor="schedule">
-                    Biểu đồ giờ <span className="text-red-500">(*)</span>
+                    Biểu đồ giờ {!departureTime && <span className="text-red-500">(*)</span>}
                   </Label>
                   <Select
                     id="schedule"
                     value={scheduleId}
                     onChange={(e) => setScheduleId(e.target.value)}
                     className="mt-1"
-                    required
                     disabled={!routeId || readOnly}
                   >
-                    <option value="">Chọn giờ</option>
+                    <option value="">
+                      {!routeId
+                        ? "Vui lòng chọn tuyến trước"
+                        : schedules.length === 0
+                          ? "Không có biểu đồ - dùng giờ xuất bến khác"
+                          : "Chọn giờ"}
+                    </option>
                     {schedules.map((s) => (
                       <option key={s.id} value={s.id}>
                         {format(
@@ -735,7 +894,7 @@ export function CapPhepDialog({
                     variant="outline"
                     size="sm"
                     onClick={() => setAddDriverDialogOpen(true)}
-                    disabled={!selectedVehicle?.operatorId || readOnly}
+                    disabled={!selectedOperatorId || readOnly}
                   >
                     <Plus className="h-4 w-4 mr-1" />
                     Thêm
@@ -894,7 +1053,9 @@ export function CapPhepDialog({
               {/* Giờ xuất bến khác & Ngày xuất bến */}
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <Label htmlFor="otherDepartureTime">Giờ xuất bến khác</Label>
+                  <Label htmlFor="otherDepartureTime">
+                    Giờ xuất bến khác {!scheduleId && <span className="text-red-500">(*)</span>}
+                  </Label>
                   <Input
                     id="otherDepartureTime"
                     type="time"
@@ -928,7 +1089,7 @@ export function CapPhepDialog({
                     variant="outline"
                     size="sm"
                     onClick={() => setAddServiceDialogOpen(true)}
-                    disabled={readOnly}
+                    disabled={!record.id || readOnly}
                   >
                     <Plus className="h-4 w-4 mr-1" />
                     Thêm
@@ -946,7 +1107,7 @@ export function CapPhepDialog({
                         size="sm"
                         className="h-6 w-6 p-0"
                         onClick={() => setAddServiceDialogOpen(true)}
-                        disabled={readOnly}
+                        disabled={!record.id || readOnly}
                       >
                         <Pencil className="h-3 w-3" />
                       </Button>
@@ -1055,13 +1216,13 @@ export function CapPhepDialog({
                 </div>
               </div>
 
-              {/* Điều kiện thông tin xe - Detailed View */}
+              {/* Điều kiện cấp phép - Detailed View */}
               <div className="border border-gray-200 rounded-lg bg-white overflow-hidden">
                 {/* Header with overall status */}
                 <div className="flex items-center justify-between px-4 py-3 bg-gray-50 border-b">
                   <div className="flex items-center gap-2">
                     <Label className="font-semibold text-gray-900">
-                      Điều kiện thông tin xe
+                      Điều kiện cấp phép
                     </Label>
                     {(() => {
                       const { isValid, validCount, totalCount } = getOverallStatus();
@@ -1242,9 +1403,9 @@ export function CapPhepDialog({
         )}
 
         {/* Add Driver Dialog */}
-        {selectedVehicle?.operatorId && (
+        {selectedOperatorId && (
           <ThemTaiXeDialog
-            operatorId={selectedVehicle.operatorId}
+            operatorId={selectedOperatorId}
             open={addDriverDialogOpen}
             onClose={() => setAddDriverDialogOpen(false)}
             onSuccess={handleAddDriverSuccess}

@@ -37,19 +37,25 @@ export function Autocomplete({
   useEffect(() => {
     if (value) {
       const selected = options.find(opt => opt.value === value)
-      setInputValue(selected?.label || "")
+      // Nếu tìm thấy option thì hiện label, nếu không thì giữ nguyên value
+      setInputValue(selected?.label || value)
     } else {
       setInputValue("")
     }
   }, [value, options])
 
-  // Filter options based on input
-  const filteredOptions = options.filter(option =>
-    option.label.toLowerCase().includes(inputValue.toLowerCase())
-  )
+  // Filter options based on input and limit to 100 items for performance
+  const filteredOptions = options
+    .filter(option =>
+      option.label.toLowerCase().includes(inputValue.toLowerCase())
+    )
+    .slice(0, 100)
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setInputValue(e.target.value)
+    const newValue = e.target.value
+    setInputValue(newValue)
+    // Gọi onChange ngay khi nhập để cho phép nhập giá trị tự do
+    onChange?.(newValue)
     if (!open) setOpen(true)
   }
 
@@ -68,6 +74,10 @@ export function Autocomplete({
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === "Escape") {
+      setOpen(false)
+    }
+    if (e.key === "Enter") {
+      // Khi nhấn Enter, đóng dropdown và giữ giá trị hiện tại
       setOpen(false)
     }
   }

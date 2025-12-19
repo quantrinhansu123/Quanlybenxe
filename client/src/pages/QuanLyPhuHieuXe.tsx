@@ -42,20 +42,23 @@ const formatDate = (dateString: string | undefined | null): string => {
   }
 }
 
-// Helper function to translate status to Vietnamese
-const translateStatus = (status: string): string => {
-  const statusMap: Record<string, string> = {
-    trong_ben: "Trong bến",
-    dang_chay: "Đang chạy"
-  }
-  return statusMap[status] || status
-}
-
-// Helper function to get status badge variant
+// Helper function to get status badge variant based on Vietnamese status text
 const getStatusVariant = (status: string): "active" | "inactive" | "maintenance" => {
-  if (status === "trong_ben") return "active"  // Green for in station
-  if (status === "dang_chay") return "maintenance"  // Orange for running
-  return "inactive"
+  if (!status) return "inactive"
+  const statusLower = status.toLowerCase()
+  // "Còn hiệu lực", "Cấp mới" etc. are active
+  if (statusLower.includes("hiệu lực") || statusLower.includes("cấp mới") || statusLower.includes("cap moi")) {
+    return "active"
+  }
+  // "Hết hạn" is expired/inactive
+  if (statusLower.includes("hết") || statusLower.includes("het")) {
+    return "inactive"
+  }
+  // "Thu hồi" is revoked/maintenance
+  if (statusLower.includes("thu hồi") || statusLower.includes("thu hoi")) {
+    return "maintenance"
+  }
+  return "active" // Default to active for other statuses
 }
 
 export default function QuanLyPhuHieuXe() {
@@ -90,6 +93,7 @@ export default function QuanLyPhuHieuXe() {
   }
 
   // Get unique values for filters
+  const badgeStatuses = Array.from(new Set(badges.map((b) => b.status).filter(Boolean))).sort()
   const badgeTypes = Array.from(new Set(badges.map((b) => b.badge_type).filter(Boolean))).sort()
   const badgeColors = Array.from(new Set(badges.map((b) => b.badge_color).filter(Boolean))).sort()
 
@@ -105,8 +109,8 @@ export default function QuanLyPhuHieuXe() {
       if (!matchesSearch) return false
     }
 
-    // Status filter (based on operational_status: trong_ben/dang_chay)
-    if (filterStatus && badge.operational_status !== filterStatus) {
+    // Status filter (based on status: active/expired/revoked)
+    if (filterStatus && badge.status !== filterStatus) {
       return false
     }
 
@@ -161,7 +165,7 @@ export default function QuanLyPhuHieuXe() {
       badge.badge_color,
       badge.issue_date,
       badge.expiry_date,
-      translateStatus(badge.operational_status),
+      badge.status || "",
       badge.file_code,
       badge.issue_type,
       badge.notes || "",
@@ -220,8 +224,11 @@ export default function QuanLyPhuHieuXe() {
                   onChange={(e) => setFilterStatus(e.target.value)}
                 >
                   <option value="">Tất cả trạng thái</option>
-                  <option value="trong_ben">Trong bến</option>
-                  <option value="dang_chay">Đang chạy</option>
+                  {badgeStatuses.map((status) => (
+                    <option key={status} value={status}>
+                      {status}
+                    </option>
+                  ))}
                 </Select>
               </div>
               <div className="space-y-2">
@@ -315,8 +322,8 @@ export default function QuanLyPhuHieuXe() {
                   </TableCell>
                   <TableCell className="text-center">
                     <StatusBadge
-                      status={getStatusVariant(badge.operational_status)}
-                      label={translateStatus(badge.operational_status)}
+                      status={getStatusVariant(badge.status)}
+                      label={badge.status || "N/A"}
                     />
                   </TableCell>
                   <TableCell className="text-center">
@@ -433,8 +440,8 @@ export default function QuanLyPhuHieuXe() {
                 <div className="space-y-2">
                   <Label className="text-sm font-semibold">Trạng thái</Label>
                   <StatusBadge
-                    status={getStatusVariant(selectedBadge.operational_status)}
-                    label={translateStatus(selectedBadge.operational_status)}
+                    status={getStatusVariant(selectedBadge.status)}
+                    label={selectedBadge.status || "N/A"}
                   />
                 </div>
                 <div className="space-y-2">

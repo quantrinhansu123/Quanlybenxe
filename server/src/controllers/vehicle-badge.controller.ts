@@ -33,20 +33,8 @@ const normalizePlate = (plate: string): string => {
 
 // Helper function to map Firebase data to VehicleBadge format
 const mapFirebaseDataToBadge = (firebaseData: any, activePlates?: Set<string>) => {
-  // Normalize status - map Vietnamese to English
-  let status = 'active'
-  if (firebaseData.TrangThai) {
-    const statusLower = firebaseData.TrangThai.toLowerCase()
-    if (statusLower.includes('hiệu lực') || statusLower.includes('hieu luc')) {
-      status = 'active'
-    } else if (statusLower.includes('hết') || statusLower.includes('het')) {
-      status = 'expired'
-    } else if (statusLower.includes('thu hồi') || statusLower.includes('thu hoi')) {
-      status = 'revoked'
-    } else {
-      status = firebaseData.TrangThai
-    }
-  }
+  // Keep original status from Firebase data (TrangThai field)
+  const status = firebaseData.TrangThai || ''
 
   return {
     id: firebaseData.ID_PhuHieu || '',
@@ -173,6 +161,53 @@ export const getVehicleBadgeById = async (req: Request, res: Response): Promise<
   } catch (error) {
     console.error('Error fetching vehicle badge:', error)
     res.status(500).json({ 
+      error: 'Failed to fetch vehicle badge',
+      details: error instanceof Error ? error.message : 'Unknown error'
+    })
+  }
+}
+
+export const getVehicleBadgeByPlateNumber = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { plateNumber } = req.params
+
+    if (!plateNumber) {
+      res.status(400).json({ error: 'Plate number is required' })
+      return
+    }
+
+    // Normalize input plate number
+    const normalizedInput = normalizePlate(plateNumber)
+
+    // Get active dispatch plates to compute operational_status
+    const activePlates = await getActiveDispatchPlates()
+
+    // Get data from Firebase datasheet/PHUHIEUXE path
+    const snapshot = await db!.ref('datasheet/PHUHIEUXE').once('value')
+    const firebaseData = snapshot.val()
+
+    if (!firebaseData) {
+      res.status(404).json({ error: 'No vehicle badges found' })
+      return
+    }
+
+    // Find badge by plate number (BienSoXe field)
+    const badgeKey = Object.keys(firebaseData).find(key => {
+      const item = firebaseData[key]
+      if (!item.BienSoXe) return false
+      return normalizePlate(item.BienSoXe) === normalizedInput
+    })
+
+    if (!badgeKey) {
+      res.status(404).json({ error: 'Vehicle badge not found for this plate number' })
+      return
+    }
+
+    const badge = mapFirebaseDataToBadge(firebaseData[badgeKey], activePlates)
+    res.json(badge)
+  } catch (error) {
+    console.error('Error fetching vehicle badge by plate number:', error)
+    res.status(500).json({
       error: 'Failed to fetch vehicle badge',
       details: error instanceof Error ? error.message : 'Unknown error'
     })

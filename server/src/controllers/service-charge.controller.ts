@@ -3,8 +3,8 @@ import { firebase } from '../config/database.js'
 import { z } from 'zod'
 
 const serviceChargeSchema = z.object({
-  dispatchRecordId: z.string().uuid('Invalid dispatch record ID'),
-  serviceTypeId: z.string().uuid('Invalid service ID'), // Giữ tên cũ để tương thích với frontend
+  dispatchRecordId: z.string().min(1, 'Dispatch record ID is required'),
+  serviceTypeId: z.string().min(1, 'Service ID is required'), // Giữ tên cũ để tương thích với frontend
   quantity: z.number().positive().default(1),
   unitPrice: z.number().nonnegative('Unit price must be non-negative'),
   totalAmount: z.number().nonnegative('Total amount must be non-negative'),
