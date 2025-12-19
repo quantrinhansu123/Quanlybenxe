@@ -78,11 +78,7 @@ export const getAllVehicles = async (req: Request, res: Response) => {
 
     let query = firebase
       .from('vehicles')
-      .select(`
-        *,
-        operators:operator_id(id, name, code),
-        vehicle_types:vehicle_type_id(id, name)
-      `)
+      .select('*')
       .order('created_at', { ascending: false })
 
     if (operatorId) {
@@ -95,6 +91,14 @@ export const getAllVehicles = async (req: Request, res: Response) => {
     const { data: vehicles, error: vehiclesError } = await query
 
     if (vehiclesError) throw vehiclesError
+
+    // Fetch operators and vehicle_types for manual join (Firebase RTDB doesn't support joins)
+    const { data: operators } = await firebase.from('operators').select('*')
+    const { data: vehicleTypes } = await firebase.from('vehicle_types').select('*')
+    
+    // Create lookup maps
+    const operatorMap = new Map((operators || []).map((op: any) => [op.id, op]))
+    const vehicleTypeMap = new Map((vehicleTypes || []).map((vt: any) => [vt.id, vt]))
 
     // Fetch documents
     const vehicleIds = vehicles.map((v: any) => v.id)
@@ -119,19 +123,23 @@ export const getAllVehicles = async (req: Request, res: Response) => {
         }
       })
 
+      // Manual join with operators and vehicle_types
+      const operator = vehicle.operator_id ? operatorMap.get(vehicle.operator_id) as any : null
+      const vehicleType = vehicle.vehicle_type_id ? vehicleTypeMap.get(vehicle.vehicle_type_id) as any : null
+
       return {
         id: vehicle.id,
         plateNumber: vehicle.plate_number,
         vehicleTypeId: vehicle.vehicle_type_id,
-        vehicleType: vehicle.vehicle_types ? {
-          id: vehicle.vehicle_types.id,
-          name: vehicle.vehicle_types.name,
+        vehicleType: vehicleType ? {
+          id: vehicleType.id,
+          name: vehicleType.name,
         } : undefined,
         operatorId: vehicle.operator_id,
-        operator: vehicle.operators ? {
-          id: vehicle.operators.id,
-          name: vehicle.operators.name,
-          code: vehicle.operators.code,
+        operator: operator ? {
+          id: operator.id,
+          name: operator.name,
+          code: operator.code,
         } : undefined,
         seatCapacity: vehicle.seat_capacity,
         bedCapacity: vehicle.bed_capacity,
@@ -178,17 +186,26 @@ export const getVehicleById = async (req: Request, res: Response) => {
 
     const { data: vehicle, error: vehicleError } = await firebase
       .from('vehicles')
-      .select(`
-        *,
-        operators:operator_id(id, name, code),
-        vehicle_types:vehicle_type_id(id, name)
-      `)
+      .select('*')
       .eq('id', id)
       .single()
 
     if (vehicleError) throw vehicleError
     if (!vehicle) {
       return res.status(404).json({ error: 'Vehicle not found' })
+    }
+
+    // Fetch operator and vehicle_type for manual join
+    let operator = null
+    let vehicleType = null
+    
+    if (vehicle.operator_id) {
+      const { data: op } = await firebase.from('operators').select('*').eq('id', vehicle.operator_id).single()
+      operator = op
+    }
+    if (vehicle.vehicle_type_id) {
+      const { data: vt } = await firebase.from('vehicle_types').select('*').eq('id', vehicle.vehicle_type_id).single()
+      vehicleType = vt
     }
 
     const { data: documents } = await firebase
@@ -214,15 +231,15 @@ export const getVehicleById = async (req: Request, res: Response) => {
       id: vehicle.id,
       plateNumber: vehicle.plate_number,
       vehicleTypeId: vehicle.vehicle_type_id,
-      vehicleType: (vehicle as any).vehicle_types ? {
-        id: (vehicle as any).vehicle_types.id,
-        name: (vehicle as any).vehicle_types.name,
+      vehicleType: vehicleType ? {
+        id: vehicleType.id,
+        name: vehicleType.name,
       } : undefined,
       operatorId: vehicle.operator_id,
-      operator: (vehicle as any).operators ? {
-        id: (vehicle as any).operators.id,
-        name: (vehicle as any).operators.name,
-        code: (vehicle as any).operators.code,
+      operator: operator ? {
+        id: operator.id,
+        name: operator.name,
+        code: operator.code,
       } : undefined,
       seatCapacity: vehicle.seat_capacity,
       bedCapacity: vehicle.bed_capacity,
