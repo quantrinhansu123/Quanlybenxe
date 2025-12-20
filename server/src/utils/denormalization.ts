@@ -43,7 +43,7 @@ export interface DenormalizedData {
  */
 export async function fetchDenormalizedData(params: {
   vehicleId: string
-  driverId: string
+  driverId?: string | null  // Optional - bypass driver requirement
   routeId?: string | null
   userId?: string | null
 }): Promise<DenormalizedData> {
@@ -53,10 +53,10 @@ export async function fetchDenormalizedData(params: {
       .select('id, plate_number, operator_id')
       .eq('id', params.vehicleId)
       .single(),
-    firebase.from('drivers')
+    params.driverId ? firebase.from('drivers')
       .select('id, full_name')
       .eq('id', params.driverId)
-      .single(),
+      .single() : Promise.resolve({ data: null }),
     params.routeId ? firebase.from('routes')
       .select('id, route_name, route_type, destination_id')
       .eq('id', params.routeId)

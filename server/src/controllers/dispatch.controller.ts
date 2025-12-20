@@ -13,7 +13,7 @@ import {
 
 const dispatchSchema = z.object({
   vehicleId: z.string().min(1, 'Invalid vehicle ID'),
-  driverId: z.string().min(1, 'Invalid driver ID'),
+  driverId: z.string().min(1).optional(),  // Optional - bypass driver requirement
   scheduleId: z.string().min(1).optional(),
   routeId: z.string().min(1, 'Invalid route ID').optional(),
   entryTime: z.string().refine(

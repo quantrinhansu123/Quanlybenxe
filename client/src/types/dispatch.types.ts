@@ -72,7 +72,7 @@ export interface DispatchRecord {
 
 export interface DispatchInput {
   vehicleId: string
-  driverId: string
+  driverId?: string  // Optional - bypass driver requirement
   scheduleId?: string
   routeId?: string
   entryTime: string

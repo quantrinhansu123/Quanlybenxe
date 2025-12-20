@@ -241,9 +241,9 @@ export function ChoXeVaoBenDialog({
       return
     }
     
+    // Bypass: Không bắt buộc phải có driver, chỉ cảnh báo
     if (!selectedDriver) {
-      toast.error("Không tìm thấy thông tin lái xe cho xe này")
-      return
+      console.warn("Không tìm thấy thông tin lái xe cho xe này - cho phép tiếp tục")
     }
 
     // Nếu xác nhận trả khách, các trường này là bắt buộc
@@ -273,7 +273,7 @@ export function ChoXeVaoBenDialog({
       if (isEditMode && editRecord) {
         await dispatchService.update(editRecord.id, {
           vehicleId,
-          driverId: selectedDriver.id,
+          driverId: selectedDriver?.id || undefined,
           routeId: routeId || undefined,
           entryTime: entryTimeISO,
         })
@@ -286,7 +286,7 @@ export function ChoXeVaoBenDialog({
       // Create mode - create new record
       const dispatchData: DispatchInput = {
         vehicleId,
-        driverId: selectedDriver.id,
+        driverId: selectedDriver?.id || undefined,
         routeId: routeId || undefined,
         scheduleId: confirmPassengerDrop ? (scheduleId || undefined) : undefined,
         entryTime: entryTimeISO,
