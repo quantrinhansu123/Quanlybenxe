@@ -316,7 +316,11 @@ export default function DieuDo() {
   }, [records]);
 
   const vehicleOptions = vehicles
-    .filter((v) => !activeVehicleIds.has(v.id))
+    .filter((v) => {
+      // Allow vehicle if it's not active OR if it's the vehicle being edited
+      const isEditingThisVehicle = dialogType === "edit" && selectedRecord?.vehicleId === v.id;
+      return !activeVehicleIds.has(v.id) || isEditingThisVehicle;
+    })
     .map((v) => ({ id: v.id, plateNumber: v.plateNumber }));
 
   const handleAction = (record: DispatchRecord, type: typeof dialogType) => {

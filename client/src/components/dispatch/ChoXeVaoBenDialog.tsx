@@ -166,6 +166,9 @@ export function ChoXeVaoBenDialog({
   }
 
   const loadVehicleDetails = async (id: string) => {
+    // For legacy/badge vehicles, driver is not required - skip API call if it fails
+    const isLegacyOrBadge = id.startsWith('legacy_') || id.startsWith('badge_')
+    
     try {
       const vehicle = await vehicleService.getById(id)
       
@@ -189,6 +192,10 @@ export function ChoXeVaoBenDialog({
       }
     } catch (error) {
       console.error("Failed to load vehicle details:", error)
+      // Fallback for legacy/badge vehicles - don't block, just log warning
+      if (isLegacyOrBadge) {
+        console.warn("Không tìm thấy thông tin lái xe cho xe này - cho phép tiếp tục")
+      }
       setSelectedDriver(null)
     }
   }
@@ -219,6 +226,14 @@ export function ChoXeVaoBenDialog({
     // Clear selection if input is cleared
     if (!value) {
       setVehicleId("")
+    } else {
+      // Auto-select if exact match found (case-insensitive)
+      const exactMatch = vehicleOptions.find(
+        v => v.plateNumber.toLowerCase() === value.toLowerCase()
+      )
+      if (exactMatch) {
+        setVehicleId(exactMatch.id)
+      }
     }
   }
 

@@ -82,6 +82,7 @@ export interface Vehicle {
   vehicleType?: VehicleType
   operatorId: string
   operator?: Operator
+  operatorName?: string  // For legacy vehicles without operatorId
   seatCapacity: number
   bedCapacity?: number
   manufactureYear?: number

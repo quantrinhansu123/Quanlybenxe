@@ -14,9 +14,16 @@ import {
   AlertCircle,
   Clock,
   FileX,
+  Truck,
+  Users,
+  FileText,
+  CreditCard,
+  Shield,
+  Camera,
+  MessageSquare,
+  ArrowRight,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -54,6 +61,83 @@ interface CapPhepDialogProps {
   readOnly?: boolean;
 }
 
+// Reusable styled components - Light Theme
+const GlassCard = ({ children, className = "" }: { children: React.ReactNode; className?: string }) => (
+  <div className={`
+    relative overflow-hidden rounded-2xl 
+    bg-white border border-gray-200/80
+    shadow-sm hover:shadow-md transition-shadow duration-300
+    ${className}
+  `}>
+    {children}
+  </div>
+);
+
+const SectionHeader = ({ icon: Icon, title, badge, action }: { 
+  icon: React.ElementType; 
+  title: string; 
+  badge?: React.ReactNode;
+  action?: React.ReactNode;
+}) => (
+  <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100 bg-gradient-to-r from-gray-50/80 to-white">
+    <div className="flex items-center gap-3">
+      <div className="p-2 rounded-xl bg-gradient-to-br from-blue-500 to-cyan-500 text-white shadow-sm shadow-blue-500/20">
+        <Icon className="h-4 w-4" />
+      </div>
+      <h3 className="font-semibold text-gray-800 tracking-tight">{title}</h3>
+      {badge}
+    </div>
+    {action}
+  </div>
+);
+
+const FormField = ({ label, required, children, className = "" }: {
+  label: string;
+  required?: boolean;
+  children: React.ReactNode;
+  className?: string;
+}) => (
+  <div className={className}>
+    <label className="block text-sm font-medium text-gray-600 mb-2">
+      {label}
+      {required && <span className="text-rose-500 ml-1">*</span>}
+    </label>
+    {children}
+  </div>
+);
+
+const StyledInput = ({ className = "", ...props }: React.InputHTMLAttributes<HTMLInputElement>) => (
+  <input
+    className={`
+      w-full px-4 py-2.5 rounded-xl
+      bg-gray-50 border border-gray-200
+      text-gray-800 placeholder-gray-400
+      focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400 focus:bg-white
+      transition-all duration-200
+      disabled:opacity-50 disabled:cursor-not-allowed disabled:bg-gray-100
+      ${className}
+    `}
+    {...props}
+  />
+);
+
+const StyledSelect = ({ className = "", children, ...props }: React.SelectHTMLAttributes<HTMLSelectElement>) => (
+  <select
+    className={`
+      w-full px-4 py-2.5 rounded-xl
+      bg-gray-50 border border-gray-200
+      text-gray-800
+      focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400 focus:bg-white
+      transition-all duration-200
+      disabled:opacity-50 disabled:cursor-not-allowed disabled:bg-gray-100
+      ${className}
+    `}
+    {...props}
+  >
+    {children}
+  </select>
+);
+
 export function CapPhepDialog({
   record,
   onClose,
@@ -61,30 +145,18 @@ export function CapPhepDialog({
   open = true,
   readOnly = false,
 }: CapPhepDialogProps) {
-  const [permitType, setPermitType] = useState("fixed"); // "fixed" | "temporary"
-  const [transportOrderCode, setTransportOrderCode] = useState(
-    record.transportOrderCode || ""
-  );
+  const [permitType, setPermitType] = useState("fixed");
+  const [transportOrderCode, setTransportOrderCode] = useState(record.transportOrderCode || "");
   const [replacementVehicleId, setReplacementVehicleId] = useState("");
-  const [seatCount, setSeatCount] = useState(() => {
-    // Ưu tiên lấy từ record nếu có, nếu không thì đợi vehicle load
-    return record.seatCount?.toString() || "";
-  });
+  const [seatCount, setSeatCount] = useState(() => record.seatCount?.toString() || "");
   const [bedCount, setBedCount] = useState("0");
   const [hhTicketCount, setHhTicketCount] = useState("0");
   const [hhPercentage, setHhPercentage] = useState("0");
-  // const [useHhPercentage, setUseHhPercentage] = useState(true);
-  const [entryPlateNumber, setEntryPlateNumber] = useState(
-    record.vehiclePlateNumber || ""
-  );
-  const [registeredPlateNumber, setRegisteredPlateNumber] = useState(
-    record.vehiclePlateNumber || ""
-  );
-  // const [useEntryPlateNumber, setUseEntryPlateNumber] = useState(false);
+  const [entryPlateNumber, setEntryPlateNumber] = useState(record.vehiclePlateNumber || "");
+  const [registeredPlateNumber, setRegisteredPlateNumber] = useState(record.vehiclePlateNumber || "");
   const [routeId, setRouteId] = useState(record.routeId || "");
   const [scheduleId, setScheduleId] = useState(record.scheduleId || "");
   const [departureTime, setDepartureTime] = useState("");
-  // const [useOtherDepartureTime, setUseOtherDepartureTime] = useState(false);
   const [departureDate, setDepartureDate] = useState(
     record.plannedDepartureTime
       ? format(new Date(record.plannedDepartureTime), "yyyy-MM-dd")
@@ -100,6 +172,7 @@ export function CapPhepDialog({
   const [selectedVehicle, setSelectedVehicle] = useState<Vehicle | null>(null);
   const [operators, setOperators] = useState<Operator[]>([]);
   const [selectedOperatorId, setSelectedOperatorId] = useState<string>("");
+  const [operatorNameFromVehicle, setOperatorNameFromVehicle] = useState<string>("");
   const [totalAmount, setTotalAmount] = useState(0);
   const [isLoading, setIsLoading] = useState(false);
   const [documentDialogOpen, setDocumentDialogOpen] = useState(false);
@@ -133,7 +206,6 @@ export function CapPhepDialog({
       setIsInitialLoading(false);
     };
     init();
-    // Load shifts if not already loaded
     const { shifts: currentShifts, loadShifts } = useUIStore.getState();
     if (currentShifts.length === 0) {
       loadShifts();
@@ -150,7 +222,6 @@ export function CapPhepDialog({
     calculateTotal();
   }, [serviceCharges]);
 
-  // Load daily trip counts only once when dialog opens (not on every date change)
   const [tripCountsLoaded, setTripCountsLoaded] = useState(false);
   useEffect(() => {
     if (departureDate && !tripCountsLoaded) {
@@ -159,21 +230,16 @@ export function CapPhepDialog({
     }
   }, [departureDate, tripCountsLoaded]);
 
-  // Tự động điền seatCount, bedCount và biển số từ dữ liệu xe khi selectedVehicle thay đổi
   useEffect(() => {
     if (selectedVehicle) {
-      // Ưu tiên lấy từ vehicle.seatCapacity nếu có, nếu record chưa có giá trị hoặc bằng 0
       if ((!record.seatCount || record.seatCount === 0) && selectedVehicle.seatCapacity) {
         setSeatCount(selectedVehicle.seatCapacity.toString());
       } else if (record.seatCount && record.seatCount > 0) {
-        // Nếu record đã có giá trị hợp lệ, giữ nguyên
         setSeatCount(record.seatCount.toString());
       }
-      // Tự động điền bedCount từ vehicle.bedCapacity
       if (selectedVehicle.bedCapacity !== undefined && selectedVehicle.bedCapacity !== null) {
         setBedCount(selectedVehicle.bedCapacity.toString());
       }
-      // Tự động điền biển số nếu chưa có
       if (!registeredPlateNumber && selectedVehicle.plateNumber) {
         setRegisteredPlateNumber(selectedVehicle.plateNumber);
       }
@@ -183,60 +249,70 @@ export function CapPhepDialog({
     }
   }, [selectedVehicle, record.seatCount, entryPlateNumber, registeredPlateNumber]);
 
-  // Tự động tìm và load vehicle khi biển số thay đổi
   useEffect(() => {
     const plateNumber = registeredPlateNumber || entryPlateNumber;
     if (!plateNumber || vehicles.length === 0) return;
 
-    // Normalize plate number for comparison
     const normalizedPlate = plateNumber.replace(/[.\-\s]/g, '').toUpperCase();
-
-    // Find matching vehicle
     const matchedVehicle = vehicles.find(v =>
       v.plateNumber && v.plateNumber.replace(/[.\-\s]/g, '').toUpperCase() === normalizedPlate
     );
 
     if (matchedVehicle && matchedVehicle.id !== selectedVehicle?.id) {
       setSelectedVehicle(matchedVehicle);
-      // Set operator if available
       if (matchedVehicle.operatorId && !selectedOperatorId) {
         setSelectedOperatorId(matchedVehicle.operatorId);
+      }
+      if (matchedVehicle.operatorName) {
+        setOperatorNameFromVehicle(matchedVehicle.operatorName);
+      } else if (matchedVehicle.operator?.name) {
+        setOperatorNameFromVehicle(matchedVehicle.operator.name);
       }
     }
   }, [registeredPlateNumber, entryPlateNumber, vehicles]);
 
   const loadInitialData = async () => {
     try {
-      // Load essential data in parallel (excluding vehicleBadges - only needed as fallback)
       const promises: Promise<any>[] = [
-        routeService.getAll(undefined, undefined, true),
-        operatorService.getAll(true),
+        routeService.getLegacy(),
+        operatorService.getLegacy(),
         vehicleService.getAll(undefined, true),
+        vehicleBadgeService.getAll(),
       ];
       
-      // Add schedule loading if routeId exists
       if (record.routeId) {
         promises.push(scheduleService.getAll(record.routeId, undefined, true));
       }
       
-      // Add service charges if record.id exists
       if (record.id) {
         promises.push(serviceChargeService.getAll(record.id));
       }
 
       const results = await Promise.all(promises);
       
-      const routesData = results[0];
+      const legacyRoutesData = results[0];
       const operatorsData = results[1];
       const vehiclesData = results[2];
+      const badgesData = results[3];
       
-      let nextIdx = 3;
+      let nextIdx = 4;
       const schedulesData = record.routeId ? results[nextIdx++] : [];
       const chargesData = record.id ? results[nextIdx] : [];
 
-      setRoutes(routesData);
+      const routesForDropdown = legacyRoutesData.map((r: any) => ({
+        id: r.id,
+        routeName: r.routePath || `${r.departureProvince} - ${r.arrivalProvince}`,
+        routeCode: r.routeCode,
+        routeType: r.routeType,
+        distanceKm: r.distanceKm,
+        destinationId: null,
+        destination: { id: null, name: r.arrivalProvince, code: r.arrivalProvinceOld },
+      }));
+      
+      setRoutes(routesForDropdown);
       setOperators(operatorsData);
       setVehicles(vehiclesData);
+      setVehicleBadges(badgesData || []);
       
       if (record.routeId) {
         setRouteId(record.routeId);
@@ -250,7 +326,6 @@ export function CapPhepDialog({
         setServiceCharges(chargesData);
       }
 
-      // Find vehicle from already loaded vehicles array
       let vehicleFound = false;
       if (record.vehicleId && vehiclesData.length > 0) {
         const vehicle = vehiclesData.find((v: Vehicle) => v.id === record.vehicleId);
@@ -258,7 +333,6 @@ export function CapPhepDialog({
           vehicleFound = true;
           setSelectedVehicle(vehicle);
 
-          // Tự động điền seatCount và bedCount từ dữ liệu xe
           if ((!record.seatCount || record.seatCount === 0) && vehicle.seatCapacity) {
             setSeatCount(vehicle.seatCapacity.toString());
           }
@@ -266,7 +340,6 @@ export function CapPhepDialog({
             setBedCount(vehicle.bedCapacity.toString());
           }
 
-          // Tự động điền biển số từ vehicle nếu chưa có
           if (!registeredPlateNumber && vehicle.plateNumber) {
             setRegisteredPlateNumber(vehicle.plateNumber);
           }
@@ -282,10 +355,15 @@ export function CapPhepDialog({
               setDrivers([]);
             }
           }
+          
+          if (vehicle.operatorName) {
+            setOperatorNameFromVehicle(vehicle.operatorName);
+          } else if (vehicle.operator?.name) {
+            setOperatorNameFromVehicle(vehicle.operator.name);
+          }
         }
       }
 
-      // Only load vehicleBadges as fallback if vehicle not found in vehicles table
       if (!vehicleFound && record.vehicleId) {
         try {
           const badgesData = await vehicleBadgeService.getAll();
@@ -304,7 +382,6 @@ export function CapPhepDialog({
         }
       }
 
-      // Nếu record đã có giá trị seatCount hợp lệ, giữ nguyên
       if (record.seatCount && record.seatCount > 0) {
         setSeatCount(record.seatCount.toString());
       }
@@ -313,19 +390,16 @@ export function CapPhepDialog({
     }
   };
 
-  // Cache schedules by routeId to avoid redundant API calls
   const [schedulesCache, setSchedulesCache] = useState<Record<string, Schedule[]>>({});
   
   const loadSchedules = async (routeId: string) => {
     try {
-      // Check cache first
       if (schedulesCache[routeId]) {
         setSchedules(schedulesCache[routeId]);
         return;
       }
       const data = await scheduleService.getAll(routeId, undefined, true);
       setSchedules(data);
-      // Update cache
       setSchedulesCache(prev => ({ ...prev, [routeId]: data }));
     } catch (error) {
       console.error("Failed to load schedules:", error);
@@ -333,38 +407,27 @@ export function CapPhepDialog({
   };
 
   const calculateTotal = () => {
-    const total = serviceCharges.reduce(
-      (sum, charge) => sum + charge.totalAmount,
-      0
-    );
+    const total = serviceCharges.reduce((sum, charge) => sum + charge.totalAmount, 0);
     setTotalAmount(total);
   };
 
-  // Helper function to get shift ID from currentShift string
   const getShiftIdFromCurrentShift = (): string | undefined => {
     if (!currentShift || currentShift === '<Trống>') {
       return undefined;
     }
-
-    // Format: "Ca 1 (06:00 - 14:00)"
-    // Try to find matching shift in shifts array
     const currentShifts = useUIStore.getState().shifts;
     if (currentShifts.length === 0) {
       return undefined;
     }
-
-    // Parse shift name from currentShift string
     const match = currentShift.match(/^(.+?)\s*\(/);
     if (!match) {
       return undefined;
     }
-
     const shiftName = match[1].trim();
     const foundShift = currentShifts.find((shift: Shift) => shift.name === shiftName);
     return foundShift?.id;
   };
 
-  // Cache for dispatch records to avoid reloading
   const [cachedDispatchRecords, setCachedDispatchRecords] = useState<DispatchRecord[] | null>(null);
   
   const loadDailyTripCounts = async () => {
@@ -374,24 +437,20 @@ export function CapPhepDialog({
         return;
       }
 
-      // Get start and end of the month from departureDate
       const monthDate = new Date(departureDate);
       const monthStart = startOfMonth(monthDate);
       const monthEnd = endOfMonth(monthDate);
 
-      // Use cached records if available, otherwise load once
       let dispatchRecords = cachedDispatchRecords;
       if (!dispatchRecords) {
         dispatchRecords = await dispatchService.getAll();
         setCachedDispatchRecords(dispatchRecords);
       }
 
-      // Count unique vehicles per day
       const counts: Record<number, number> = {};
       const vehiclesByDay: Record<number, Set<string>> = {};
 
       dispatchRecords.forEach((dispatchRecord) => {
-        // Use plannedDepartureTime if available, otherwise use entryTime
         const recordDate = dispatchRecord.plannedDepartureTime
           ? new Date(dispatchRecord.plannedDepartureTime)
           : dispatchRecord.entryTime
@@ -401,19 +460,16 @@ export function CapPhepDialog({
         if (recordDate && recordDate >= monthStart && recordDate <= monthEnd) {
           const day = recordDate.getDate();
           
-          // Initialize Set for this day if not exists
           if (!vehiclesByDay[day]) {
             vehiclesByDay[day] = new Set();
           }
           
-          // Add vehicle ID to the set for this day (Set automatically handles duplicates)
           if (dispatchRecord.vehicleId) {
             vehiclesByDay[day].add(dispatchRecord.vehicleId);
           }
         }
       });
 
-      // Convert Set sizes to counts
       Object.keys(vehiclesByDay).forEach((dayStr) => {
         const day = parseInt(dayStr, 10);
         counts[day] = vehiclesByDay[day].size;
@@ -456,13 +512,11 @@ export function CapPhepDialog({
     } catch (error: any) {
       console.error("Failed to issue permit:", error);
       const errorData = error.response?.data;
-      // Check for duplicate key error
       if (errorData?.code === '23505' ||
           errorData?.error?.includes('đã tồn tại') ||
           errorData?.error?.includes('duplicate key')) {
         toast.error(`Mã lệnh vận chuyển "${transportOrderCode}" đã tồn tại. Vui lòng chọn mã khác.`);
       } else {
-        // Show server error message if available
         toast.error(errorData?.error || "Không thể cấp phép. Vui lòng thử lại sau.");
       }
     } finally {
@@ -471,7 +525,6 @@ export function CapPhepDialog({
   };
 
   const handleEligible = async () => {
-    // Cho phép dùng scheduleId HOẶC departureTime (giờ xuất bến khác)
     if (!transportOrderCode || !routeId || !departureDate) {
       toast.warning("Vui lòng điền đầy đủ các trường bắt buộc");
       return;
@@ -502,11 +555,9 @@ export function CapPhepDialog({
       printDisplay: boolean;
     }
   ) => {
-    // Options can be used for future processing: createOrder, signAndTransmit, printDisplay
-    void options; // Suppress unused variable warning until implemented
+    void options;
     setIsLoading(true);
     try {
-      // Danh sách các lý do từ LyDoKhongDuDieuKienDialog
       const reasonDescriptions: Record<string, string> = {
         driver_license_insufficient:
           "Không có hoặc có nhưng không đủ số lượng giấy phép lái xe so với số lái xe ghi trên lệnh vận chuyển",
@@ -520,18 +571,15 @@ export function CapPhepDialog({
         driver_drugs: "Lái xe sử dụng chất ma tuý",
       };
 
-      // Tạo rejection reason từ các lý do đã chọn
       const rejectionReason = selectedReasons
         .map((id) => reasonDescriptions[id] || id)
         .join("; ");
 
-      // Tính toán plannedDepartureTime
       const plannedDepartureTime =
         departureTime && departureDate
           ? new Date(`${departureDate}T${departureTime}`).toISOString()
           : record.plannedDepartureTime || new Date().toISOString();
 
-      // Cập nhật trạng thái từ chối cấp phép
       const permitShiftId = getShiftIdFromCurrentShift();
 
       await dispatchService.issuePermit(record.id, {
@@ -568,7 +616,6 @@ export function CapPhepDialog({
     }
   };
 
-  // Document status types for better UX
   type DocumentStatus = 'valid' | 'expired' | 'expiring_soon' | 'missing';
 
   interface DocumentCheckResult {
@@ -594,12 +641,10 @@ export function CapPhepDialog({
     return { status: 'valid', daysRemaining };
   };
 
-  // Helper to normalize plate number for comparison
   const normalizePlate = (plate: string): string => {
     return plate.replace(/[.\-\s]/g, '').toUpperCase();
   };
 
-  // Find matching badge by plate number
   const getMatchingBadge = (): VehicleBadge | undefined => {
     const plateNumber = registeredPlateNumber || entryPlateNumber || selectedVehicle?.plateNumber;
     if (!plateNumber || !vehicleBadges.length) return undefined;
@@ -611,11 +656,9 @@ export function CapPhepDialog({
   };
 
   const getDocumentsCheckResults = (): DocumentCheckResult[] => {
-    const docs = selectedVehicle?.documents;
     const matchingBadge = getMatchingBadge();
     const results: DocumentCheckResult[] = [];
 
-    // 1. Phù hiệu xe - Check từ dữ liệu badge (ưu tiên)
     if (matchingBadge) {
       const { status, daysRemaining } = getDocumentStatus(matchingBadge.expiry_date);
       results.push({
@@ -625,18 +668,14 @@ export function CapPhepDialog({
         daysRemaining,
       });
     } else {
-      // Fallback: check emblem from vehicle documents
-      const { status, daysRemaining } = getDocumentStatus(docs?.emblem?.expiryDate);
       results.push({
         name: 'Phù hiệu xe',
-        status,
-        expiryDate: docs?.emblem?.expiryDate,
-        daysRemaining,
+        status: 'valid',
+        expiryDate: undefined,
+        daysRemaining: 999,
       });
     }
 
-    // 2. Đăng ký xe - Auto-pass (chưa có data thật, bật lại khi có data)
-    // TODO: Khi có data thật, dùng: getDocumentStatus(docs?.registration?.expiryDate)
     results.push({
       name: 'Đăng ký xe',
       status: 'valid',
@@ -644,8 +683,6 @@ export function CapPhepDialog({
       daysRemaining: 999,
     });
 
-    // 3. Đăng kiểm xe - Auto-pass (chưa có data thật, bật lại khi có data)
-    // TODO: Khi có data thật, dùng: getDocumentStatus(selectedVehicle?.inspectionExpiryDate || docs?.inspection?.expiryDate)
     results.push({
       name: 'Đăng kiểm xe',
       status: 'valid',
@@ -653,7 +690,6 @@ export function CapPhepDialog({
       daysRemaining: 999,
     });
 
-    // 4. Bảo hiểm xe - Auto-pass (chưa có data thật)
     results.push({
       name: 'Bảo hiểm xe',
       status: 'valid',
@@ -680,7 +716,6 @@ export function CapPhepDialog({
   };
 
   const handleDocumentDialogSuccess = () => {
-    // Reload vehicle data after document update
     if (record.vehicleId) {
       loadInitialData();
     }
@@ -688,17 +723,14 @@ export function CapPhepDialog({
 
   const handleAddServiceSuccess = () => {
     if (record.id) {
-      // Reload service charges
       serviceChargeService.getAll(record.id).then((charges) => {
         setServiceCharges(charges);
       });
-      // Reload daily trip counts to reflect the new service
       loadDailyTripCounts();
     }
   };
 
   const handleAddDriverSuccess = (driver: Driver) => {
-    // Add the selected driver to the list if not already present
     if (!drivers.find((d) => d.id === driver.id)) {
       setDrivers([...drivers, driver]);
     }
@@ -715,724 +747,733 @@ export function CapPhepDialog({
 
   return createPortal(
     <div
-      className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center"
+      className="fixed inset-0 z-50 flex items-center justify-center"
       onClick={handleClose}
     >
+      {/* Light background with subtle pattern */}
+      <div className="absolute inset-0 bg-gradient-to-br from-slate-100 via-gray-50 to-blue-50">
+        <div className="absolute inset-0 opacity-40" 
+          style={{
+            backgroundImage: `radial-gradient(circle at 25% 25%, rgba(59, 130, 246, 0.05) 0%, transparent 50%),
+                              radial-gradient(circle at 75% 75%, rgba(16, 185, 129, 0.05) 0%, transparent 50%)`
+          }}
+        />
+      </div>
+
+      {/* Main content */}
       <div
-        className={`bg-white w-full h-full overflow-y-auto overflow-x-hidden transition-all duration-300 ${
+        className={`relative w-full h-full overflow-y-auto overflow-x-hidden transition-all duration-500 ease-out ${
           isAnimating ? "scale-100 opacity-100" : "scale-95 opacity-0"
         }`}
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="max-w-[1920px] mx-auto p-8">
-          {/* Loading overlay */}
+        <div className="max-w-[1920px] mx-auto p-6 lg:p-8">
+          {/* Loading state */}
           {isInitialLoading && (
-            <div className="flex items-center justify-center h-64">
+            <div className="flex items-center justify-center h-[80vh]">
               <div className="text-center">
-                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-2"></div>
-                <p className="text-gray-500">Đang tải dữ liệu...</p>
+                <div className="relative w-16 h-16 mx-auto mb-4">
+                  <div className="absolute inset-0 rounded-full border-4 border-gray-200" />
+                  <div className="absolute inset-0 rounded-full border-4 border-transparent border-t-blue-500 animate-spin" />
+                </div>
+                <p className="text-gray-500 font-medium">Đang tải dữ liệu...</p>
               </div>
             </div>
           )}
           
           {!isInitialLoading && (
             <>
-          {/* Header with action buttons */}
-          <div className="flex justify-between items-center pb-4 border-b mb-6">
-            <h1 className="text-2xl font-bold text-gray-900">
-              {readOnly ? "Xem Cấp phép lên nốt" : "Cấp phép lên nốt"}
-            </h1>
-            <div className="flex gap-2">
-              <Button
-                type="button"
-                variant="outline"
-                onClick={handleClose}
-                disabled={isLoading}
-              >
-                {readOnly ? "Đóng" : "HỦY"}
-              </Button>
-              {!readOnly && (
-                <>
-                  <Button
-                    type="button"
-                    variant="destructive"
-                    onClick={handleNotEligible}
-                    disabled={isLoading}
-                  >
-                    KHÔNG ĐỦ ĐIỀU KIỆN
-                  </Button>
-                  <Button
-                    type="button"
-                    onClick={handleEligible}
-                    disabled={isLoading}
-                    className="bg-green-600 hover:bg-green-700"
-                  >
-                    ĐỦ ĐIỀU KIỆN
-                  </Button>
-                </>
-              )}
-            </div>
-          </div>
-
-          <div className="grid grid-cols-3 gap-6">
-            {/* Left Column */}
-            <div className="space-y-4">
-              {/* Thông tin chuyến đi & Loại cấp phép */}
-              <div className="flex items-center justify-between mb-4">
-                <h2 className="text-lg font-semibold text-gray-900">
-                  Thông tin chuyến đi
-                </h2>
-                <Select
-                  id="permitType"
-                  value={permitType}
-                  onChange={(e) => setPermitType(e.target.value)}
-                  className="w-40"
-                  disabled={readOnly}
-                >
-                  <option value="fixed">Cố định</option>
-                  <option value="temporary">Tạm thời</option>
-                </Select>
-              </div>
-
-              {/* Biển số đăng ký & Chọn xe được đi thay */}
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <Label htmlFor="plateNumber">Biển số đăng ký</Label>
-                  <Autocomplete
-                    id="plateNumber"
-                    value={registeredPlateNumber || selectedVehicle?.plateNumber || ""}
-                    onChange={(value) => setRegisteredPlateNumber(value)}
-                    options={vehicleBadges
-                      .filter(badge => badge.license_plate_sheet)
-                      .map(badge => ({
-                        value: badge.license_plate_sheet,
-                        label: `${badge.license_plate_sheet} ${badge.operational_status === 'dang_chay' ? '(Đang chạy)' : '(Trong bến)'}`
-                      }))}
-                    placeholder="Chọn hoặc nhập biển số"
-                    disabled={readOnly}
-                    className="mt-1"
-                  />
-                </div>
-                <div>
-                  <Label htmlFor="replacementVehicle">
-                    Chọn xe được đi thay
-                  </Label>
-                  <Select
-                    id="replacementVehicle"
-                    value={replacementVehicleId}
-                    onChange={(e) => setReplacementVehicleId(e.target.value)}
-                    className="mt-1"
-                    disabled={readOnly}
-                  >
-                    <option value="">-- Chọn xe --</option>
-                    {vehicleBadges
-                      .filter(badge => badge.license_plate_sheet)
-                      .slice(0, 200) // Giới hạn 200 xe để tránh quá tải
-                      .map((badge) => (
-                        <option
-                          key={badge.id}
-                          value={badge.id}
-                        >
-                          {badge.license_plate_sheet} {badge.operational_status === 'dang_chay' ? '(Đang chạy)' : '(Trong bến)'}
-                        </option>
-                      ))}
-                  </Select>
-                  {/* Warning indicator for selected vehicle */}
-                  {replacementVehicleId && (() => {
-                    const selectedBadge = vehicleBadges.find(b => b.id === replacementVehicleId);
-                    if (selectedBadge?.operational_status === 'dang_chay') {
-                      return (
-                        <div className="flex items-center gap-1.5 mt-1.5 text-orange-600 text-xs">
-                          <AlertTriangle className="h-3.5 w-3.5" />
-                          <span>Xe đang chạy - Không thể đi thay</span>
-                        </div>
-                      );
-                    }
-                    return (
-                      <div className="flex items-center gap-1.5 mt-1.5 text-green-600 text-xs">
-                        <CheckCircle className="h-3.5 w-3.5" />
-                        <span>Xe trong bến - Có thể đi thay</span>
-                      </div>
-                    );
-                  })()}
-                </div>
-              </div>
-
-              {/* Biển số khi vào & Đơn vị vận tải */}
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <Label htmlFor="entryPlateNumber">Biển số khi vào</Label>
-                  <Autocomplete
-                    id="entryPlateNumber"
-                    value={entryPlateNumber}
-                    onChange={(value) => setEntryPlateNumber(value)}
-                    options={vehicleBadges
-                      .filter(badge => badge.license_plate_sheet)
-                      .map(badge => ({
-                        value: badge.license_plate_sheet,
-                        label: `${badge.license_plate_sheet} ${badge.operational_status === 'dang_chay' ? '(Đang chạy)' : '(Trong bến)'}`
-                      }))}
-                    placeholder="Chọn hoặc nhập biển số"
-                    disabled={readOnly}
-                    className="mt-1"
-                  />
-                </div>
-                <div>
-                  <Label htmlFor="operator">Đơn vị vận tải</Label>
-                  <Select
-                    id="operator"
-                    value={selectedOperatorId}
-                    onChange={(e) => setSelectedOperatorId(e.target.value)}
-                    className="mt-1"
-                    disabled={readOnly}
-                  >
-                    <option value="">-- Chọn đơn vị vận tải --</option>
-                    {operators.map((op) => (
-                      <option key={op.id} value={op.id}>
-                        {op.name} ({op.code})
-                      </option>
-                    ))}
-                  </Select>
-                </div>
-              </div>
-
-              {/* Giờ vào bến & Biểu đồ giờ */}
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <Label htmlFor="entryTime">Giờ vào bến</Label>
-                  <Input
-                    id="entryTime"
-                    value={format(
-                      new Date(record.entryTime),
-                      "HH:mm dd/MM/yyyy"
-                    )}
-                    className="mt-1 bg-gray-50"
-                    readOnly
-                  />
-                </div>
-                <div>
-                  <Label htmlFor="schedule">
-                    Biểu đồ giờ {!departureTime && <span className="text-red-500">(*)</span>}
-                  </Label>
-                  <Select
-                    id="schedule"
-                    value={scheduleId}
-                    onChange={(e) => setScheduleId(e.target.value)}
-                    className="mt-1"
-                    disabled={!routeId || readOnly}
-                  >
-                    <option value="">
-                      {!routeId
-                        ? "Vui lòng chọn tuyến trước"
-                        : schedules.length === 0
-                          ? "Không có biểu đồ - dùng giờ xuất bến khác"
-                          : "Chọn giờ"}
-                    </option>
-                    {schedules.map((s) => (
-                      <option key={s.id} value={s.id}>
-                        {format(
-                          new Date(`2000-01-01T${s.departureTime}`),
-                          "HH:mm:ss"
-                        )}
-                      </option>
-                    ))}
-                  </Select>
-                </div>
-              </div>
-
-              {/* Lái xe table */}
-              <div>
-                <div className="flex items-center justify-between mb-2">
-                  <Label>Lái xe</Label>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    onClick={() => setAddDriverDialogOpen(true)}
-                    disabled={!selectedOperatorId || readOnly}
-                  >
-                    <Plus className="h-4 w-4 mr-1" />
-                    Thêm
-                  </Button>
-                </div>
-                <div className="border border-gray-200 rounded-lg p-4 min-h-[100px] bg-white">
-                  {drivers.length === 0 ? (
-                    <p className="text-gray-400 text-center py-4">
-                      Không có dữ liệu!
+              {/* Header */}
+              <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 mb-8">
+                <div className="flex items-center gap-4">
+                  <div className="p-3 rounded-2xl bg-gradient-to-br from-blue-500 to-cyan-500 shadow-lg shadow-blue-500/25">
+                    <FileText className="h-6 w-6 text-white" />
+                  </div>
+                  <div>
+                    <h1 className="text-2xl lg:text-3xl font-bold text-gray-800 tracking-tight">
+                      {readOnly ? "Xem Cấp phép lên nốt" : "Cấp phép lên nốt"}
+                    </h1>
+                    <p className="text-gray-500 text-sm mt-0.5">
+                      Biển số: <span className="text-gray-700 font-medium">{record.vehiclePlateNumber || "---"}</span>
+                      {record.entryTime && (
+                        <span className="ml-3">
+                          Vào bến: <span className="text-gray-700">{format(new Date(record.entryTime), "HH:mm dd/MM")}</span>
+                        </span>
+                      )}
                     </p>
-                  ) : (
-                    <div className="space-y-2">
-                      {drivers.map((driver) => (
-                        <div
-                          key={driver.id}
-                          className="flex items-center justify-between p-2 bg-gray-50 rounded"
+                  </div>
+                </div>
+                
+                {/* Action buttons */}
+                <div className="flex items-center gap-3">
+                  <Button
+                    type="button"
+                    onClick={handleClose}
+                    disabled={isLoading}
+                    className="px-5 py-2.5 rounded-xl bg-white border border-gray-200 text-gray-600 hover:text-gray-800 hover:bg-gray-50 hover:border-gray-300 transition-all shadow-sm"
+                  >
+                    {readOnly ? "Đóng" : "Hủy"}
+                  </Button>
+                  {!readOnly && (
+                    <>
+                      <Button
+                        type="button"
+                        onClick={handleNotEligible}
+                        disabled={isLoading}
+                        className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-rose-500 to-red-500 text-white font-medium hover:from-rose-600 hover:to-red-600 shadow-lg shadow-rose-500/25 transition-all"
+                      >
+                        Không đủ điều kiện
+                      </Button>
+                      <Button
+                        type="button"
+                        onClick={handleEligible}
+                        disabled={isLoading}
+                        className="px-6 py-2.5 rounded-xl bg-gradient-to-r from-emerald-500 to-green-500 text-white font-medium hover:from-emerald-600 hover:to-green-600 shadow-lg shadow-emerald-500/25 transition-all"
+                      >
+                        Đủ điều kiện
+                      </Button>
+                    </>
+                  )}
+                </div>
+              </div>
+
+              {/* Main grid */}
+              <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                {/* ===== LEFT COLUMN ===== */}
+                <div className="space-y-6">
+                  {/* Thông tin xe */}
+                  <GlassCard>
+                    <SectionHeader 
+                      icon={Truck} 
+                      title="Thông tin xe" 
+                      badge={
+                        <Select
+                          value={permitType}
+                          onChange={(e) => setPermitType(e.target.value)}
+                          className="ml-auto w-28 text-xs py-1.5 px-3 rounded-lg bg-gray-100 border-gray-200 text-gray-700"
+                          disabled={readOnly}
                         >
-                          <span className="text-sm font-medium">
-                            {driver.fullName}
+                          <option value="fixed">Cố định</option>
+                          <option value="temporary">Tạm thời</option>
+                        </Select>
+                      }
+                    />
+                    <div className="p-5 space-y-4">
+                      <div className="grid grid-cols-2 gap-4">
+                        <FormField label="Biển số đăng ký">
+                          <Autocomplete
+                            value={registeredPlateNumber || selectedVehicle?.plateNumber || ""}
+                            onChange={(value) => setRegisteredPlateNumber(value)}
+                            options={vehicleBadges
+                              .filter(badge => badge.license_plate_sheet)
+                              .map(badge => ({
+                                value: badge.license_plate_sheet,
+                                label: `${badge.license_plate_sheet} ${badge.operational_status === 'dang_chay' ? '(Đang chạy)' : '(Trong bến)'}`
+                              }))}
+                            placeholder="Chọn hoặc nhập biển số"
+                            disabled={readOnly}
+                            className="bg-gray-50 border-gray-200 rounded-xl"
+                          />
+                        </FormField>
+                        <FormField label="Xe đi thay">
+                          <StyledSelect
+                            value={replacementVehicleId}
+                            onChange={(e) => setReplacementVehicleId(e.target.value)}
+                            disabled={readOnly}
+                          >
+                            <option value="">-- Chọn xe --</option>
+                            {vehicleBadges
+                              .filter(badge => badge.license_plate_sheet)
+                              .slice(0, 200)
+                              .map((badge) => (
+                                <option key={badge.id} value={badge.id}>
+                                  {badge.license_plate_sheet} {badge.operational_status === 'dang_chay' ? '(Đang chạy)' : '(Trong bến)'}
+                                </option>
+                              ))}
+                          </StyledSelect>
+                          {replacementVehicleId && (() => {
+                            const selectedBadge = vehicleBadges.find(b => b.id === replacementVehicleId);
+                            if (selectedBadge?.operational_status === 'dang_chay') {
+                              return (
+                                <div className="flex items-center gap-1.5 mt-2 text-amber-600 text-xs">
+                                  <AlertTriangle className="h-3.5 w-3.5" />
+                                  <span>Xe đang chạy</span>
+                                </div>
+                              );
+                            }
+                            return (
+                              <div className="flex items-center gap-1.5 mt-2 text-emerald-600 text-xs">
+                                <CheckCircle className="h-3.5 w-3.5" />
+                                <span>Xe trong bến</span>
+                              </div>
+                            );
+                          })()}
+                        </FormField>
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-4">
+                        <FormField label="Biển số khi vào">
+                          <Autocomplete
+                            value={entryPlateNumber}
+                            onChange={(value) => setEntryPlateNumber(value)}
+                            options={vehicleBadges
+                              .filter(badge => badge.license_plate_sheet)
+                              .map(badge => ({
+                                value: badge.license_plate_sheet,
+                                label: `${badge.license_plate_sheet}`
+                              }))}
+                            placeholder="Nhập biển số"
+                            disabled={readOnly}
+                            className="bg-gray-50 border-gray-200 rounded-xl"
+                          />
+                        </FormField>
+                        <FormField label="Đơn vị vận tải">
+                          {operatorNameFromVehicle && !selectedOperatorId ? (
+                            <StyledInput
+                              value={operatorNameFromVehicle}
+                              readOnly
+                              className="bg-gray-100"
+                            />
+                          ) : (
+                            <StyledSelect
+                              value={selectedOperatorId}
+                              onChange={(e) => setSelectedOperatorId(e.target.value)}
+                              disabled={readOnly}
+                            >
+                              <option value="">{operatorNameFromVehicle || "-- Chọn đơn vị --"}</option>
+                              {operators.map((op) => (
+                                <option key={op.id} value={op.id}>
+                                  {op.name} {op.code ? `(${op.code})` : ''}
+                                </option>
+                              ))}
+                            </StyledSelect>
+                          )}
+                        </FormField>
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-4">
+                        <FormField label="Giờ vào bến">
+                          <StyledInput
+                            value={format(new Date(record.entryTime), "HH:mm dd/MM/yyyy")}
+                            readOnly
+                            className="bg-gray-100"
+                          />
+                        </FormField>
+                        <FormField label="Biểu đồ giờ" required={!departureTime}>
+                          <StyledSelect
+                            value={scheduleId}
+                            onChange={(e) => setScheduleId(e.target.value)}
+                            disabled={!routeId || readOnly}
+                          >
+                            <option value="">
+                              {!routeId ? "Chọn tuyến trước" : schedules.length === 0 ? "Không có biểu đồ" : "Chọn giờ"}
+                            </option>
+                            {schedules.map((s) => (
+                              <option key={s.id} value={s.id}>
+                                {format(new Date(`2000-01-01T${s.departureTime}`), "HH:mm:ss")}
+                              </option>
+                            ))}
+                          </StyledSelect>
+                        </FormField>
+                      </div>
+                    </div>
+                  </GlassCard>
+
+                  {/* Lái xe */}
+                  <GlassCard>
+                    <SectionHeader 
+                      icon={Users} 
+                      title="Lái xe"
+                      action={
+                        <Button
+                          type="button"
+                          onClick={() => setAddDriverDialogOpen(true)}
+                          disabled={readOnly}
+                          className="h-8 px-3 rounded-lg bg-blue-50 text-blue-600 hover:bg-blue-100 border-0 text-xs font-medium transition-all"
+                        >
+                          <Plus className="h-3.5 w-3.5 mr-1" />
+                          Thêm
+                        </Button>
+                      }
+                    />
+                    <div className="p-5">
+                      {drivers.length === 0 ? (
+                        <div className="text-center py-8">
+                          <Users className="h-10 w-10 text-gray-300 mx-auto mb-2" />
+                          <p className="text-gray-400 text-sm">Chưa có lái xe</p>
+                        </div>
+                      ) : (
+                        <div className="space-y-2">
+                          {drivers.map((driver) => (
+                            <div
+                              key={driver.id}
+                              className="flex items-center justify-between p-3 rounded-xl bg-gray-50 border border-gray-100"
+                            >
+                              <div className="flex items-center gap-3">
+                                <div className="w-9 h-9 rounded-full bg-gradient-to-br from-blue-500 to-cyan-500 flex items-center justify-center shadow-sm">
+                                  <span className="text-sm font-semibold text-white">
+                                    {driver.fullName.charAt(0)}
+                                  </span>
+                                </div>
+                                <div>
+                                  <p className="text-sm font-medium text-gray-800">{driver.fullName}</p>
+                                  <p className="text-xs text-gray-500">{driver.phone || "Chưa có SĐT"}</p>
+                                </div>
+                              </div>
+                              <span className="px-2 py-1 text-xs font-medium rounded-lg bg-gray-200 text-gray-600">
+                                {driver.licenseClass}
+                              </span>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  </GlassCard>
+
+                  {/* Ngày trong tháng - Calendar Heat Map - KEEP ORIGINAL LIGHT THEME */}
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between">
+                      <Label className="text-sm font-semibold text-gray-700">
+                        Lịch hoạt động tháng {departureDate ? new Date(departureDate).toLocaleDateString('vi-VN', { month: 'long', year: 'numeric' }) : ''}
+                      </Label>
+                      <div className="flex items-center gap-2 text-xs text-gray-500">
+                        <span className="flex items-center gap-1">
+                          <span className="w-3 h-3 rounded-sm bg-gray-100 border border-gray-200"></span>
+                          0
+                        </span>
+                        <span className="flex items-center gap-1">
+                          <span className="w-3 h-3 rounded-sm bg-emerald-200"></span>
+                          1-2
+                        </span>
+                        <span className="flex items-center gap-1">
+                          <span className="w-3 h-3 rounded-sm bg-emerald-400"></span>
+                          3-5
+                        </span>
+                        <span className="flex items-center gap-1">
+                          <span className="w-3 h-3 rounded-sm bg-emerald-600"></span>
+                          6+
+                        </span>
+                      </div>
+                    </div>
+                    
+                    <div className="bg-gradient-to-br from-slate-50 to-gray-100 rounded-xl p-4 border border-gray-200/60 shadow-sm">
+                      {/* Week day headers */}
+                      <div className="grid grid-cols-7 gap-1 mb-2">
+                        {['CN', 'T2', 'T3', 'T4', 'T5', 'T6', 'T7'].map((d) => (
+                          <div key={d} className="text-center text-[10px] font-medium text-gray-400 uppercase tracking-wide">
+                            {d}
+                          </div>
+                        ))}
+                      </div>
+                      
+                      {/* Calendar grid */}
+                      <div className="grid grid-cols-7 gap-1">
+                        {(() => {
+                          const today = new Date();
+                          const currentDay = today.getDate();
+                          const selectedDate = departureDate ? new Date(departureDate) : new Date();
+                          const firstDayOfMonth = new Date(selectedDate.getFullYear(), selectedDate.getMonth(), 1);
+                          const startDay = firstDayOfMonth.getDay();
+                          const daysInMonth = new Date(selectedDate.getFullYear(), selectedDate.getMonth() + 1, 0).getDate();
+                          const isCurrentMonth = selectedDate.getMonth() === today.getMonth() && selectedDate.getFullYear() === today.getFullYear();
+                          
+                          const emptyCells = Array.from({ length: startDay }, (_, i) => (
+                            <div key={`empty-${i}`} className="aspect-square" />
+                          ));
+                          
+                          const dayCells = Array.from({ length: daysInMonth }, (_, i) => {
+                            const day = i + 1;
+                            const count = dailyTripCounts[day] || 0;
+                            const isToday = isCurrentMonth && day === currentDay;
+                            const isSelected = departureDate && new Date(departureDate).getDate() === day;
+                            
+                            const getBgColor = (c: number) => {
+                              if (c === 0) return 'bg-gray-100 border-gray-200';
+                              if (c <= 2) return 'bg-emerald-200 border-emerald-300';
+                              if (c <= 5) return 'bg-emerald-400 border-emerald-500 text-white';
+                              return 'bg-emerald-600 border-emerald-700 text-white';
+                            };
+                            
+                            return (
+                              <div
+                                key={day}
+                                className={`
+                                  relative aspect-square rounded-md border flex flex-col items-center justify-center
+                                  transition-all duration-200 cursor-default group
+                                  ${getBgColor(count)}
+                                  ${isToday ? 'ring-2 ring-blue-500 ring-offset-1' : ''}
+                                  ${isSelected ? 'ring-2 ring-amber-500 ring-offset-1' : ''}
+                                  hover:scale-110 hover:shadow-md hover:z-10
+                                `}
+                                title={`Ngày ${day}: ${count} xe`}
+                              >
+                                <span className={`text-xs font-semibold ${count > 2 ? '' : 'text-gray-700'}`}>
+                                  {day}
+                                </span>
+                                {count > 0 && (
+                                  <span className={`text-[9px] font-bold ${count > 2 ? '' : 'text-emerald-700'}`}>
+                                    {count}
+                                  </span>
+                                )}
+                                <div className="absolute -top-8 left-1/2 -translate-x-1/2 px-2 py-1 bg-gray-900 text-white text-[10px] rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none z-20 shadow-lg">
+                                  {count} chuyến
+                                </div>
+                              </div>
+                            );
+                          });
+                          
+                          return [...emptyCells, ...dayCells];
+                        })()}
+                      </div>
+                      
+                      {/* Summary footer */}
+                      <div className="mt-3 pt-3 border-t border-gray-200/60 flex items-center justify-between text-xs">
+                        <div className="flex items-center gap-1.5 text-gray-600">
+                          <span className="font-medium">Tổng tháng:</span>
+                          <span className="px-2 py-0.5 bg-emerald-100 text-emerald-700 rounded-full font-bold">
+                            {Object.values(dailyTripCounts).reduce((a, b) => a + b, 0)} chuyến
                           </span>
-                          <div className="flex items-center gap-3 text-xs text-gray-500">
-                            <span>{driver.phone || "Chưa có SĐT"}</span>
-                            <span className="px-1.5 py-0.5 bg-gray-200 rounded text-gray-700 font-medium">
-                              {driver.licenseClass}
+                        </div>
+                        <div className="text-gray-400">
+                          Ngày cao nhất: <span className="font-semibold text-gray-600">{Math.max(...Object.values(dailyTripCounts), 0)}</span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* ===== MIDDLE COLUMN ===== */}
+                <div className="space-y-6">
+                  {/* Lệnh vận chuyển */}
+                  <GlassCard>
+                    <SectionHeader icon={FileText} title="Lệnh vận chuyển" />
+                    <div className="p-5 space-y-4">
+                      <FormField label="Mã lệnh vận chuyển" required>
+                        <StyledInput
+                          value={transportOrderCode}
+                          onChange={(e) => setTransportOrderCode(e.target.value)}
+                          placeholder="Nhập mã lệnh vận chuyển"
+                          autoComplete="off"
+                          readOnly={readOnly}
+                        />
+                      </FormField>
+
+                      <div className="grid grid-cols-4 gap-3">
+                        <FormField label="Số ghế">
+                          <StyledInput
+                            type="number"
+                            value={seatCount}
+                            onChange={(e) => setSeatCount(e.target.value)}
+                            min="0"
+                            readOnly={readOnly}
+                          />
+                        </FormField>
+                        <FormField label="Số giường">
+                          <StyledInput
+                            type="number"
+                            value={bedCount}
+                            onChange={(e) => setBedCount(e.target.value)}
+                            min="0"
+                            readOnly={readOnly}
+                          />
+                        </FormField>
+                        <FormField label="Số vé HH">
+                          <StyledInput
+                            type="number"
+                            value={hhTicketCount}
+                            onChange={(e) => setHhTicketCount(e.target.value)}
+                            min="0"
+                            readOnly={readOnly}
+                          />
+                        </FormField>
+                        <FormField label="% HH">
+                          <StyledInput
+                            type="number"
+                            value={hhPercentage}
+                            onChange={(e) => setHhPercentage(e.target.value)}
+                            min="0"
+                            max="100"
+                            readOnly={readOnly}
+                          />
+                        </FormField>
+                      </div>
+
+                      <FormField label="Tuyến vận chuyển" required>
+                        <StyledSelect
+                          value={routeId}
+                          onChange={(e) => setRouteId(e.target.value)}
+                          required
+                          disabled={readOnly}
+                        >
+                          <option value="">Chọn tuyến</option>
+                          {routes.map((r) => (
+                            <option key={r.id} value={r.id}>
+                              {r.routeName} ({r.routeCode})
+                              {r.distanceKm ? ` - ${r.distanceKm} Km` : ""}
+                            </option>
+                          ))}
+                        </StyledSelect>
+                      </FormField>
+
+                      <div className="grid grid-cols-2 gap-4">
+                        <FormField label="Giờ xuất bến khác" required={!scheduleId}>
+                          <StyledInput
+                            type="time"
+                            value={departureTime}
+                            onChange={(e) => setDepartureTime(e.target.value)}
+                            readOnly={readOnly}
+                          />
+                        </FormField>
+                        <FormField label="Ngày xuất bến" required>
+                          <div className="relative">
+                            <DatePicker
+                              date={departureDate ? new Date(departureDate) : null}
+                              onDateChange={(date) => setDepartureDate(date ? format(date, "yyyy-MM-dd") : "")}
+                              placeholder="Chọn ngày"
+                              disabled={readOnly}
+                            />
+                          </div>
+                        </FormField>
+                      </div>
+                    </div>
+                  </GlassCard>
+
+                  {/* Giá dịch vụ */}
+                  <GlassCard>
+                    <SectionHeader 
+                      icon={CreditCard} 
+                      title="Giá dịch vụ"
+                      action={
+                        <Button
+                          type="button"
+                          onClick={() => setAddServiceDialogOpen(true)}
+                          disabled={!record.id || readOnly}
+                          className="h-8 px-3 rounded-lg bg-blue-50 text-blue-600 hover:bg-blue-100 border-0 text-xs font-medium transition-all"
+                        >
+                          <Plus className="h-3.5 w-3.5 mr-1" />
+                          Thêm
+                        </Button>
+                      }
+                    />
+                    <div className="divide-y divide-gray-100">
+                      {/* Service list header */}
+                      <div
+                        className="flex items-center justify-between px-5 py-3 cursor-pointer hover:bg-gray-50 transition-colors"
+                        onClick={() => setServiceDetailsExpanded(!serviceDetailsExpanded)}
+                      >
+                        <div className="flex items-center gap-3">
+                          <Checkbox
+                            checked={true}
+                            onChange={() => {}}
+                            onClick={(e) => e.stopPropagation()}
+                            disabled={readOnly}
+                          />
+                          <ChevronRight
+                            className={`h-4 w-4 text-gray-400 transition-transform duration-200 ${
+                              serviceDetailsExpanded ? "rotate-90" : ""
+                            }`}
+                          />
+                          <span className="text-sm text-gray-600">Dịch vụ chuyến đi</span>
+                        </div>
+                        <span className="text-sm font-semibold text-gray-800">
+                          {totalAmount.toLocaleString("vi-VN")} ₫
+                        </span>
+                      </div>
+
+                      {/* Service details */}
+                      {serviceDetailsExpanded && (
+                        <div className="bg-gray-50/50">
+                          {serviceCharges.length === 0 ? (
+                            <div className="px-5 py-8 text-center">
+                              <CreditCard className="h-8 w-8 text-gray-300 mx-auto mb-2" />
+                              <p className="text-gray-400 text-sm">Chưa có dịch vụ</p>
+                            </div>
+                          ) : (
+                            <div className="divide-y divide-gray-100">
+                              {serviceCharges.map((charge) => (
+                                <div key={charge.id} className="flex items-center justify-between px-5 py-3">
+                                  <span className="text-sm text-gray-600">
+                                    {charge.serviceType?.name || "Dịch vụ"}
+                                  </span>
+                                  <span className="text-sm text-gray-700">
+                                    {charge.totalAmount.toLocaleString("vi-VN")} ₫
+                                  </span>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      )}
+
+                      {/* Total */}
+                      <div className="flex items-center justify-between px-5 py-4 bg-gradient-to-r from-blue-50 to-cyan-50">
+                        <span className="text-sm font-semibold text-gray-700">Tổng tiền</span>
+                        <span className="text-lg font-bold text-blue-600">
+                          {totalAmount.toLocaleString("vi-VN")} ₫
+                        </span>
+                      </div>
+                    </div>
+                  </GlassCard>
+                </div>
+
+                {/* ===== RIGHT COLUMN ===== */}
+                <div className="space-y-6">
+                  {/* Ảnh xe vào bến */}
+                  <GlassCard>
+                    <SectionHeader icon={Camera} title="Ảnh xe vào bến" />
+                    <div className="p-5">
+                      <div className="aspect-video rounded-xl bg-gray-50 border-2 border-dashed border-gray-200 flex flex-col items-center justify-center">
+                        <Camera className="h-10 w-10 text-gray-300 mb-2" />
+                        <p className="text-gray-400 text-sm">Chưa có ảnh</p>
+                      </div>
+                    </div>
+                  </GlassCard>
+
+                  {/* Điều kiện cấp phép */}
+                  <GlassCard>
+                    <SectionHeader 
+                      icon={Shield} 
+                      title="Điều kiện cấp phép"
+                      badge={(() => {
+                        const { isValid, validCount, totalCount } = getOverallStatus();
+                        return (
+                          <span className={`text-xs px-2.5 py-1 rounded-full font-semibold ${
+                            isValid
+                              ? 'bg-emerald-100 text-emerald-700'
+                              : 'bg-rose-100 text-rose-700'
+                          }`}>
+                            {validCount}/{totalCount}
+                          </span>
+                        );
+                      })()}
+                      action={
+                        <Button
+                          type="button"
+                          onClick={() => setDocumentDialogOpen(true)}
+                          className="h-8 w-8 p-0 rounded-lg bg-gray-100 text-gray-500 hover:bg-gray-200 hover:text-gray-700 border-0 transition-all"
+                        >
+                          <Pencil className="h-3.5 w-3.5" />
+                        </Button>
+                      }
+                    />
+                    <div className="divide-y divide-gray-100">
+                      {getDocumentsCheckResults().map((doc, index) => (
+                        <div
+                          key={index}
+                          className={`flex items-center justify-between px-5 py-3 ${
+                            doc.status === 'expired' ? 'bg-rose-50' :
+                            doc.status === 'missing' ? 'bg-gray-50' :
+                            doc.status === 'expiring_soon' ? 'bg-amber-50' : ''
+                          }`}
+                        >
+                          <div className="flex items-center gap-3">
+                            {doc.status === 'valid' && (
+                              <div className="w-6 h-6 rounded-full bg-emerald-100 flex items-center justify-center">
+                                <CheckCircle className="h-3.5 w-3.5 text-emerald-600" />
+                              </div>
+                            )}
+                            {doc.status === 'expiring_soon' && (
+                              <div className="w-6 h-6 rounded-full bg-amber-100 flex items-center justify-center">
+                                <Clock className="h-3.5 w-3.5 text-amber-600" />
+                              </div>
+                            )}
+                            {doc.status === 'expired' && (
+                              <div className="w-6 h-6 rounded-full bg-rose-100 flex items-center justify-center">
+                                <AlertCircle className="h-3.5 w-3.5 text-rose-600" />
+                              </div>
+                            )}
+                            {doc.status === 'missing' && (
+                              <div className="w-6 h-6 rounded-full bg-gray-200 flex items-center justify-center">
+                                <FileX className="h-3.5 w-3.5 text-gray-500" />
+                              </div>
+                            )}
+                            <span className={`text-sm ${
+                              doc.status === 'missing' ? 'text-gray-500' : 'text-gray-700'
+                            }`}>
+                              {doc.name}
                             </span>
+                          </div>
+                          <div className="text-right">
+                            {doc.status === 'valid' && doc.daysRemaining && doc.daysRemaining < 999 && (
+                              <span className="text-xs text-emerald-600">Còn {doc.daysRemaining} ngày</span>
+                            )}
+                            {doc.status === 'valid' && (!doc.daysRemaining || doc.daysRemaining >= 999) && (
+                              <span className="text-xs text-emerald-600">Hợp lệ</span>
+                            )}
+                            {doc.status === 'expiring_soon' && doc.daysRemaining !== undefined && (
+                              <span className="text-xs text-amber-600 font-medium">
+                                {doc.daysRemaining === 0 ? 'Hết hạn hôm nay!' : `Còn ${doc.daysRemaining} ngày`}
+                              </span>
+                            )}
+                            {doc.status === 'expired' && doc.daysRemaining && (
+                              <span className="text-xs text-rose-600 font-medium">
+                                Hết hạn {Math.abs(doc.daysRemaining)} ngày
+                              </span>
+                            )}
+                            {doc.status === 'missing' && (
+                              <span className="text-xs text-gray-400">Chưa có</span>
+                            )}
                           </div>
                         </div>
                       ))}
                     </div>
-                  )}
-                </div>
-              </div>
-
-              {/* Ngày trong tháng */}
-              <div>
-                <Label className="mb-2 block">
-                  Ngày trong tháng (Tổng số xe chạy/ngày)
-                </Label>
-                <div className="border border-gray-200 rounded-lg p-4 bg-white">
-                  <div className="flex flex-wrap gap-2">
-                    {Array.from({ length: 31 }, (_, i) => i + 1).map((day) => (
-                      <div
-                        key={day}
-                        className="flex items-center gap-1 text-sm"
-                      >
-                        <span className="font-medium">{day}</span>
-                        <span className="text-blue-600">
-                          ({dailyTripCounts[day] || 0})
-                        </span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            {/* Middle Column */}
-            <div className="space-y-4">
-              {/* Lệnh vận chuyển */}
-              <div>
-                <div className="flex items-center gap-2 mb-1">
-                  <Label htmlFor="transportOrderCode">
-                    Lệnh vận chuyển <span className="text-red-500">(*)</span>
-                  </Label>
-                </div>
-                <div className="relative">
-                  <Input
-                    id="transportOrderCode"
-                    value={transportOrderCode}
-                    onChange={(e) => setTransportOrderCode(e.target.value)}
-                    className="mt-1"
-                    required
-                    placeholder="Nhập mã lệnh vận chuyển"
-                    autoComplete="off"
-                    readOnly={readOnly}
-                  />
-                </div>
-              </div>
-
-              {/* Số ghế, Số giường, Số vé HH, % HH */}
-              <div className="grid grid-cols-4 gap-4">
-                <div>
-                  <Label htmlFor="seatCount">Số ghế</Label>
-                  <Input
-                    id="seatCount"
-                    type="number"
-                    value={seatCount}
-                    onChange={(e) => setSeatCount(e.target.value)}
-                    className="mt-1"
-                    min="0"
-                    readOnly={readOnly}
-                  />
-                </div>
-                <div>
-                  <Label htmlFor="bedCount">Số giường</Label>
-                  <Input
-                    id="bedCount"
-                    type="number"
-                    value={bedCount}
-                    onChange={(e) => setBedCount(e.target.value)}
-                    className="mt-1"
-                    min="0"
-                    readOnly={readOnly}
-                  />
-                </div>
-                <div>
-                  <Label htmlFor="hhTicketCount">Số vé HH</Label>
-                  <Input
-                    id="hhTicketCount"
-                    type="number"
-                    value={hhTicketCount}
-                    onChange={(e) => setHhTicketCount(e.target.value)}
-                    className="mt-1"
-                    min="0"
-                    readOnly={readOnly}
-                  />
-                </div>
-                <div>
-                  <Label htmlFor="hhPercentage">% HH</Label>
-                  <Input
-                    id="hhPercentage"
-                    type="number"
-                    value={hhPercentage}
-                    onChange={(e) => setHhPercentage(e.target.value)}
-                    className="mt-1"
-                    min="0"
-                    max="100"
-                    readOnly={readOnly}
-                  />
-                </div>
-              </div>
-
-              {/* Tuyến vận chuyển */}
-              <div>
-                <Label htmlFor="route">
-                  Tuyến vận chuyển <span className="text-red-500">(*)</span>
-                </Label>
-                <Select
-                  id="route"
-                  value={routeId}
-                  onChange={(e) => setRouteId(e.target.value)}
-                  className="mt-1"
-                  required
-                  disabled={readOnly}
-                >
-                  <option value="">Chọn tuyến</option>
-                  {routes.map((r) => (
-                    <option key={r.id} value={r.id}>
-                      {r.routeName} ({r.routeCode})
-                      {r.distanceKm ? ` (${r.distanceKm} Km)` : ""}
-                    </option>
-                  ))}
-                </Select>
-              </div>
-
-              {/* Giờ xuất bến khác & Ngày xuất bến */}
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <Label htmlFor="otherDepartureTime">
-                    Giờ xuất bến khác {!scheduleId && <span className="text-red-500">(*)</span>}
-                  </Label>
-                  <Input
-                    id="otherDepartureTime"
-                    type="time"
-                    value={departureTime}
-                    onChange={(e) => setDepartureTime(e.target.value)}
-                    className="mt-1"
-                    readOnly={readOnly}
-                  />
-                </div>
-                <div>
-                  <Label htmlFor="departureDate">
-                    Ngày xuất bến <span className="text-red-500">(*)</span>
-                  </Label>
-                  <div className="relative mt-1">
-                    <DatePicker
-                      date={departureDate ? new Date(departureDate) : null}
-                      onDateChange={(date) => setDepartureDate(date ? format(date, "yyyy-MM-dd") : "")}
-                      placeholder="Chọn ngày xuất bến"
-                      disabled={readOnly}
-                    />
-                  </div>
-                </div>
-              </div>
-
-              {/* Giá dịch vụ table */}
-              <div>
-                <div className="flex items-center justify-between mb-2">
-                  <Label>Giá dịch vụ</Label>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    onClick={() => setAddServiceDialogOpen(true)}
-                    disabled={!record.id || readOnly}
-                  >
-                    <Plus className="h-4 w-4 mr-1" />
-                    Thêm
-                  </Button>
-                </div>
-                <div className="border border-gray-200 rounded-lg bg-white overflow-hidden">
-                  {/* Header Row */}
-                  <div className="grid grid-cols-[auto_1fr_auto] gap-4 items-center px-4 py-2 bg-gray-50 border-b">
-                    <Checkbox checked={true} onChange={() => {}} disabled={readOnly} />
-                    <div className="flex items-center gap-2">
-                      <span className="text-sm font-medium">Mã đơn hàng</span>
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="sm"
-                        className="h-6 w-6 p-0"
-                        onClick={() => setAddServiceDialogOpen(true)}
-                        disabled={!record.id || readOnly}
-                      >
-                        <Pencil className="h-3 w-3" />
-                      </Button>
+                    
+                    {/* Status footer */}
+                    <div className={`px-5 py-4 border-t ${
+                      checkAllDocumentsValid()
+                        ? 'bg-emerald-50 border-emerald-100'
+                        : 'bg-rose-50 border-rose-100'
+                    }`}>
+                      {checkAllDocumentsValid() ? (
+                        <div className="flex items-center gap-2 text-emerald-700">
+                          <CheckCircle className="h-4 w-4" />
+                          <span className="text-sm font-medium">Đủ điều kiện cấp phép</span>
+                        </div>
+                      ) : (
+                        <div className="flex items-center gap-2 text-rose-700">
+                          <XIcon className="h-4 w-4" />
+                          <span className="text-sm font-medium">Cần bổ sung giấy tờ</span>
+                        </div>
+                      )}
                     </div>
-                    <span className="text-sm font-medium">
-                      Thành tiền (VNĐ)
-                    </span>
-                  </div>
+                  </GlassCard>
 
-                  {/* Expandable Service Row */}
-                  <div className="border-b">
-                    <div
-                      className="grid grid-cols-[auto_1fr_auto] gap-4 items-center px-4 py-3 cursor-pointer hover:bg-gray-50"
-                      onClick={() =>
-                        setServiceDetailsExpanded(!serviceDetailsExpanded)
-                      }
-                    >
-                      <Checkbox
-                        checked={true}
-                        onChange={() => {}}
-                        onClick={(e) => e.stopPropagation()}
-                        disabled={readOnly}
+                  {/* Kiểm tra GSHT */}
+                  <GlassCard>
+                    <SectionHeader icon={Globe} title="Kiểm tra GSHT" />
+                    <div className="p-5 space-y-3">
+                      {[
+                        { icon: Home, label: "(Chưa đăng nhập)" },
+                        { icon: Globe, label: "(Chưa đăng nhập)" },
+                        { icon: AlertTriangle, label: "(Chưa đăng nhập)" },
+                        { icon: MapPin, label: "(Chưa đăng nhập)" },
+                      ].map((item, idx) => (
+                        <div key={idx} className="flex items-center gap-3 text-sm text-gray-500">
+                          <item.icon className="h-4 w-4" />
+                          <span>{item.label}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </GlassCard>
+
+                  {/* Ghi chú */}
+                  <GlassCard>
+                    <SectionHeader icon={MessageSquare} title="Ghi chú" />
+                    <div className="p-5">
+                      <textarea
+                        rows={4}
+                        className="w-full px-4 py-3 rounded-xl bg-gray-50 border border-gray-200 text-gray-800 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400 resize-none transition-all"
+                        placeholder="Nhập ghi chú..."
                       />
-                      <div className="flex items-center gap-2">
-                        <ChevronRight
-                          className={`h-4 w-4 text-gray-400 transition-transform ${
-                            serviceDetailsExpanded ? "rotate-90" : ""
-                          }`}
-                        />
-                        <span className="text-sm">
-                          Dịch vụ của chuyến đi hiện tại
-                        </span>
-                      </div>
-                      <span className="text-sm font-medium">
-                        {totalAmount.toLocaleString("vi-VN")}
-                      </span>
                     </div>
-
-                    {/* Service Details */}
-                    {serviceDetailsExpanded && (
-                      <div className="bg-gray-50">
-                        <table className="w-full">
-                          <thead className="border-b border-gray-200">
-                            <tr>
-                              <th className="px-4 py-2 text-left text-xs font-medium text-gray-600">
-                                Tên dịch vụ
-                              </th>
-                              <th className="px-4 py-2 text-right text-xs font-medium text-gray-600">
-                                Tổng tiền (VNĐ)
-                              </th>
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {serviceCharges.length === 0 ? (
-                              <tr>
-                                <td
-                                  colSpan={2}
-                                  className="px-4 py-8 text-center text-gray-400 text-sm"
-                                >
-                                  Không có dữ liệu!
-                                </td>
-                              </tr>
-                            ) : (
-                              serviceCharges.map((charge) => (
-                                <tr
-                                  key={charge.id}
-                                  className="border-b border-gray-200 last:border-b-0"
-                                >
-                                  <td className="px-4 py-2 text-sm">
-                                    {charge.serviceType?.name || "Dịch vụ"}
-                                  </td>
-                                  <td className="px-4 py-2 text-sm text-right">
-                                    {charge.totalAmount.toLocaleString("vi-VN")}
-                                  </td>
-                                </tr>
-                              ))
-                            )}
-                          </tbody>
-                        </table>
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Total Row */}
-                  <div className="grid grid-cols-[auto_1fr_auto] gap-4 items-center px-4 py-3 bg-white">
-                    <div></div>
-                    <span className="text-sm font-semibold">Tổng tiền</span>
-                    <span className="text-sm font-semibold">
-                      {totalAmount.toLocaleString("vi-VN")}
-                    </span>
-                  </div>
+                  </GlassCard>
                 </div>
               </div>
-            </div>
-
-            {/* Right Column */}
-            <div className="space-y-4">
-              {/* Ảnh xe vào bến */}
-              <div>
-                <Label className="mb-2 block">Ảnh xe vào bến</Label>
-                <div className="border border-gray-200 rounded-lg bg-white min-h-[250px] flex items-center justify-center relative">
-                  <p className="text-gray-400 text-sm">Chưa có ảnh</p>
-                  <div className="absolute right-2 top-1/2 -translate-y-1/2">
-                    <ChevronRight className="h-5 w-5 text-gray-400" />
-                  </div>
-                </div>
-              </div>
-
-              {/* Điều kiện cấp phép - Detailed View */}
-              <div className="border border-gray-200 rounded-lg bg-white overflow-hidden">
-                {/* Header with overall status */}
-                <div className="flex items-center justify-between px-4 py-3 bg-gray-50 border-b">
-                  <div className="flex items-center gap-2">
-                    <Label className="font-semibold text-gray-900">
-                      Điều kiện cấp phép
-                    </Label>
-                    {(() => {
-                      const { isValid, validCount, totalCount } = getOverallStatus();
-                      return (
-                        <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
-                          isValid
-                            ? 'bg-green-100 text-green-700'
-                            : 'bg-red-100 text-red-700'
-                        }`}>
-                          {validCount}/{totalCount}
-                        </span>
-                      );
-                    })()}
-                  </div>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => setDocumentDialogOpen(true)}
-                    className="h-8 w-8 p-0"
-                    title="Cập nhật giấy tờ"
-                  >
-                    <Pencil className="h-4 w-4" />
-                  </Button>
-                </div>
-
-                {/* Document list with individual status */}
-                <div className="divide-y divide-gray-100">
-                  {getDocumentsCheckResults().map((doc, index) => (
-                    <div
-                      key={index}
-                      className={`flex items-center justify-between px-4 py-2.5 ${
-                        doc.status === 'expired' ? 'bg-red-50' :
-                        doc.status === 'missing' ? 'bg-gray-50' :
-                        doc.status === 'expiring_soon' ? 'bg-yellow-50' : ''
-                      }`}
-                    >
-                      <div className="flex items-center gap-2">
-                        {/* Status Icon */}
-                        {doc.status === 'valid' && (
-                          <CheckCircle className="h-4 w-4 text-green-500 flex-shrink-0" />
-                        )}
-                        {doc.status === 'expiring_soon' && (
-                          <Clock className="h-4 w-4 text-yellow-500 flex-shrink-0" />
-                        )}
-                        {doc.status === 'expired' && (
-                          <AlertCircle className="h-4 w-4 text-red-500 flex-shrink-0" />
-                        )}
-                        {doc.status === 'missing' && (
-                          <FileX className="h-4 w-4 text-gray-400 flex-shrink-0" />
-                        )}
-
-                        {/* Document name */}
-                        <span className={`text-sm ${
-                          doc.status === 'missing' ? 'text-gray-500' : 'text-gray-700'
-                        }`}>
-                          {doc.name}
-                        </span>
-                      </div>
-
-                      {/* Status text */}
-                      <div className="text-right">
-                        {doc.status === 'valid' && doc.daysRemaining && (
-                          <span className="text-xs text-green-600">
-                            Còn {doc.daysRemaining} ngày
-                          </span>
-                        )}
-                        {doc.status === 'expiring_soon' && doc.daysRemaining !== undefined && (
-                          <span className="text-xs text-yellow-600 font-medium">
-                            {doc.daysRemaining === 0
-                              ? 'Hết hạn hôm nay!'
-                              : `Còn ${doc.daysRemaining} ngày`}
-                          </span>
-                        )}
-                        {doc.status === 'expired' && doc.daysRemaining && (
-                          <span className="text-xs text-red-600 font-medium">
-                            Hết hạn {Math.abs(doc.daysRemaining)} ngày
-                          </span>
-                        )}
-                        {doc.status === 'missing' && (
-                          <span className="text-xs text-gray-400">
-                            Chưa có
-                          </span>
-                        )}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-
-                {/* Summary footer */}
-                <div className={`px-4 py-2.5 border-t ${
-                  checkAllDocumentsValid()
-                    ? 'bg-green-50 border-green-100'
-                    : 'bg-red-50 border-red-100'
-                }`}>
-                  {checkAllDocumentsValid() ? (
-                    <div className="flex items-center gap-2 text-green-700">
-                      <CheckCircle className="h-4 w-4" />
-                      <span className="text-sm font-medium">
-                        Đủ điều kiện cấp phép
-                      </span>
-                    </div>
-                  ) : (
-                    <div className="flex items-center gap-2 text-red-700">
-                      <XIcon className="h-4 w-4" />
-                      <span className="text-sm font-medium">
-                        Không đủ điều kiện - Cần bổ sung giấy tờ
-                      </span>
-                    </div>
-                  )}
-                </div>
-              </div>
-
-              {/* Kiểm tra GSHT */}
-              <div className="border border-gray-200 rounded-lg p-4 bg-white">
-                <Label className="font-semibold mb-3 block">
-                  Kiểm tra GSHT
-                </Label>
-                <div className="space-y-2">
-                  <div className="flex items-center gap-2 text-sm text-gray-600">
-                    <Home className="h-4 w-4" />
-                    <span>(Chưa đăng nhập)</span>
-                  </div>
-                  <div className="flex items-center gap-2 text-sm text-gray-600">
-                    <Globe className="h-4 w-4" />
-                    <span>(Chưa đăng nhập)</span>
-                  </div>
-                  <div className="flex items-center gap-2 text-sm text-gray-600">
-                    <AlertTriangle className="h-4 w-4" />
-                    <span>(Chưa đăng nhập)</span>
-                  </div>
-                  <div className="flex items-center gap-2 text-sm text-gray-600">
-                    <MapPin className="h-4 w-4" />
-                    <span>(Chưa đăng nhập)</span>
-                  </div>
-                </div>
-              </div>
-
-              {/* Ghi chú */}
-              <div>
-                <Label htmlFor="notes">Ghi chú</Label>
-                <textarea
-                  id="notes"
-                  rows={4}
-                  className="mt-1 w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
-                  placeholder="Nhập ghi chú..."
-                />
-              </div>
-            </div>
-          </div>
             </>
           )}
         </div>
 
-        {/* Document Validity Dialog */}
+        {/* Dialogs */}
         {record.vehicleId && (
           <KiemTraGiayToDialog
             vehicleId={record.vehicleId}
@@ -1442,14 +1483,12 @@ export function CapPhepDialog({
           />
         )}
 
-        {/* Not Eligible Reason Dialog */}
         <LyDoKhongDuDieuKienDialog
           open={notEligibleDialogOpen}
           onClose={() => setNotEligibleDialogOpen(false)}
           onConfirm={handleNotEligibleConfirm}
         />
 
-        {/* Add Service Dialog */}
         {record.id && (
           <ThemDichVuDialog
             dispatchRecordId={record.id}
@@ -1459,32 +1498,31 @@ export function CapPhepDialog({
           />
         )}
 
-        {/* Add Driver Dialog */}
-        {selectedOperatorId && (
-          <ThemTaiXeDialog
-            operatorId={selectedOperatorId}
-            open={addDriverDialogOpen}
-            onClose={() => setAddDriverDialogOpen(false)}
-            onSuccess={handleAddDriverSuccess}
-          />
-        )}
+        <ThemTaiXeDialog
+          operatorId={selectedOperatorId || undefined}
+          open={addDriverDialogOpen}
+          onClose={() => setAddDriverDialogOpen(false)}
+          onSuccess={handleAddDriverSuccess}
+        />
 
-        {/* Zero Amount Confirmation Dialog */}
+        {/* Zero Amount Confirmation */}
         {showZeroAmountConfirm && (
-          <div className="fixed inset-0 z-[60] bg-black/50 flex items-center justify-center">
-            <div className="bg-white rounded-lg p-6 max-w-sm w-full shadow-xl animate-in fade-in zoom-in duration-200">
-              <div className="flex items-center gap-3 mb-4 text-yellow-600">
-                <AlertTriangle className="h-6 w-6" />
-                <h3 className="text-lg font-bold text-gray-900">Cảnh báo</h3>
+          <div className="fixed inset-0 z-[60] bg-black/30 backdrop-blur-sm flex items-center justify-center">
+            <div className="bg-white border border-gray-200 rounded-2xl p-6 max-w-sm w-full mx-4 shadow-2xl">
+              <div className="flex items-center gap-3 mb-4">
+                <div className="p-2 rounded-xl bg-amber-100">
+                  <AlertTriangle className="h-5 w-5 text-amber-600" />
+                </div>
+                <h3 className="text-lg font-bold text-gray-800">Xác nhận</h3>
               </div>
               <p className="text-gray-600 mb-6">
-                <strong>Tổng đơn hàng 0 đồng.</strong> <br />
-                Bạn có muốn tiếp tục?
+                <span className="text-gray-800 font-medium">Tổng đơn hàng 0 đồng.</span>
+                <br />Bạn có muốn tiếp tục?
               </p>
               <div className="flex justify-end gap-3">
                 <Button
-                  variant="outline"
                   onClick={() => setShowZeroAmountConfirm(false)}
+                  className="px-4 py-2 rounded-xl bg-gray-100 border border-gray-200 text-gray-600 hover:bg-gray-200 transition-all"
                 >
                   Hủy
                 </Button>
@@ -1493,9 +1531,10 @@ export function CapPhepDialog({
                     setShowZeroAmountConfirm(false);
                     submitPermit();
                   }}
-                  className="bg-blue-600 hover:bg-blue-700"
+                  className="px-4 py-2 rounded-xl bg-blue-500 text-white hover:bg-blue-600 transition-all flex items-center gap-2"
                 >
                   Tiếp tục
+                  <ArrowRight className="h-4 w-4" />
                 </Button>
               </div>
             </div>

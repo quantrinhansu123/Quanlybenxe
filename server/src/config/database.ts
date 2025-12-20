@@ -204,6 +204,11 @@ class FirebaseQuery {
     return this
   }
 
+  // Remove undefined values from object (Firebase RTDB doesn't accept undefined)
+  private removeUndefined(obj: any): any {
+    return JSON.parse(JSON.stringify(obj))
+  }
+
   async execute() {
     const database = getDb()
 
@@ -225,8 +230,10 @@ class FirebaseQuery {
               dataWithId.updated_at = new Date().toISOString()
             }
 
-            await database.ref(`${this.collection}/${id}`).set(dataWithId)
-            results.push(dataWithId)
+            // Sanitize to remove undefined values before Firebase set
+            const sanitizedData = this.removeUndefined(dataWithId)
+            await database.ref(`${this.collection}/${id}`).set(sanitizedData)
+            results.push(sanitizedData)
           }
 
           resolve({
@@ -265,8 +272,10 @@ class FirebaseQuery {
 
           const updatedRecords: any[] = []
           for (const record of filteredRecords) {
-            const updated = { ...record, ...updateData }
-            await database.ref(`${this.collection}/${record.id}`).update(updateData)
+            // Sanitize to remove undefined values before Firebase update
+            const sanitizedUpdateData = this.removeUndefined(updateData)
+            const updated = { ...record, ...sanitizedUpdateData }
+            await database.ref(`${this.collection}/${record.id}`).update(sanitizedUpdateData)
             updatedRecords.push(updated)
           }
 

@@ -84,8 +84,14 @@ export const getAllVehicles = async (req: Request, res: Response) => {
     if (operatorId) {
       query = query.eq('operator_id', operatorId as string)
     }
-    if (isActive !== undefined) {
-      query = query.eq('is_active', isActive === 'true')
+    // Default to active vehicles only, unless explicitly set to 'false' or 'all'
+    if (isActive === 'all') {
+      // Return all vehicles (active and inactive)
+    } else if (isActive === 'false') {
+      query = query.eq('is_active', false)
+    } else {
+      // Default: only active vehicles
+      query = query.eq('is_active', true)
     }
 
     const { data: vehicles, error: vehiclesError } = await query

@@ -93,7 +93,15 @@ export const getAllVehicles = async (req: Request, res: Response) => {
       .order('created_at', { ascending: false })
 
     if (operatorId) query = query.eq('operator_id', operatorId as string)
-    if (isActive !== undefined) query = query.eq('is_active', isActive === 'true')
+    // Default to active vehicles only, unless explicitly set to 'false' or 'all'
+    if (isActive === 'all') {
+      // Return all vehicles (active and inactive)
+    } else if (isActive === 'false') {
+      query = query.eq('is_active', false)
+    } else {
+      // Default: only active vehicles
+      query = query.eq('is_active', true)
+    }
 
     const { data: vehicles, error } = await query
     if (error) throw error
@@ -243,6 +251,72 @@ export const getVehicleById = async (req: Request, res: Response) => {
   try {
     const { id } = req.params
 
+    // Handle legacy vehicles from datasheet/Xe
+    if (id.startsWith('legacy_')) {
+      const legacyKey = id.replace('legacy_', '')
+      const snapshot = await firebaseDb.ref(`datasheet/Xe/${legacyKey}`).once('value')
+      const data = snapshot.val()
+      
+      if (!data) return res.status(404).json({ error: 'Legacy vehicle not found' })
+      
+      return res.json({
+        id,
+        plateNumber: data.plate_number || data.BienSo || '',
+        vehicleType: { id: null, name: data.vehicle_type || data.LoaiXe || '' },
+        vehicleTypeName: data.vehicle_type || data.LoaiXe || '',
+        seatCapacity: parseInt(data.seat_count || data.SoCho) || 0,
+        bedCapacity: 0,
+        manufacturer: data.manufacturer || data.NhanHieu || '',
+        modelCode: data.model_code || data.SoLoai || '',
+        manufactureYear: (data.manufacture_year || data.NamSanXuat) ? parseInt(data.manufacture_year || data.NamSanXuat) : null,
+        color: data.color || data.MauSon || '',
+        chassisNumber: data.chassis_number || data.SoKhung || '',
+        engineNumber: data.engine_number || data.SoMay || '',
+        operatorId: null,
+        operator: { id: null, name: data.owner_name || data.TenDangKyXe || '', code: '' },
+        operatorName: data.owner_name || data.TenDangKyXe || '',
+        isActive: true,
+        notes: '',
+        source: 'legacy',
+        documents: {}
+      })
+    }
+
+    // Handle badge vehicles from datasheet/PHUHIEUXE
+    if (id.startsWith('badge_')) {
+      const badgeKey = id.replace('badge_', '')
+      const snapshot = await firebaseDb.ref(`datasheet/PHUHIEUXE/${badgeKey}`).once('value')
+      const data = snapshot.val()
+      
+      if (!data) return res.status(404).json({ error: 'Badge vehicle not found' })
+      
+      return res.json({
+        id,
+        plateNumber: data.BienSoXe || '',
+        vehicleType: { id: null, name: data.LoaiPH || '' },
+        vehicleTypeName: data.LoaiPH || '',
+        seatCapacity: 0,
+        bedCapacity: 0,
+        manufacturer: '',
+        modelCode: '',
+        manufactureYear: null,
+        color: '',
+        chassisNumber: '',
+        engineNumber: '',
+        operatorId: null,
+        operator: { id: null, name: '', code: '' },
+        operatorName: '',
+        isActive: data.TrangThai !== 'Thu hồi',
+        notes: `Phù hiệu: ${data.SoPhuHieu || ''}`,
+        source: 'badge',
+        badgeNumber: data.SoPhuHieu || '',
+        badgeType: data.LoaiPH || '',
+        badgeExpiryDate: data.NgayHetHan || null,
+        documents: {}
+      })
+    }
+
+    // Normal vehicle from vehicles table
     const { data: vehicle, error } = await firebase
       .from('vehicles')
       .select('*')

@@ -1,6 +1,10 @@
 import { Request, Response } from 'express'
-import { firebase } from '../config/database.js'
+import { firebase, firebaseDb } from '../config/database.js'
 import { z } from 'zod'
+
+// Cache for legacy operators
+let legacyOperatorsCache: { data: any[]; timestamp: number } | null = null
+const LEGACY_CACHE_TTL = 30 * 60 * 1000 // 30 minutes
 
 const operatorSchema = z.object({
   name: z.string().min(1, 'Name is required'),
@@ -59,6 +63,79 @@ export const getAllOperators = async (req: Request, res: Response) => {
     return res.json(operators)
   } catch (error) {
     console.error('Error fetching operators:', error)
+    return res.status(500).json({ error: 'Failed to fetch operators' })
+  }
+}
+
+/**
+ * Get legacy operators from datasheet/Xe (unique owner_name values)
+ * Combined with regular operators for complete list
+ */
+export const getLegacyOperators = async (req: Request, res: Response) => {
+  try {
+    const forceRefresh = req.query.refresh === 'true'
+    
+    // Check cache
+    if (!forceRefresh && legacyOperatorsCache && Date.now() - legacyOperatorsCache.timestamp < LEGACY_CACHE_TTL) {
+      return res.json(legacyOperatorsCache.data)
+    }
+    
+    // Load regular operators first
+    const { data: regularOps } = await firebase
+      .from('operators')
+      .select('*')
+      .eq('is_active', true)
+    
+    const regularOperators = (regularOps || []).map((op: any) => ({
+      id: op.id,
+      name: op.name,
+      code: op.code,
+      isActive: true,
+      source: 'database',
+    }))
+    
+    // Load unique owner_name from datasheet/Xe
+    const snapshot = await firebaseDb.ref('datasheet/Xe').once('value')
+    const xeData = snapshot.val()
+    
+    const ownerSet = new Map<string, string>() // name -> generated id
+    if (xeData) {
+      Object.entries(xeData).forEach(([key, v]: [string, any]) => {
+        const name = (v.owner_name || v.TenDangKyXe || '').trim()
+        if (name && !ownerSet.has(name)) {
+          ownerSet.set(name, `legacy_op_${key}`)
+        }
+      })
+    }
+    
+    // Convert to operator format
+    const legacyOperators = Array.from(ownerSet.entries()).map(([name, id]) => ({
+      id,
+      name,
+      code: '', // No code for legacy
+      isActive: true,
+      source: 'legacy',
+    }))
+    
+    // Merge: regular operators first, then legacy (avoid duplicates by name)
+    const regularNames = new Set(regularOperators.map((o: any) => o.name.toLowerCase()))
+    const uniqueLegacy = legacyOperators.filter(o => !regularNames.has(o.name.toLowerCase()))
+    
+    const allOperators = [...regularOperators, ...uniqueLegacy]
+    
+    // Sort by name
+    allOperators.sort((a, b) => a.name.localeCompare(b.name, 'vi'))
+    
+    // Update cache
+    legacyOperatorsCache = { data: allOperators, timestamp: Date.now() }
+    
+    return res.json(allOperators)
+  } catch (error) {
+    console.error('Error fetching legacy operators:', error)
+    // Return stale cache if available
+    if (legacyOperatorsCache) {
+      return res.json(legacyOperatorsCache.data)
+    }
     return res.status(500).json({ error: 'Failed to fetch operators' })
   }
 }

@@ -223,7 +223,7 @@ export const createDispatchRecord = async (req: AuthRequest, res: Response) => {
 
     const insertData: any = {
       vehicle_id: vehicleId,
-      driver_id: driverId,
+      driver_id: driverId || null,  // Firebase RTDB doesn't accept undefined
       schedule_id: scheduleId || null,
       route_id: routeId || null,
       entry_time: entryTimeForDB,
@@ -288,6 +288,8 @@ export const createDispatchRecord = async (req: AuthRequest, res: Response) => {
     })
   } catch (error: any) {
     console.error('Error creating dispatch record:', error)
+    console.error('Error stack:', error.stack)
+    console.error('Request body:', JSON.stringify(req.body, null, 2))
     if (error.name === 'ZodError') {
       return res.status(400).json({ error: error.errors[0].message })
     }

@@ -18,6 +18,20 @@ export const operatorService = {
     }
   },
 
+  /**
+   * Get all operators including legacy ones from datasheet
+   * Returns 1154+ operators from datasheet/Xe unique owner_names
+   */
+  getLegacy: async (): Promise<Operator[]> => {
+    try {
+      const response = await api.get<Operator[]>('/operators/legacy')
+      return response.data
+    } catch (error) {
+      console.error('Error fetching legacy operators:', error)
+      return []
+    }
+  },
+
   getById: async (id: string): Promise<Operator> => {
     const response = await api.get<Operator>(`/operators/${id}`)
     return response.data

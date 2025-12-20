@@ -8,7 +8,7 @@ import { driverService } from "@/services/driver.service";
 import type { Driver } from "@/types";
 
 interface ThemTaiXeDialogProps {
-  operatorId: string;
+  operatorId?: string;  // Optional - load all drivers if not provided
   open: boolean;
   onClose: () => void;
   onSuccess: (driver: Driver) => void;
@@ -25,7 +25,7 @@ export function ThemTaiXeDialog({
   const [isLoading, setIsLoading] = useState(false);
 
   useEffect(() => {
-    if (open && operatorId) {
+    if (open) {
       loadDrivers();
     }
   }, [open, operatorId]);
@@ -33,7 +33,8 @@ export function ThemTaiXeDialog({
   const loadDrivers = async () => {
     setIsLoading(true);
     try {
-      const data = await driverService.getAll(operatorId, true);
+      // Load drivers for specific operator, or all drivers if no operatorId
+      const data = await driverService.getAll(operatorId || undefined, true);
       setDrivers(data);
     } catch (error) {
       console.error("Failed to load drivers:", error);

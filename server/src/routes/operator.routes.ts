@@ -1,6 +1,7 @@
 import { Router } from 'express'
 import {
   getAllOperators,
+  getLegacyOperators,
   getOperatorById,
   createOperator,
   updateOperator,
@@ -13,6 +14,7 @@ const router = Router()
 router.use(authenticate)
 
 router.get('/', getAllOperators)
+router.get('/legacy', getLegacyOperators)
 router.get('/:id', getOperatorById)
 router.post('/', createOperator)
 router.put('/:id', updateOperator)

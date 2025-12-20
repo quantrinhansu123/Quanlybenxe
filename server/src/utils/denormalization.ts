@@ -92,16 +92,21 @@ export async function fetchDenormalizedData(params: {
   routeId?: string | null
   userId?: string | null
 }): Promise<DenormalizedData> {
+  console.log('[fetchDenormalizedData] params:', JSON.stringify(params))
+  
   // Check if vehicleId is legacy or badge
   const isLegacyVehicle = params.vehicleId.startsWith('legacy_')
   const isBadgeVehicle = params.vehicleId.startsWith('badge_')
+  console.log('[fetchDenormalizedData] isLegacy:', isLegacyVehicle, 'isBadge:', isBadgeVehicle)
 
   let vehicleData: DenormalizedVehicleData
 
   if (isLegacyVehicle) {
     // Extract key from legacy_xxx format
     const legacyKey = params.vehicleId.replace('legacy_', '')
+    console.log('[fetchDenormalizedData] Fetching legacy vehicle with key:', legacyKey)
     vehicleData = await fetchLegacyVehicle(legacyKey)
+    console.log('[fetchDenormalizedData] Legacy vehicle data:', JSON.stringify(vehicleData))
   } else if (isBadgeVehicle) {
     // Extract key from badge_xxx format
     const badgeKey = params.vehicleId.replace('badge_', '')

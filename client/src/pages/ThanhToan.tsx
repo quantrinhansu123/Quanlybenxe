@@ -12,15 +12,29 @@ import {
   X,
   RefreshCw,
   FileSpreadsheet,
-  RotateCw,
+  Calendar,
+  Clock,
+  Bus,
+  MapPin,
+  User,
+  Building2,
+  CreditCard,
+  Receipt,
+  Banknote,
+  CircleDollarSign,
+  CheckCircle2,
+  AlertCircle,
+  ArrowRight,
+  Search,
+  TrendingUp,
+  Wallet,
 } from "lucide-react"
-import { iconStyles } from "@/lib/icon-theme"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select } from "@/components/ui/select"
 import { Checkbox } from "@/components/ui/checkbox"
-import { Card, CardContent } from "@/components/ui/card"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import {
   Dialog,
   DialogContent,
@@ -29,14 +43,6 @@ import {
   DialogFooter,
   DialogClose,
 } from "@/components/ui/dialog"
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table"
 import { dispatchService } from "@/services/dispatch.service"
 import { serviceChargeService } from "@/services/service-charge.service"
 import type { DispatchRecord, ServiceCharge, ServiceType, ServiceChargeInput } from "@/types"
@@ -45,6 +51,198 @@ import { useUIStore } from "@/store/ui.store"
 import * as XLSX from "xlsx"
 import { DatePickerRange } from "@/components/DatePickerRange"
 import { type DateRange } from "react-day-picker"
+import { cn } from "@/lib/utils"
+
+// Status configuration
+const statusConfig = {
+  paid: { 
+    label: "Đã thanh toán", 
+    bg: "bg-emerald-100", 
+    text: "text-emerald-700",
+    icon: CheckCircle2,
+    gradient: "from-emerald-500 to-teal-500"
+  },
+  departed: { 
+    label: "Đã xuất bến", 
+    bg: "bg-violet-100", 
+    text: "text-violet-700",
+    icon: ArrowRight,
+    gradient: "from-violet-500 to-purple-500"
+  },
+  pending: { 
+    label: "Chờ thanh toán", 
+    bg: "bg-amber-100", 
+    text: "text-amber-700",
+    icon: Clock,
+    gradient: "from-amber-500 to-orange-500"
+  }
+}
+
+// Stats Card Component
+function StatsCard({ 
+  title, 
+  value, 
+  subtitle,
+  icon: Icon, 
+  gradient,
+  trend
+}: { 
+  title: string
+  value: string | number
+  subtitle?: string
+  icon: React.ElementType
+  gradient: string
+  trend?: { value: number; label: string }
+}) {
+  return (
+    <div className={cn(
+      "relative overflow-hidden rounded-2xl p-5",
+      "bg-gradient-to-br", gradient,
+      "text-white shadow-lg"
+    )}>
+      <div className="absolute top-0 right-0 w-32 h-32 -mr-8 -mt-8 opacity-20">
+        <Icon className="w-full h-full" />
+      </div>
+      <div className="relative">
+        <p className="text-sm font-medium text-white/80">{title}</p>
+        <p className="text-3xl font-bold mt-1">{value}</p>
+        {subtitle && <p className="text-sm text-white/70 mt-1">{subtitle}</p>}
+        {trend && (
+          <div className="flex items-center gap-1 mt-2 text-sm">
+            <TrendingUp className="w-4 h-4" />
+            <span>{trend.value}% {trend.label}</span>
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
+// Order Card Component for List View
+function OrderCard({ 
+  item, 
+  isSelected, 
+  onSelect, 
+  onNavigate 
+}: { 
+  item: DispatchRecord
+  isSelected: boolean
+  onSelect: () => void
+  onNavigate: () => void
+}) {
+  const isPaid = item.currentStatus === 'paid' || item.currentStatus === 'departed'
+  const status = isPaid 
+    ? (item.currentStatus === 'paid' ? statusConfig.paid : statusConfig.departed)
+    : statusConfig.pending
+  const StatusIcon = status.icon
+
+  return (
+    <div 
+      className={cn(
+        "group relative bg-white rounded-xl border-2 transition-all duration-200",
+        "hover:shadow-lg hover:border-blue-200 hover:-translate-y-0.5",
+        isSelected ? "border-blue-400 ring-2 ring-blue-100" : "border-gray-100"
+      )}
+    >
+      {/* Selection checkbox */}
+      {!isPaid && (
+        <div className="absolute top-4 left-4 z-10">
+          <Checkbox 
+            checked={isSelected}
+            onChange={onSelect}
+            className="h-5 w-5"
+          />
+        </div>
+      )}
+
+      {/* Status indicator */}
+      <div className={cn(
+        "absolute top-0 right-0 px-3 py-1.5 rounded-bl-xl rounded-tr-xl",
+        status.bg
+      )}>
+        <div className="flex items-center gap-1.5">
+          <StatusIcon className={cn("w-3.5 h-3.5", status.text)} />
+          <span className={cn("text-xs font-semibold", status.text)}>
+            {status.label}
+          </span>
+        </div>
+      </div>
+
+      <div 
+        className="p-5 cursor-pointer"
+        onClick={onNavigate}
+      >
+        {/* Header */}
+        <div className="flex items-start gap-4 mb-4">
+          <div className={cn(
+            "flex-shrink-0 w-12 h-12 rounded-xl flex items-center justify-center",
+            "bg-gradient-to-br from-blue-500 to-indigo-600 text-white shadow-md"
+          )}>
+            <Bus className="w-6 h-6" />
+          </div>
+          <div className="flex-1 min-w-0 pt-1">
+            <p className="font-bold text-gray-900 text-lg">
+              {item.vehiclePlateNumber}
+            </p>
+            <p className="text-sm text-gray-500 truncate">
+              {item.transportOrderCode || `#${item.id.slice(-8)}`}
+            </p>
+          </div>
+        </div>
+
+        {/* Details */}
+        <div className="space-y-2.5">
+          <div className="flex items-center gap-2 text-sm">
+            <Building2 className="w-4 h-4 text-gray-400 flex-shrink-0" />
+            <span className="text-gray-600 truncate">
+              {item.vehicle?.operator?.name || 'Chưa có đơn vị'}
+            </span>
+          </div>
+          <div className="flex items-center gap-2 text-sm">
+            <MapPin className="w-4 h-4 text-gray-400 flex-shrink-0" />
+            <span className="text-gray-600 truncate">
+              {item.routeName || 'Chưa có tuyến'}
+            </span>
+          </div>
+          <div className="flex items-center gap-2 text-sm">
+            <Calendar className="w-4 h-4 text-gray-400 flex-shrink-0" />
+            <span className="text-gray-600">
+              {format(new Date(item.entryTime), "dd/MM/yyyy")}
+            </span>
+            <span className="text-gray-300">|</span>
+            <Clock className="w-4 h-4 text-gray-400 flex-shrink-0" />
+            <span className="text-gray-600">
+              {item.plannedDepartureTime 
+                ? format(new Date(item.plannedDepartureTime), "HH:mm")
+                : '--:--'}
+            </span>
+          </div>
+        </div>
+
+        {/* Footer */}
+        <div className="mt-4 pt-4 border-t border-gray-100 flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <User className="w-4 h-4 text-gray-400" />
+            <span className="text-sm text-gray-500">{item.entryBy || 'N/A'}</span>
+          </div>
+          <div className="flex items-center gap-1.5">
+            <CircleDollarSign className="w-5 h-5 text-emerald-500" />
+            <span className="text-lg font-bold text-emerald-600">
+              {(item.paymentAmount || 0).toLocaleString('vi-VN')}đ
+            </span>
+          </div>
+        </div>
+      </div>
+
+      {/* Hover action hint */}
+      <div className={cn(
+        "absolute inset-x-0 bottom-0 h-1 rounded-b-xl transition-all duration-200",
+        "bg-gradient-to-r opacity-0 group-hover:opacity-100",
+        isPaid ? status.gradient : "from-blue-500 to-indigo-500"
+      )} />
+    </div>
+  )
+}
 
 export default function ThanhToan() {
   const { id } = useParams<{ id: string }>()
@@ -78,15 +276,21 @@ export default function ThanhToan() {
   const [listData, setListData] = useState<DispatchRecord[]>([])
   const [selectedItems, setSelectedItems] = useState<Set<string>>(new Set())
   const [orderType, setOrderType] = useState<string>("all")
+  const [searchQuery, setSearchQuery] = useState("")
   const [dateRange, setDateRange] = useState<DateRange | undefined>(() => {
     const today = new Date()
     const fromDate = new Date(today.setHours(0, 0, 0, 0))
     const toDate = new Date(today.setHours(23, 59, 59, 999))
-    return {
-      from: fromDate,
-      to: toDate,
-    }
+    return { from: fromDate, to: toDate }
   })
+
+  // Calculate stats
+  const stats = {
+    total: listData.length,
+    pending: listData.filter(i => i.currentStatus !== 'paid' && i.currentStatus !== 'departed').length,
+    paid: listData.filter(i => i.currentStatus === 'paid').length,
+    totalAmount: listData.reduce((sum, i) => sum + (i.paymentAmount || 0), 0)
+  }
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -94,11 +298,8 @@ export default function ThanhToan() {
         setShowServiceDropdown(false)
       }
     }
-
     document.addEventListener("mousedown", handleClickOutside)
-    return () => {
-      document.removeEventListener("mousedown", handleClickOutside)
-    }
+    return () => document.removeEventListener("mousedown", handleClickOutside)
   }, [])
 
   useEffect(() => {
@@ -111,18 +312,15 @@ export default function ThanhToan() {
     }
   }, [id, setTitle])
 
-  // Auto-filter when dateRange or orderType changes
   useEffect(() => {
     if (!id && allData.length > 0) {
       applyFilters()
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [dateRange, orderType, allData.length, id])
+  }, [dateRange, orderType, searchQuery, allData.length, id])
 
   const applyFilters = () => {
     let filtered = [...allData]
     
-    // Filter by date
     if (dateRange?.from && dateRange?.to) {
       const fromDate = new Date(dateRange.from)
       fromDate.setHours(0, 0, 0, 0)
@@ -140,17 +338,20 @@ export default function ThanhToan() {
         return entryTime >= fromDate
       })
     }
+
+    if (searchQuery) {
+      const query = searchQuery.toLowerCase()
+      filtered = filtered.filter(record => 
+        record.vehiclePlateNumber?.toLowerCase().includes(query) ||
+        record.transportOrderCode?.toLowerCase().includes(query) ||
+        record.vehicle?.operator?.name?.toLowerCase().includes(query) ||
+        record.routeName?.toLowerCase().includes(query)
+      )
+    }
     
-    // Filter by order type (if needed in the future)
-    // For now, orderType filter is not implemented as there's no field in DispatchRecord
-    // This can be extended later based on business requirements
-    
-    // Sort by entry time desc
     filtered.sort((a, b) => new Date(b.entryTime).getTime() - new Date(a.entryTime).getTime())
-    
     setListData(filtered)
     
-    // Clear selection for items that no longer exist or have been paid
     setSelectedItems(prev => {
       const newSet = new Set<string>()
       prev.forEach(itemId => {
@@ -166,11 +367,8 @@ export default function ThanhToan() {
   const loadListData = async () => {
     setIsLoading(true)
     try {
-      // Fetch all records
       const data = await dispatchService.getAll()
       setAllData(data)
-      
-      // Apply filters will be triggered by useEffect
     } catch (error) {
       console.error("Failed to load list data:", error)
       toast.error("Không thể tải danh sách đơn hàng")
@@ -186,7 +384,6 @@ export default function ThanhToan() {
     }
 
     try {
-      // Prepare data for Excel
       const excelData = listData.map((item, index) => ({
         "STT": index + 1,
         "Mã đơn hàng": item.transportOrderCode || item.id.substring(0, 8),
@@ -197,48 +394,25 @@ export default function ThanhToan() {
           ? format(new Date(item.plannedDepartureTime), "HH:mm") 
           : "-",
         "Ngày tạo": format(new Date(item.entryTime), "dd/MM/yyyy HH:mm"),
-        "Ngày áp dụng": format(new Date(item.entryTime), "dd/MM/yyyy"),
         "Người tạo": item.entryBy || "-",
-        "Ca trực": "-",
         "Tổng tiền (đồng)": item.paymentAmount || 0,
         "Trạng thái": item.currentStatus === 'paid' ? 'Đã thanh toán' : 
                       item.currentStatus === 'departed' ? 'Đã xuất bến' : 'Chưa thanh toán'
       }))
 
-      // Create workbook and worksheet
       const ws = XLSX.utils.json_to_sheet(excelData)
       const wb = XLSX.utils.book_new()
       XLSX.utils.book_append_sheet(wb, ws, "Danh sách đơn hàng")
 
-      // Set column widths
-      const colWidths = [
-        { wch: 5 },   // STT
-        { wch: 15 },  // Mã đơn hàng
-        { wch: 15 },  // Biển kiểm soát
-        { wch: 25 },  // Đơn vị vận tải
-        { wch: 20 },  // Tuyến vận chuyển
-        { wch: 15 },  // Giờ xuất bến KH
-        { wch: 20 },  // Ngày tạo
-        { wch: 15 },  // Ngày áp dụng
-        { wch: 15 },  // Người tạo
-        { wch: 10 },  // Ca trực
-        { wch: 18 },  // Tổng tiền
-        { wch: 15 },  // Trạng thái
-      ]
-      ws['!cols'] = colWidths
-
-      // Generate filename with date range
       const fromDateStr = dateRange?.from ? format(dateRange.from, "dd-MM-yyyy") : format(new Date(), "dd-MM-yyyy")
       const toDateStr = dateRange?.to ? format(dateRange.to, "dd-MM-yyyy") : format(new Date(), "dd-MM-yyyy")
       const filename = `Danh-sach-don-hang_${fromDateStr}_${toDateStr}.xlsx`
 
-      // Write file
       XLSX.writeFile(wb, filename)
-      
-      toast.success(`Đã xuất Excel thành công: ${filename}`)
+      toast.success(`Đã xuất Excel thành công`)
     } catch (error) {
       console.error("Failed to export Excel:", error)
-      toast.error("Không thể xuất Excel. Vui lòng thử lại sau.")
+      toast.error("Không thể xuất Excel")
     }
   }
 
@@ -256,13 +430,13 @@ export default function ThanhToan() {
       setServiceCharges(chargesData)
       setServiceTypes(typesData)
       
-      // Set default note
       if (recordData) {
         setNote(`Đơn hàng điều độ (${format(new Date(recordData.entryTime), "dd/MM/yyyy HH:mm")})`)
+        setExpandedOrders(new Set([recordData.transportOrderCode || `ORDER-${id?.slice(0, 8)}`]))
       }
     } catch (error) {
       console.error("Failed to load payment data:", error)
-      toast.error("Không thể tải dữ liệu thanh toán. Vui lòng thử lại sau.")
+      toast.error("Không thể tải dữ liệu thanh toán")
       navigate("/dieu-do")
     } finally {
       setIsLoading(false)
@@ -272,21 +446,17 @@ export default function ThanhToan() {
   const toggleOrder = (orderId: string) => {
     setExpandedOrders(prev => {
       const newSet = new Set(prev)
-      if (newSet.has(orderId)) {
-        newSet.delete(orderId)
-      } else {
-        newSet.add(orderId)
-      }
+      if (newSet.has(orderId)) newSet.delete(orderId)
+      else newSet.add(orderId)
       return newSet
     })
   }
 
   const calculateTotals = () => {
     const subtotal = serviceCharges.reduce((sum, charge) => sum + charge.totalAmount, 0)
-    const discount = 0 // Có thể tính từ serviceCharges nếu có
-    const tax = 0 // Có thể tính từ serviceCharges nếu có
+    const discount = 0
+    const tax = 0
     const total = subtotal - discount + tax
-    
     return { subtotal, discount, tax, total }
   }
 
@@ -306,7 +476,7 @@ export default function ThanhToan() {
       navigate("/thanh-toan")
     } catch (error) {
       console.error("Failed to process payment:", error)
-      toast.error("Không thể xử lý thanh toán. Vui lòng thử lại sau.")
+      toast.error("Không thể xử lý thanh toán")
     } finally {
       setIsProcessing(false)
     }
@@ -314,16 +484,13 @@ export default function ThanhToan() {
 
   const handlePayment = async () => {
     if (!record) return
-
     const { total } = calculateTotals()
     
-    // Kiểm tra nếu tổng tiền = 0, hiển thị modal cảnh báo
     if (total === 0) {
       setShowZeroAmountWarning(true)
       return
     }
     
-    // Nếu có tiền, thanh toán trực tiếp
     await processPayment()
   }
 
@@ -340,13 +507,8 @@ export default function ThanhToan() {
 
   const handleAddServiceClick = () => {
     setIsAddingService(true)
-    // Ensure the order section is expanded
     const orderId = record?.transportOrderCode || `ORDER-${id?.slice(0, 8)}`
-    setExpandedOrders(prev => {
-      const newSet = new Set(prev)
-      newSet.add(orderId)
-      return newSet
-    })
+    setExpandedOrders(prev => new Set(prev).add(orderId))
   }
 
   const handleSaveService = async () => {
@@ -371,34 +533,21 @@ export default function ThanhToan() {
       }
 
       await serviceChargeService.create(input)
-      
-      // Reload service charges
       const chargesData = await serviceChargeService.getAll(id)
       setServiceCharges(chargesData)
       
-      // Reset form and close adding mode
-      setNewService({
-        serviceTypeId: "",
-        serviceName: "",
-        quantity: 1,
-        unitPrice: 0,
-      })
+      setNewService({ serviceTypeId: "", serviceName: "", quantity: 1, unitPrice: 0 })
       setIsAddingService(false)
       toast.success("Thêm dịch vụ thành công!")
     } catch (error) {
       console.error("Failed to add service:", error)
-      toast.error("Không thể thêm dịch vụ. Vui lòng thử lại sau.")
+      toast.error("Không thể thêm dịch vụ")
     }
   }
 
   const handleCancelService = () => {
     setIsAddingService(false)
-    setNewService({
-      serviceTypeId: "",
-      serviceName: "",
-      quantity: 1,
-      unitPrice: 0,
-    })
+    setNewService({ serviceTypeId: "", serviceName: "", quantity: 1, unitPrice: 0 })
   }
 
   const handleServiceTypeChange = (serviceTypeId: string) => {
@@ -412,310 +561,230 @@ export default function ThanhToan() {
   }
 
   const handleDeleteService = async (chargeId: string) => {
-    if (!window.confirm("Bạn có chắc chắn muốn xóa dịch vụ này?")) {
-      return
-    }
-
+    if (!window.confirm("Bạn có chắc chắn muốn xóa dịch vụ này?")) return
     if (!id) return
 
     try {
       await serviceChargeService.delete(chargeId)
-      
-      // Reload service charges
       const chargesData = await serviceChargeService.getAll(id)
       setServiceCharges(chargesData)
-      
       toast.success("Xóa dịch vụ thành công!")
     } catch (error) {
       console.error("Failed to delete service:", error)
-      toast.error("Không thể xóa dịch vụ. Vui lòng thử lại sau.")
+      toast.error("Không thể xóa dịch vụ")
     }
   }
 
   const toggleItemSelection = (itemId: string) => {
     setSelectedItems(prev => {
       const newSet = new Set(prev)
-      if (newSet.has(itemId)) {
-        newSet.delete(itemId)
-      } else {
-        newSet.add(itemId)
-      }
+      if (newSet.has(itemId)) newSet.delete(itemId)
+      else newSet.add(itemId)
       return newSet
     })
   }
 
   const handleBatchPayment = () => {
     if (selectedItems.size === 0) {
-      toast.warning("Vui lòng chọn ít nhất một đơn hàng để thanh toán")
+      toast.warning("Vui lòng chọn ít nhất một đơn hàng")
       return
     }
-
-    // Get the first selected item
     const selectedRecord = listData.find(item => selectedItems.has(item.id))
-    
     if (selectedRecord) {
-      // Navigate to payment page for the selected item
       navigate(`/thanh-toan/${selectedRecord.id}`)
     }
   }
 
-  // Render List View if no ID
+  // ========== LIST VIEW ==========
   if (!id) {
     return (
-      <div className="h-full flex flex-col">
-        {/* Filters */}
-        <div className="bg-white p-3 sm:p-4 rounded-lg shadow-sm mb-4">
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:flex lg:flex-wrap items-end gap-3 sm:gap-4">
-                <div className="flex-1 min-w-0 sm:min-w-[280px] lg:w-96">
-                    <Label className="text-xs text-gray-500 mb-1 block">Khoảng thời gian (*)</Label>
-                    <DatePickerRange
-                      range={dateRange}
-                      onRangeChange={setDateRange}
-                      placeholder="Chọn khoảng thời gian"
-                      label=""
-                      className="w-full"
-                    />
+      <div className="min-h-screen bg-gradient-to-br from-slate-50 via-gray-50 to-slate-100">
+        <div className="p-4 lg:p-6 space-y-6">
+          {/* Header */}
+          <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
+            <div>
+              <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-3">
+                <div className="p-2 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-xl text-white">
+                  <Receipt className="w-6 h-6" />
                 </div>
-                <div className="flex-1 min-w-0 sm:min-w-[180px] lg:w-48">
-                    <Label className="text-xs text-gray-500 mb-1 block">Loại đơn hàng (*)</Label>
-                    <Select value={orderType} onChange={(e) => setOrderType(e.target.value)} className="w-full">
-                        <option value="all">Tất cả</option>
-                        <option value="thanh-toan-chuyen">Thanh toán chuyến</option>
-                        <option value="thanh-toan-dinh-ky">Thanh toán định kỳ</option>
-                        <option value="thanh-toan-truy-thu">Thanh toán truy thu</option>
-                        <option value="khac">Khác</option>
-                        <option value="thanh-toan-khong-du-dieu-kien">Thanh toán không đủ điều kiện</option>
-                        <option value="thanh-toan-chuyen-tang-cuong">Thanh toán chuyến (Tăng cường)</option>
-                        <option value="thanh-toan-vang-lai">Thanh toán vãng lai</option>
-                    </Select>
-                </div>
+                Quản lý đơn hàng
+              </h1>
+              <p className="text-gray-500 mt-1">Theo dõi và xử lý thanh toán</p>
             </div>
-        </div>
-
-        {/* Toolbar */}
-        <div className="bg-white p-2 sm:p-3 rounded-t-lg border-b">
-            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 sm:gap-0">
-                <div className="flex items-center gap-1 overflow-x-auto w-full sm:w-auto">
-                    <Button variant="ghost" size="icon" title="Làm mới" onClick={loadListData} className="shrink-0">
-                        <RefreshCw className={iconStyles.infoIcon} />
-                    </Button>
-                    <Button variant="ghost" size="icon" title="Xuất Excel" onClick={handleExportExcel} className="shrink-0">
-                        <FileSpreadsheet className={iconStyles.infoIcon} />
-                    </Button>
-                    <Button variant="ghost" size="icon" title="Thêm mới" onClick={() => navigate("/thanh-toan/tao-moi")} className="shrink-0">
-                        <Plus className={iconStyles.successIcon} />
-                    </Button>
-                    <Button variant="ghost" size="icon" title="Tải lại" onClick={loadListData} className="shrink-0">
-                        <RotateCw className={iconStyles.infoIcon} />
-                    </Button>
-                    {selectedItems.size > 0 && (
-                      <Button 
-                        variant="default" 
-                        size="sm" 
-                        className="gap-2 bg-green-600 hover:bg-green-700 ml-2 shrink-0 text-xs sm:text-sm"
-                        onClick={handleBatchPayment}
-                      >
-                        <span className="hidden sm:inline">THANH TOÁN</span>
-                        <span className="sm:hidden">TT</span>
-                        {selectedItems.size > 1 ? ` (${selectedItems.size})` : ''}
-                      </Button>
-                    )}
-                </div>
-                <div className="w-full sm:w-auto">
-                     <Button variant="secondary" size="sm" className="gap-2 w-full sm:w-auto text-xs sm:text-sm">
-                        <span className="hidden sm:inline">Loại thanh toán</span>
-                        <span className="sm:hidden">Loại TT</span>
-                        <ChevronUp className={iconStyles.navigationIcon} />
-                     </Button>
-                </div>
+            <div className="flex items-center gap-2">
+              <Button 
+                variant="outline" 
+                size="sm" 
+                onClick={loadListData}
+                className="gap-2"
+              >
+                <RefreshCw className="w-4 h-4" />
+                Làm mới
+              </Button>
+              <Button 
+                variant="outline" 
+                size="sm" 
+                onClick={handleExportExcel}
+                className="gap-2"
+              >
+                <FileSpreadsheet className="w-4 h-4" />
+                Xuất Excel
+              </Button>
+              {selectedItems.size > 0 && (
+                <Button 
+                  size="sm"
+                  onClick={handleBatchPayment}
+                  className="gap-2 bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-600 hover:to-teal-600"
+                >
+                  <Banknote className="w-4 h-4" />
+                  Thanh toán ({selectedItems.size})
+                </Button>
+              )}
             </div>
-        </div>
+          </div>
 
-        {/* Table - Desktop */}
-        <div className="bg-white flex-1 overflow-auto border rounded-b-lg hidden md:block">
-            <Table>
-                <TableHeader>
-                    <TableRow>
-                        <TableHead className="w-10"></TableHead>
-                        <TableHead>Mã đơn hàng</TableHead>
-                        <TableHead>Biển kiểm soát</TableHead>
-                        <TableHead>Đơn vị vận tải</TableHead>
-                        <TableHead>Tuyến vận chuyển</TableHead>
-                        <TableHead>Giờ xuất bến KH</TableHead>
-                        <TableHead>Ngày tạo</TableHead>
-                        <TableHead>Ngày áp dụng</TableHead>
-                        <TableHead>Người tạo</TableHead>
-                        <TableHead>Ca trực</TableHead>
-                        <TableHead>Tổng tiền (đồng)</TableHead>
-                        <TableHead>Trạng thái</TableHead>
-                    </TableRow>
-                </TableHeader>
-                <TableBody>
-                    {isLoading ? (
-                        <TableRow>
-                            <TableCell colSpan={12} className="text-center py-20 text-gray-500">
-                                <div className="flex justify-center items-center gap-2">
-                                    <RefreshCw className={`${iconStyles.infoIcon} animate-spin`} />
-                                    Đang tải dữ liệu...
-                                </div>
-                            </TableCell>
-                        </TableRow>
-                    ) : listData.length === 0 ? (
-                        <TableRow>
-                            <TableCell colSpan={12} className="text-center py-20 text-gray-500">
-                                Không có dữ liệu!
-                            </TableCell>
-                        </TableRow>
-                    ) : (
-                        listData.map(item => {
-                            const isPaid = item.currentStatus === 'paid' || item.currentStatus === 'departed'
-                            const isSelected = selectedItems.has(item.id)
-                            
-                            return (
-                                <TableRow key={item.id}>
-                                    <TableCell>
-                                        {!isPaid && (
-                                            <Checkbox 
-                                                checked={isSelected}
-                                                onChange={() => toggleItemSelection(item.id)}
-                                            />
-                                        )}
-                                    </TableCell>
-                                    <TableCell>{item.transportOrderCode || item.id.substring(0, 8)}</TableCell>
-                                    <TableCell>{item.vehiclePlateNumber}</TableCell>
-                                    <TableCell>{item.vehicle?.operator?.name}</TableCell>
-                                    <TableCell>{item.routeName}</TableCell>
-                                    <TableCell>{item.plannedDepartureTime ? format(new Date(item.plannedDepartureTime), "HH:mm") : "-"}</TableCell>
-                                    <TableCell>{format(new Date(item.entryTime), "dd/MM/yyyy HH:mm")}</TableCell>
-                                    <TableCell>{format(new Date(item.entryTime), "dd/MM/yyyy")}</TableCell>
-                                    <TableCell>{item.entryBy || "-"}</TableCell>
-                                    <TableCell>-</TableCell>
-                                    <TableCell>{item.paymentAmount?.toLocaleString('vi-VN') || 0}</TableCell>
-                                    <TableCell>
-                                        <span className={`px-2 py-1 rounded-full text-xs ${
-                                            item.currentStatus === 'paid' ? 'bg-green-100 text-green-800' : 
-                                            item.currentStatus === 'departed' ? 'bg-gray-100 text-gray-800' : 
-                                            'bg-yellow-100 text-yellow-800'
-                                        }`}>
-                                            {item.currentStatus === 'paid' ? 'Đã thanh toán' : 
-                                             item.currentStatus === 'departed' ? 'Đã xuất bến' : 'Chưa thanh toán'}
-                                        </span>
-                                    </TableCell>
-                                </TableRow>
-                            )
-                        })
-                    )}
-                </TableBody>
-            </Table>
-        </div>
+          {/* Stats Cards */}
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+            <StatsCard
+              title="Tổng đơn hàng"
+              value={stats.total}
+              subtitle="Trong khoảng thời gian"
+              icon={Receipt}
+              gradient="from-blue-500 to-indigo-600"
+            />
+            <StatsCard
+              title="Chờ thanh toán"
+              value={stats.pending}
+              subtitle="Cần xử lý"
+              icon={Clock}
+              gradient="from-amber-500 to-orange-500"
+            />
+            <StatsCard
+              title="Đã thanh toán"
+              value={stats.paid}
+              subtitle="Hoàn thành"
+              icon={CheckCircle2}
+              gradient="from-emerald-500 to-teal-500"
+            />
+            <StatsCard
+              title="Tổng doanh thu"
+              value={`${(stats.totalAmount / 1000000).toFixed(1)}M`}
+              subtitle={`${stats.totalAmount.toLocaleString('vi-VN')}đ`}
+              icon={Wallet}
+              gradient="from-violet-500 to-purple-600"
+            />
+          </div>
 
-        {/* Mobile Card Layout */}
-        <div className="md:hidden bg-white flex-1 overflow-auto border rounded-b-lg">
-            {isLoading ? (
-                <div className="text-center py-20 text-gray-500">
-                    <div className="flex justify-center items-center gap-2">
-                        <RefreshCw className={`${iconStyles.infoIcon} animate-spin`} />
-                        Đang tải dữ liệu...
-                    </div>
+          {/* Filters */}
+          <Card className="border-0 shadow-sm">
+            <CardContent className="p-4">
+              <div className="flex flex-col lg:flex-row gap-4">
+                {/* Search */}
+                <div className="flex-1 relative">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                  <Input
+                    placeholder="Tìm theo biển số, mã đơn, đơn vị, tuyến..."
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    className="pl-10"
+                  />
                 </div>
-            ) : listData.length === 0 ? (
-                <div className="text-center py-20 text-gray-500">
-                    Không có dữ liệu!
+                
+                {/* Date Range */}
+                <div className="w-full lg:w-80">
+                  <DatePickerRange
+                    range={dateRange}
+                    onRangeChange={setDateRange}
+                    placeholder="Chọn khoảng thời gian"
+                    label=""
+                    className="w-full"
+                  />
                 </div>
-            ) : (
-                <div className="p-3 space-y-3">
-                    {listData.map(item => (
-                        <div key={item.id} className="border border-gray-200 rounded-lg p-3 bg-gray-50">
-                            <div className="flex items-start justify-between mb-2">
-                                <div className="flex items-center gap-2">
-                                    <Checkbox
-                                        checked={selectedItems.has(item.id)}
-                                        onChange={(checked) => {
-                                            const newSelected = new Set(selectedItems)
-                                            if (checked) {
-                                                newSelected.add(item.id)
-                                            } else {
-                                                newSelected.delete(item.id)
-                                            }
-                                            setSelectedItems(newSelected)
-                                        }}
-                                    />
-                                    <span className="font-semibold text-blue-600 text-sm">
-                                        {item.transportOrderCode || item.id.slice(-8)}
-                                    </span>
-                                </div>
-                                <span className={`px-2 py-1 rounded-full text-xs font-medium ${
-                                    item.currentStatus === 'paid' 
-                                        ? 'bg-green-100 text-green-800'
-                                        : item.currentStatus === 'departed'
-                                        ? 'bg-blue-100 text-blue-800'
-                                        : 'bg-yellow-100 text-yellow-800'
-                                }`}>
-                                    {item.currentStatus === 'paid' ? 'Đã thanh toán' : 
-                                     item.currentStatus === 'departed' ? 'Đã xuất bến' : 'Chưa thanh toán'}
-                                </span>
-                            </div>
-                            
-                            <div className="space-y-1 text-sm">
-                                <div className="flex justify-between">
-                                    <span className="text-gray-600">Biển số:</span>
-                                    <span className="font-medium">{item.vehiclePlateNumber}</span>
-                                </div>
-                                <div className="flex justify-between">
-                                    <span className="text-gray-600">Đơn vị:</span>
-                                    <span className="font-medium text-right">{item.vehicle?.operator?.name || '-'}</span>
-                                </div>
-                                <div className="flex justify-between">
-                                    <span className="text-gray-600">Tuyến:</span>
-                                    <span className="font-medium text-right">{item.routeName || '-'}</span>
-                                </div>
-                                <div className="flex justify-between">
-                                    <span className="text-gray-600">Xuất bến:</span>
-                                    <span className="font-medium">
-                                        {item.plannedDepartureTime 
-                                            ? format(new Date(item.plannedDepartureTime), "HH:mm") 
-                                            : '-'}
-                                    </span>
-                                </div>
-                                <div className="flex justify-between">
-                                    <span className="text-gray-600">Ngày tạo:</span>
-                                    <span className="font-medium">
-                                        {format(new Date(item.entryTime), "dd/MM/yyyy")}
-                                    </span>
-                                </div>
-                                <div className="flex justify-between border-t pt-2 mt-2">
-                                    <span className="text-gray-600">Tổng tiền:</span>
-                                    <span className="font-bold text-green-600">
-                                        {(item.paymentAmount || 0).toLocaleString()} đ
-                                    </span>
-                                </div>
-                            </div>
-                        </div>
-                    ))}
-                </div>
-            )}
-        </div>
 
-        {/* Footer */}
-        <div className="bg-white p-2 border-t flex justify-between items-center text-sm mt-auto">
-            <div className="font-medium">Tổng: {listData.length} đơn hàng</div>
-            <div className="font-bold">{listData.reduce((sum, item) => sum + (item.paymentAmount || 0), 0).toLocaleString('vi-VN')}</div>
+                {/* Order Type */}
+                <div className="w-full lg:w-48">
+                  <Select 
+                    value={orderType} 
+                    onChange={(e) => setOrderType(e.target.value)} 
+                    className="w-full"
+                  >
+                    <option value="all">Tất cả loại</option>
+                    <option value="thanh-toan-chuyen">Thanh toán chuyến</option>
+                    <option value="thanh-toan-dinh-ky">Thanh toán định kỳ</option>
+                    <option value="thanh-toan-vang-lai">Vãng lai</option>
+                  </Select>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Orders Grid */}
+          {isLoading ? (
+            <div className="flex items-center justify-center py-20">
+              <div className="text-center">
+                <div className="w-10 h-10 border-3 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto" />
+                <p className="text-gray-500 mt-4">Đang tải dữ liệu...</p>
+              </div>
+            </div>
+          ) : listData.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-20">
+              <div className="w-20 h-20 bg-gray-100 rounded-full flex items-center justify-center mb-4">
+                <Receipt className="w-10 h-10 text-gray-400" />
+              </div>
+              <p className="text-gray-500 text-lg font-medium">Không có đơn hàng nào</p>
+              <p className="text-gray-400 text-sm mt-1">Thay đổi bộ lọc để xem thêm</p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-4">
+              {listData.map(item => (
+                <OrderCard
+                  key={item.id}
+                  item={item}
+                  isSelected={selectedItems.has(item.id)}
+                  onSelect={() => toggleItemSelection(item.id)}
+                  onNavigate={() => navigate(`/thanh-toan/${item.id}`)}
+                />
+              ))}
+            </div>
+          )}
+
+          {/* Footer Summary */}
+          {listData.length > 0 && (
+            <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4">
+              <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
+                <div className="flex items-center gap-4 text-sm text-gray-600">
+                  <span>Hiển thị <strong>{listData.length}</strong> đơn hàng</span>
+                  {selectedItems.size > 0 && (
+                    <span className="text-blue-600">
+                      | Đã chọn <strong>{selectedItems.size}</strong>
+                    </span>
+                  )}
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="text-gray-500">Tổng:</span>
+                  <span className="text-2xl font-bold text-emerald-600">
+                    {stats.totalAmount.toLocaleString('vi-VN')}đ
+                  </span>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
       </div>
     )
   }
 
-  // Detail View Logic
+  // ========== DETAIL VIEW ==========
   const { subtotal, discount, tax, total } = calculateTotals()
   const orderId = record?.transportOrderCode || `ORDER-${id?.slice(0, 8)}`
   const isExpanded = expandedOrders.has(orderId)
 
   if (isLoading) {
     return (
-      <div className="flex items-center justify-center h-screen">
+      <div className="flex items-center justify-center h-screen bg-gradient-to-br from-slate-50 via-gray-50 to-slate-100">
         <div className="text-center">
-          <div className="mb-4 h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent mx-auto" />
-          <p className="text-gray-600">Đang tải...</p>
+          <div className="w-12 h-12 border-4 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto" />
+          <p className="text-gray-600 mt-4">Đang tải...</p>
         </div>
       </div>
     )
@@ -723,9 +792,12 @@ export default function ThanhToan() {
 
   if (!record) {
     return (
-      <div className="flex items-center justify-center h-screen">
+      <div className="flex items-center justify-center h-screen bg-gradient-to-br from-slate-50 via-gray-50 to-slate-100">
         <div className="text-center">
-          <p className="text-gray-600">Không tìm thấy thông tin thanh toán</p>
+          <div className="w-20 h-20 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
+            <AlertCircle className="w-10 h-10 text-gray-400" />
+          </div>
+          <p className="text-gray-600 text-lg">Không tìm thấy thông tin thanh toán</p>
           <Button onClick={() => navigate("/dieu-do")} className="mt-4">
             Quay lại
           </Button>
@@ -735,410 +807,396 @@ export default function ThanhToan() {
   }
 
   return (
-    <div className="space-y-6">
-      {/* Breadcrumb */}
-      <div className="text-sm text-gray-600">
-        Quản lý đơn hàng &gt; Thanh toán
-      </div>
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-gray-50 to-slate-100">
+      <div className="p-4 lg:p-6 space-y-6">
+        {/* Header */}
+        <div className="flex items-center gap-3 text-sm text-gray-500">
+          <button 
+            onClick={() => navigate("/thanh-toan")}
+            className="hover:text-blue-600 transition-colors"
+          >
+            Quản lý đơn hàng
+          </button>
+          <ChevronDown className="w-4 h-4 rotate-[-90deg]" />
+          <span className="text-gray-900 font-medium">Thanh toán</span>
+        </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 lg:gap-6">
-        {/* Left Column - Main Content */}
-        <div className="lg:col-span-2 space-y-4 lg:space-y-6">
-          {/* Service List Table */}
-          <Card>
-            <CardContent className="p-3 sm:p-4">
-              <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 sm:gap-0 mb-4">
-                <h2 className="text-lg font-semibold text-gray-900">Danh sách dịch vụ</h2>
+        <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
+          {/* Left Column */}
+          <div className="xl:col-span-2 space-y-6">
+            {/* Vehicle Info Card */}
+            <Card className="border-0 shadow-sm overflow-hidden">
+              <div className="bg-gradient-to-r from-blue-500 to-indigo-600 p-6 text-white">
+                <div className="flex items-center gap-4">
+                  <div className="w-16 h-16 bg-white/20 backdrop-blur rounded-xl flex items-center justify-center">
+                    <Bus className="w-8 h-8" />
+                  </div>
+                  <div>
+                    <p className="text-white/80 text-sm">Biển kiểm soát</p>
+                    <p className="text-3xl font-bold">{record.vehiclePlateNumber}</p>
+                  </div>
+                </div>
+              </div>
+              <CardContent className="p-6">
+                <div className="grid grid-cols-2 lg:grid-cols-4 gap-6">
+                  <div>
+                    <p className="text-sm text-gray-500 mb-1">Tuyến vận chuyển</p>
+                    <p className="font-semibold text-gray-900">{record.routeName || 'Chưa có'}</p>
+                  </div>
+                  <div>
+                    <p className="text-sm text-gray-500 mb-1">Giờ vào bến</p>
+                    <p className="font-semibold text-gray-900">
+                      {format(new Date(record.entryTime), "HH:mm dd/MM/yyyy")}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-sm text-gray-500 mb-1">Giờ xuất bến KH</p>
+                    <p className="font-semibold text-gray-900">
+                      {record.plannedDepartureTime 
+                        ? format(new Date(record.plannedDepartureTime), "HH:mm dd/MM/yyyy")
+                        : 'Chưa có'}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-sm text-gray-500 mb-1">Số ghế</p>
+                    <p className="font-semibold text-gray-900">{record.seatCount || 'N/A'}</p>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Services Card */}
+            <Card className="border-0 shadow-sm">
+              <CardHeader className="flex flex-row items-center justify-between pb-4">
+                <CardTitle className="flex items-center gap-2">
+                  <FileText className="w-5 h-5 text-blue-600" />
+                  Danh sách dịch vụ
+                </CardTitle>
                 <Button
                   onClick={handleAddServiceClick}
                   size="sm"
-                  className="gap-2 w-full sm:w-auto"
+                  className="gap-2 bg-gradient-to-r from-blue-500 to-indigo-600"
                 >
-                  <Plus className={iconStyles.successIcon} />
-                  <span className="hidden sm:inline">Thêm dịch vụ</span>
-                  <span className="sm:hidden">Thêm</span>
+                  <Plus className="w-4 h-4" />
+                  Thêm dịch vụ
                 </Button>
-              </div>
-            </CardContent>
-            <CardContent className="p-0 pt-0">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead className="text-center">Dịch vụ</TableHead>
-                    <TableHead className="text-center">Đơn giá (đ)</TableHead>
-                    <TableHead className="text-center">Số lượng</TableHead>
-                    <TableHead className="text-center">Chiết khấu (đ)</TableHead>
-                    <TableHead className="text-center">Chiết khấu (%)</TableHead>
-                    <TableHead className="text-center">Phần trăm thuế (%)</TableHead>
-                    <TableHead className="text-center">Thành tiền (đ)</TableHead>
-                    <TableHead className="text-center">Nợ</TableHead>
-                    <TableHead className="text-center">Thao tác</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {/* Add Service Row */}
-                  {isAddingService && (
-                    <TableRow className="bg-blue-50">
-                      <TableCell className="p-2">
-                        <div className="relative" ref={serviceDropdownRef}>
-                          <Input
-                            value={newService.serviceName}
-                            onChange={(e) => {
-                              setNewService({ ...newService, serviceName: e.target.value })
-                              setShowServiceDropdown(true)
-                            }}
-                            onFocus={() => setShowServiceDropdown(true)}
-                            placeholder="Tên dịch vụ"
-                            className="h-8 w-full"
-                          />
-                          {showServiceDropdown && (
-                            <div className="absolute z-50 w-full mt-1 bg-white border border-gray-300 rounded-md shadow-lg max-h-60 overflow-auto">
-                              {serviceTypes.filter(t => t.name.toLowerCase().includes(newService.serviceName.toLowerCase())).length > 0 ? (
-                                serviceTypes.filter(t => t.name.toLowerCase().includes(newService.serviceName.toLowerCase())).map((type) => (
+              </CardHeader>
+              <CardContent className="p-0">
+                {/* Order Header */}
+                <button
+                  onClick={() => toggleOrder(orderId)}
+                  className="w-full flex items-center justify-between p-4 bg-gray-50 hover:bg-gray-100 transition-colors border-y"
+                >
+                  <div className="flex items-center gap-3">
+                    <div className="w-8 h-8 bg-blue-100 rounded-lg flex items-center justify-center">
+                      <Receipt className="w-4 h-4 text-blue-600" />
+                    </div>
+                    <div className="text-left">
+                      <p className="font-semibold text-gray-900">Mã đơn: {orderId}</p>
+                      <p className="text-sm text-gray-500">
+                        {format(new Date(record.entryTime), "dd/MM/yyyy")}
+                      </p>
+                    </div>
+                  </div>
+                  {isExpanded ? (
+                    <ChevronUp className="w-5 h-5 text-gray-400" />
+                  ) : (
+                    <ChevronDown className="w-5 h-5 text-gray-400" />
+                  )}
+                </button>
+
+                {/* Services List */}
+                {isExpanded && (
+                  <div className="divide-y">
+                    {/* Add Service Row */}
+                    {isAddingService && (
+                      <div className="p-4 bg-blue-50">
+                        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                          <div className="md:col-span-2 relative" ref={serviceDropdownRef}>
+                            <Label className="text-xs text-gray-500 mb-1 block">Dịch vụ</Label>
+                            <Input
+                              value={newService.serviceName}
+                              onChange={(e) => {
+                                setNewService({ ...newService, serviceName: e.target.value })
+                                setShowServiceDropdown(true)
+                              }}
+                              onFocus={() => setShowServiceDropdown(true)}
+                              placeholder="Nhập tên dịch vụ..."
+                            />
+                            {showServiceDropdown && (
+                              <div className="absolute z-50 w-full mt-1 bg-white border rounded-lg shadow-lg max-h-60 overflow-auto">
+                                {serviceTypes.filter(t => 
+                                  t.name.toLowerCase().includes(newService.serviceName.toLowerCase())
+                                ).map((type) => (
                                   <div
                                     key={type.id}
                                     onClick={() => {
                                       handleServiceTypeChange(type.id)
                                       setShowServiceDropdown(false)
                                     }}
-                                    className="px-3 py-2 cursor-pointer hover:bg-blue-50 text-sm"
+                                    className="px-4 py-2.5 cursor-pointer hover:bg-blue-50 text-sm"
                                   >
                                     {type.name}
                                   </div>
-                                ))
-                              ) : (
-                                <div className="px-3 py-2 text-gray-500 text-sm">
-                                  Không tìm thấy kết quả
-                                </div>
-                              )}
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                          <div>
+                            <Label className="text-xs text-gray-500 mb-1 block">Đơn giá</Label>
+                            <Input
+                              type="number"
+                              value={newService.unitPrice}
+                              onChange={(e) => setNewService({ ...newService, unitPrice: parseFloat(e.target.value) || 0 })}
+                            />
+                          </div>
+                          <div>
+                            <Label className="text-xs text-gray-500 mb-1 block">Số lượng</Label>
+                            <Input
+                              type="number"
+                              min="1"
+                              value={newService.quantity}
+                              onChange={(e) => setNewService({ ...newService, quantity: parseInt(e.target.value) || 1 })}
+                            />
+                          </div>
+                        </div>
+                        <div className="flex items-center justify-between mt-4">
+                          <p className="text-sm">
+                            Thành tiền: <span className="font-bold text-blue-600">
+                              {(newService.quantity * newService.unitPrice).toLocaleString('vi-VN')}đ
+                            </span>
+                          </p>
+                          <div className="flex gap-2">
+                            <Button size="sm" variant="outline" onClick={handleCancelService}>
+                              <X className="w-4 h-4 mr-1" /> Hủy
+                            </Button>
+                            <Button size="sm" onClick={handleSaveService}>
+                              <Check className="w-4 h-4 mr-1" /> Lưu
+                            </Button>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
+                    {serviceCharges.length === 0 ? (
+                      <div className="py-12 text-center">
+                        <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-3">
+                          <FileText className="w-8 h-8 text-gray-400" />
+                        </div>
+                        <p className="text-gray-500">Chưa có dịch vụ nào</p>
+                        <p className="text-sm text-gray-400 mt-1">Nhấn "Thêm dịch vụ" để bắt đầu</p>
+                      </div>
+                    ) : (
+                      serviceCharges.map((charge) => (
+                        <div key={charge.id} className="p-4 flex items-center justify-between hover:bg-gray-50">
+                          <div className="flex items-center gap-4">
+                            <div className="w-10 h-10 bg-emerald-100 rounded-lg flex items-center justify-center">
+                              <CreditCard className="w-5 h-5 text-emerald-600" />
                             </div>
-                          )}
+                            <div>
+                              <p className="font-medium text-gray-900">
+                                {charge.serviceType?.name || "Dịch vụ"}
+                              </p>
+                              <p className="text-sm text-gray-500">
+                                {charge.quantity} x {charge.unitPrice.toLocaleString('vi-VN')}đ
+                              </p>
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-4">
+                            <p className="font-bold text-gray-900">
+                              {charge.totalAmount.toLocaleString('vi-VN')}đ
+                            </p>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              onClick={() => handleDeleteService(charge.id)}
+                              className="text-red-500 hover:text-red-600 hover:bg-red-50"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </Button>
+                          </div>
                         </div>
-                      </TableCell>
-                      <TableCell className="p-2 text-center">
-                        <Input
-                          type="number"
-                          min="0"
-                          value={newService.unitPrice}
-                          onChange={(e) => setNewService({ ...newService, unitPrice: parseFloat(e.target.value) || 0 })}
-                          className="h-8 w-24 mx-auto"
-                        />
-                      </TableCell>
-                      <TableCell className="p-2 text-center">
-                        <Input
-                          type="number"
-                          min="1"
-                          value={newService.quantity}
-                          onChange={(e) => setNewService({ ...newService, quantity: parseInt(e.target.value) || 1 })}
-                          className="h-8 w-20 mx-auto"
-                        />
-                      </TableCell>
-                      <TableCell className="text-center">0</TableCell>
-                      <TableCell className="text-center">0</TableCell>
-                      <TableCell className="text-center">0</TableCell>
-                      <TableCell className="font-medium text-center">
-                        {(newService.quantity * newService.unitPrice).toLocaleString('vi-VN')}
-                      </TableCell>
-                      <TableCell className="text-center">
-                        <Checkbox disabled className="mx-auto" />
-                      </TableCell>
-                      <TableCell className="text-center">
-                        <div className="flex gap-1 justify-center">
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={handleSaveService}
-                            className="h-8 w-8 text-green-600 hover:text-green-700 hover:bg-green-50"
-                          >
-                            <Check className={iconStyles.successIcon} />
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={handleCancelService}
-                            className="h-8 w-8 text-red-600 hover:text-red-700 hover:bg-red-50"
-                          >
-                            <X className={iconStyles.deleteButton} />
-                          </Button>
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  )}
+                      ))
+                    )}
 
-                  {/* Collapsible Order Row */}
-                  <TableRow className="bg-gray-50">
-                    <TableCell colSpan={9} className="p-0">
-                      <button
-                        onClick={() => toggleOrder(orderId)}
-                        className="w-full flex items-center justify-between p-4 hover:bg-gray-100"
-                      >
-                        <span className="font-medium">
-                          Mã đơn hàng: {orderId} ({format(new Date(record.entryTime), "dd/MM/yyyy")})
-                        </span>
-                        {isExpanded ? (
-                          <ChevronUp className={iconStyles.navigationIcon} />
-                        ) : (
-                          <ChevronDown className={iconStyles.navigationIcon} />
-                        )}
-                      </button>
-                    </TableCell>
-                  </TableRow>
+                    {/* Total */}
+                    {serviceCharges.length > 0 && (
+                      <div className="p-4 bg-gray-50 flex items-center justify-between">
+                        <p className="font-semibold text-gray-700">Tổng cộng</p>
+                        <p className="text-xl font-bold text-emerald-600">
+                          {subtotal.toLocaleString('vi-VN')}đ
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
 
-                  {/* Service Items */}
-                  {isExpanded && (
-                    <>
-                      {serviceCharges.length === 0 ? (
-                        <TableRow>
-                          <TableCell colSpan={9} className="text-center py-8 text-gray-500">
-                            Không có dịch vụ
-                          </TableCell>
-                        </TableRow>
-                      ) : (
-                        serviceCharges.map((charge) => (
-                          <TableRow key={charge.id}>
-                            <TableCell className="font-medium">
-                              {charge.serviceType?.name || "Dịch vụ"}
-                            </TableCell>
-                            <TableCell className="text-center">{charge.unitPrice.toLocaleString('vi-VN')}</TableCell>
-                            <TableCell className="text-center">{charge.quantity}</TableCell>
-                            <TableCell className="text-center">0</TableCell>
-                            <TableCell className="text-center">0</TableCell>
-                            <TableCell className="text-center">0</TableCell>
-                            <TableCell className="font-medium text-center">
-                              {charge.totalAmount.toLocaleString('vi-VN')}
-                            </TableCell>
-                            <TableCell className="text-center">
-                              <Checkbox className="mx-auto" />
-                            </TableCell>
-                            <TableCell className="text-center">
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                onClick={() => handleDeleteService(charge.id)}
-                                className="h-8 w-8 text-red-600 hover:text-red-700 hover:bg-red-50"
-                              >
-                                <Trash2 className={iconStyles.deleteButton} />
-                              </Button>
-                            </TableCell>
-                          </TableRow>
-                        ))
-                      )}
-
-                      {/* Total Row */}
-                      <TableRow className="bg-gray-50 font-semibold">
-                        <TableCell colSpan={6} className="text-right">
-                          Tổng tiền:
-                        </TableCell>
-                        <TableCell>
-                          {subtotal.toLocaleString('vi-VN')}₫
-                        </TableCell>
-                        <TableCell></TableCell>
-                        <TableCell></TableCell>
-                      </TableRow>
-                    </>
-                  )}
-                </TableBody>
-              </Table>
-            </CardContent>
-          </Card>
-
-          {/* Control Sheet */}
-          <Card>
-            <CardContent className="p-4 space-y-3">
-              <h3 className="font-semibold text-gray-900 mb-3">Biên kiểm soát</h3>
-              <div className="grid grid-cols-2 gap-4 text-sm">
-                <div>
-                  <span className="text-gray-600">Biến kiểm soát:</span>
-                  <span className="ml-2 font-medium">{record.vehiclePlateNumber}</span>
-                </div>
-                <div>
-                  <span className="text-gray-600">Tuyến vận chuyển:</span>
-                  <span className="ml-2 font-medium">{record.routeName || '-'}</span>
-                </div>
-                <div>
-                  <span className="text-gray-600">Giờ vào bến:</span>
-                  <span className="ml-2 font-medium">
-                    {format(new Date(record.entryTime), "HH:mm dd/MM/yyyy")}
-                  </span>
-                </div>
-                <div>
-                  <span className="text-gray-600">Số ghế | Số giường:</span>
-                  <span className="ml-2 font-medium">
-                    {record.seatCount || '-'} | 41
-                  </span>
-                </div>
-                <div>
-                  <span className="text-gray-600">Giờ xuất bến kế hoạch:</span>
-                  <span className="ml-2 font-medium">
-                    {record.plannedDepartureTime 
-                      ? format(new Date(record.plannedDepartureTime), "HH:mm dd/MM/yyyy")
-                      : '-'
-                    }
-                  </span>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-
-          {/* Action Buttons */}
-          <div className="flex gap-3">
-            <Button variant="destructive" onClick={handleCancel}>
-              HỦY THANH TOÁN
-            </Button>
-            <Button 
-              variant="outline"
-              onClick={() => {
-                if (record?.vehiclePlateNumber) {
-                  navigate(`/bao-cao/xe-tra-khach?vehiclePlateNumber=${encodeURIComponent(record.vehiclePlateNumber)}&returnTo=/thanh-toan/${id}`)
-                }
-              }}
-            >
-              <FileText className={iconStyles.infoIcon} />
-              LỊCH SỬ XE TRẢ KHÁCH
-            </Button>
-            <Button 
-              variant="outline"
-              onClick={() => {
-                if (record?.vehiclePlateNumber) {
-                  navigate(`/bao-cao/xe-ra-vao-ben?vehiclePlateNumber=${encodeURIComponent(record.vehiclePlateNumber)}&returnTo=/thanh-toan/${id}`)
-                }
-              }}
-            >
-              <FileText className={iconStyles.infoIcon} />
-              LỊCH SỬ XE RA VÀO BẾN
-            </Button>
+            {/* Quick Actions */}
+            <div className="flex flex-wrap gap-3">
+              <Button variant="outline" onClick={handleCancel} className="gap-2 text-red-600 border-red-200 hover:bg-red-50">
+                <X className="w-4 h-4" />
+                Hủy thanh toán
+              </Button>
+              <Button 
+                variant="outline"
+                onClick={() => {
+                  if (record?.vehiclePlateNumber) {
+                    navigate(`/bao-cao/xe-tra-khach?vehiclePlateNumber=${encodeURIComponent(record.vehiclePlateNumber)}&returnTo=/thanh-toan/${id}`)
+                  }
+                }}
+                className="gap-2"
+              >
+                <FileText className="w-4 h-4" />
+                Lịch sử trả khách
+              </Button>
+              <Button 
+                variant="outline"
+                onClick={() => {
+                  if (record?.vehiclePlateNumber) {
+                    navigate(`/bao-cao/xe-ra-vao-ben?vehiclePlateNumber=${encodeURIComponent(record.vehiclePlateNumber)}&returnTo=/thanh-toan/${id}`)
+                  }
+                }}
+                className="gap-2"
+              >
+                <FileText className="w-4 h-4" />
+                Lịch sử ra vào
+              </Button>
+            </div>
           </div>
-        </div>
 
-        {/* Right Column - Payment Sidebar */}
-        <div className="space-y-6">
-          <Card>
-            <CardContent className="p-6 space-y-4">
-              <h2 className="text-xl font-semibold text-gray-900">Thanh toán</h2>
-
-              {/* Symbol */}
-              <div>
-                <Label htmlFor="symbol">Ký hiệu:</Label>
-                <Select
-                  id="symbol"
-                  value={symbol}
-                  onChange={(e) => setSymbol(e.target.value)}
-                  className="mt-1"
-                >
-                  <option value="QLBX">QLBX</option>
-                  <option value="KHAC">KHAC</option>
-                </Select>
-              </div>
-
-              {/* Note */}
-              <div>
-                <Label htmlFor="note">Ghi chú</Label>
-                <textarea
-                  id="note"
-                  value={note}
-                  onChange={(e) => setNote(e.target.value)}
-                  className="mt-1 w-full min-h-[80px] px-3 py-2 border border-gray-300 rounded-md"
-                  placeholder="Ghi chú..."
-                />
-              </div>
-
-              {/* Customer Info */}
-              <div className="pt-4 border-t space-y-2 text-sm">
-                <div>
-                  <span className="text-gray-600">Người mua:</span>
-                  <span className="ml-2 font-medium">
-                    {record.driverName || '-'}
-                  </span>
-                </div>
-                <div>
-                  <span className="text-gray-600">Đơn vị vận tải:</span>
-                  <span className="ml-2 font-medium">
-                    {record.vehicle?.operator?.name || '-'}
-                  </span>
-                </div>
-                <div>
-                  <span className="text-gray-600">Mã số thuế:</span>
-                  <span className="ml-2 font-medium">
-                    {record.vehicle?.operator?.taxCode || '-'}
-                  </span>
-                </div>
-                <div>
-                  <span className="text-gray-600">Địa chỉ:</span>
-                  <span className="ml-2 font-medium">
-                    {record.vehicle?.operator?.address || '-'}
-                  </span>
+          {/* Right Column - Payment Sidebar */}
+          <div className="space-y-6">
+            {/* Payment Card */}
+            <Card className="border-0 shadow-lg sticky top-6">
+              <div className="bg-gradient-to-r from-emerald-500 to-teal-500 p-6 text-white rounded-t-xl">
+                <div className="flex items-center gap-3">
+                  <div className="w-12 h-12 bg-white/20 backdrop-blur rounded-xl flex items-center justify-center">
+                    <Banknote className="w-6 h-6" />
+                  </div>
+                  <div>
+                    <p className="text-white/80 text-sm">Thực thu</p>
+                    <p className="text-3xl font-bold">{total.toLocaleString('vi-VN')}đ</p>
+                  </div>
                 </div>
               </div>
+              <CardContent className="p-6 space-y-6">
+                {/* Symbol */}
+                <div>
+                  <Label className="text-sm text-gray-500">Ký hiệu</Label>
+                  <Select
+                    value={symbol}
+                    onChange={(e) => setSymbol(e.target.value)}
+                    className="mt-1"
+                  >
+                    <option value="QLBX">QLBX</option>
+                    <option value="KHAC">KHAC</option>
+                  </Select>
+                </div>
 
-              {/* Payment Summary */}
-              <div className="pt-4 border-t space-y-3">
-                <div className="flex justify-between text-sm">
-                  <span className="text-gray-600">Tổng tiền:</span>
-                  <span className="font-medium">{subtotal.toLocaleString('vi-VN')} đồng</span>
-                </div>
-                <div className="flex justify-between text-sm">
-                  <span className="text-gray-600">Chiết khấu:</span>
-                  <span className="font-medium">{discount.toLocaleString('vi-VN')} đồng</span>
-                </div>
-                <div className="flex justify-between text-sm">
-                  <span className="text-gray-600">Tiền thuế GTGT:</span>
-                  <span className="font-medium">{tax.toLocaleString('vi-VN')} đồng</span>
-                </div>
-                <div className="flex justify-between pt-2 border-t font-bold text-lg">
-                  <span>Thực thu:</span>
-                  <span className="text-blue-600">{total.toLocaleString('vi-VN')} đồng</span>
-                </div>
-              </div>
-
-              {/* Print Options */}
-              <div className="pt-4 border-t space-y-2">
-                <div className="flex items-center space-x-2">
-                  <Checkbox
-                    id="printOne"
-                    checked={printOneCopy}
-                    onChange={(e) => {
-                      setPrintOneCopy(e.target.checked)
-                      if (e.target.checked) setPrintTwoCopies(false)
-                    }}
+                {/* Note */}
+                <div>
+                  <Label className="text-sm text-gray-500">Ghi chú</Label>
+                  <textarea
+                    value={note}
+                    onChange={(e) => setNote(e.target.value)}
+                    className="mt-1 w-full min-h-[80px] px-3 py-2 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    placeholder="Nhập ghi chú..."
                   />
-                  <Label htmlFor="printOne" className="cursor-pointer text-sm">
-                    In 1 liên
-                  </Label>
                 </div>
-                <div className="flex items-center space-x-2">
-                  <Checkbox
-                    id="printTwo"
-                    checked={printTwoCopies}
-                    onChange={(e) => {
-                      setPrintTwoCopies(e.target.checked)
-                      if (e.target.checked) setPrintOneCopy(false)
-                    }}
-                  />
-                  <Label htmlFor="printTwo" className="cursor-pointer text-sm">
-                    In 2 liên
-                  </Label>
-                </div>
-              </div>
 
-              {/* Final Action Buttons */}
-              <div className="pt-4 border-t space-y-2">
-                <Button variant="outline" className="w-full" onClick={() => {
-                  // TODO: Implement print preview
-                  toast.info("Chức năng xem trước bản in đang được phát triển")
-                }}>
-                  <Printer className={iconStyles.infoIcon} />
-                  XEM TRƯỚC BẢN IN
-                </Button>
-                <Button 
-                  className="w-full bg-green-600 hover:bg-green-700"
-                  onClick={handlePayment}
-                  disabled={isProcessing}
-                >
-                  {isProcessing ? "Đang xử lý..." : "THANH TOÁN"}
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
+                {/* Customer Info */}
+                <div className="space-y-3 pt-4 border-t">
+                  <p className="text-sm font-semibold text-gray-700">Thông tin khách hàng</p>
+                  <div className="space-y-2 text-sm">
+                    <div className="flex items-center gap-2">
+                      <User className="w-4 h-4 text-gray-400" />
+                      <span className="text-gray-500">Người mua:</span>
+                      <span className="font-medium">{record.driverName || '-'}</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Building2 className="w-4 h-4 text-gray-400" />
+                      <span className="text-gray-500">Đơn vị:</span>
+                      <span className="font-medium truncate">{record.vehicle?.operator?.name || '-'}</span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Payment Summary */}
+                <div className="space-y-2 pt-4 border-t">
+                  <div className="flex justify-between text-sm">
+                    <span className="text-gray-500">Tổng tiền:</span>
+                    <span className="font-medium">{subtotal.toLocaleString('vi-VN')}đ</span>
+                  </div>
+                  <div className="flex justify-between text-sm">
+                    <span className="text-gray-500">Chiết khấu:</span>
+                    <span className="font-medium">{discount.toLocaleString('vi-VN')}đ</span>
+                  </div>
+                  <div className="flex justify-between text-sm">
+                    <span className="text-gray-500">Thuế GTGT:</span>
+                    <span className="font-medium">{tax.toLocaleString('vi-VN')}đ</span>
+                  </div>
+                </div>
+
+                {/* Print Options */}
+                <div className="space-y-2 pt-4 border-t">
+                  <p className="text-sm font-semibold text-gray-700">Tùy chọn in</p>
+                  <div className="flex gap-4">
+                    <label className="flex items-center gap-2 cursor-pointer">
+                      <Checkbox
+                        checked={printOneCopy}
+                        onChange={(e) => {
+                          setPrintOneCopy(e.target.checked)
+                          if (e.target.checked) setPrintTwoCopies(false)
+                        }}
+                      />
+                      <span className="text-sm">In 1 liên</span>
+                    </label>
+                    <label className="flex items-center gap-2 cursor-pointer">
+                      <Checkbox
+                        checked={printTwoCopies}
+                        onChange={(e) => {
+                          setPrintTwoCopies(e.target.checked)
+                          if (e.target.checked) setPrintOneCopy(false)
+                        }}
+                      />
+                      <span className="text-sm">In 2 liên</span>
+                    </label>
+                  </div>
+                </div>
+
+                {/* Action Buttons */}
+                <div className="space-y-3 pt-4">
+                  <Button 
+                    variant="outline" 
+                    className="w-full gap-2"
+                    onClick={() => toast.info("Chức năng đang phát triển")}
+                  >
+                    <Printer className="w-4 h-4" />
+                    Xem trước bản in
+                  </Button>
+                  <Button 
+                    className="w-full gap-2 bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-600 hover:to-teal-600 h-12 text-lg"
+                    onClick={handlePayment}
+                    disabled={isProcessing}
+                  >
+                    {isProcessing ? (
+                      <>
+                        <RefreshCw className="w-5 h-5 animate-spin" />
+                        Đang xử lý...
+                      </>
+                    ) : (
+                      <>
+                        <CheckCircle2 className="w-5 h-5" />
+                        Thanh toán
+                      </>
+                    )}
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
         </div>
       </div>
 
@@ -1147,29 +1205,29 @@ export default function ThanhToan() {
         <DialogContent className="max-w-md">
           <DialogClose onClose={() => setShowZeroAmountWarning(false)} />
           <DialogHeader>
-            <DialogTitle>Cảnh báo thanh toán</DialogTitle>
+            <DialogTitle className="flex items-center gap-2">
+              <AlertCircle className="w-5 h-5 text-amber-500" />
+              Cảnh báo thanh toán
+            </DialogTitle>
           </DialogHeader>
           <div className="py-4">
             <p className="text-gray-700">
               Tổng tiền thanh toán là <span className="font-bold text-red-600">0 đồng</span>.
             </p>
-            <p className="text-gray-600 mt-2">
-              Bạn có chắc chắn muốn tiếp tục thanh toán?
+            <p className="text-gray-500 mt-2">
+              Bạn có chắc chắn muốn tiếp tục?
             </p>
           </div>
           <DialogFooter>
-            <Button
-              variant="outline"
-              onClick={() => setShowZeroAmountWarning(false)}
-            >
+            <Button variant="outline" onClick={() => setShowZeroAmountWarning(false)}>
               Hủy
             </Button>
             <Button
-              className="bg-green-600 hover:bg-green-700"
               onClick={handleConfirmZeroAmountPayment}
               disabled={isProcessing}
+              className="bg-gradient-to-r from-emerald-500 to-teal-500"
             >
-              {isProcessing ? "Đang xử lý..." : "Xác nhận thanh toán"}
+              {isProcessing ? "Đang xử lý..." : "Xác nhận"}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -1177,4 +1235,3 @@ export default function ThanhToan() {
     </div>
   )
 }
-
