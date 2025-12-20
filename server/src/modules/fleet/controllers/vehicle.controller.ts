@@ -178,6 +178,52 @@ export const getAllVehicles = async (req: Request, res: Response) => {
           const plate = (legacyVehicle.plateNumber || '').toUpperCase()
           if (!existingPlates.has(plate)) {
             result.push(legacyVehicle)
+            existingPlates.add(plate)
+          }
+        }
+        
+        // Also fetch vehicles from PHUHIEUXE (vehicle badges)
+        // Only include Buýt and Tuyến cố định types
+        const allowedBadgeTypes = ['Buýt', 'Tuyến cố định']
+        const badgeSnap = await firebaseDb.ref('datasheet/PHUHIEUXE').once('value')
+        const badgeData = badgeSnap.val()
+        
+        if (badgeData) {
+          for (const [key, badge] of Object.entries(badgeData)) {
+            const b = badge as any
+            if (!b || !b.BienSoXe) continue
+            
+            // Filter by badge type
+            if (!allowedBadgeTypes.includes(b.LoaiPH || '')) continue
+            
+            const plate = (b.BienSoXe || '').toUpperCase()
+            if (existingPlates.has(plate)) continue
+            
+            result.push({
+              id: `badge_${key}`,
+              plateNumber: b.BienSoXe,
+              vehicleType: { id: null, name: b.LoaiPH || '' },
+              vehicleTypeName: b.LoaiPH || '',
+              seatCapacity: 0,
+              bedCapacity: 0,
+              manufacturer: '',
+              modelCode: '',
+              manufactureYear: null,
+              color: '',
+              chassisNumber: '',
+              engineNumber: '',
+              operatorId: null,
+              operator: { id: null, name: '', code: '' },
+              operatorName: '',
+              isActive: b.TrangThai !== 'Thu hồi',
+              notes: `Phù hiệu: ${b.SoPhuHieu || ''}`,
+              source: 'badge',
+              badgeNumber: b.SoPhuHieu || '',
+              badgeType: b.LoaiPH || '',
+              badgeExpiryDate: b.NgayHetHan || null,
+              documents: {}
+            })
+            existingPlates.add(plate)
           }
         }
       } catch (legacyError) {
