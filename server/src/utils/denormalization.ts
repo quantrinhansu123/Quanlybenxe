@@ -5,7 +5,7 @@
  * to reduce the number of queries needed when reading dispatch data.
  */
 
-import { firebase } from '../config/database.js'
+import { firebase, firebaseDb } from '../config/database.js'
 
 export interface DenormalizedVehicleData {
   plateNumber: string
@@ -38,8 +38,53 @@ export interface DenormalizedData {
 }
 
 /**
+ * Fetches vehicle data from legacy datasheet/Xe
+ */
+async function fetchLegacyVehicle(legacyKey: string): Promise<DenormalizedVehicleData> {
+  try {
+    const snapshot = await firebaseDb.ref(`datasheet/Xe/${legacyKey}`).once('value')
+    const data = snapshot.val()
+    if (!data) {
+      return { plateNumber: '', operatorId: null, operatorName: null, operatorCode: null }
+    }
+    return {
+      plateNumber: data.plate_number || data.BienSo || '',
+      operatorId: null,
+      operatorName: data.owner_name || data.TenDangKyXe || null,
+      operatorCode: null,
+    }
+  } catch (error) {
+    console.error('Failed to fetch legacy vehicle:', error)
+    return { plateNumber: '', operatorId: null, operatorName: null, operatorCode: null }
+  }
+}
+
+/**
+ * Fetches vehicle data from badge datasheet/PHUHIEUXE
+ */
+async function fetchBadgeVehicle(badgeKey: string): Promise<DenormalizedVehicleData> {
+  try {
+    const snapshot = await firebaseDb.ref(`datasheet/PHUHIEUXE/${badgeKey}`).once('value')
+    const data = snapshot.val()
+    if (!data) {
+      return { plateNumber: '', operatorId: null, operatorName: null, operatorCode: null }
+    }
+    return {
+      plateNumber: data.BienSoXe || '',
+      operatorId: null,
+      operatorName: null,
+      operatorCode: null,
+    }
+  } catch (error) {
+    console.error('Failed to fetch badge vehicle:', error)
+    return { plateNumber: '', operatorId: null, operatorName: null, operatorCode: null }
+  }
+}
+
+/**
  * Fetches denormalized data for a dispatch record in parallel
  * to minimize database round trips while capturing all related entity names
+ * Supports legacy vehicles (legacy_xxx) and badge vehicles (badge_xxx)
  */
 export async function fetchDenormalizedData(params: {
   vehicleId: string
@@ -47,12 +92,43 @@ export async function fetchDenormalizedData(params: {
   routeId?: string | null
   userId?: string | null
 }): Promise<DenormalizedData> {
-  // Fetch base entities first
-  const [vehicleResult, driverResult, routeResult, userResult] = await Promise.all([
-    firebase.from('vehicles')
+  // Check if vehicleId is legacy or badge
+  const isLegacyVehicle = params.vehicleId.startsWith('legacy_')
+  const isBadgeVehicle = params.vehicleId.startsWith('badge_')
+
+  let vehicleData: DenormalizedVehicleData
+
+  if (isLegacyVehicle) {
+    // Extract key from legacy_xxx format
+    const legacyKey = params.vehicleId.replace('legacy_', '')
+    vehicleData = await fetchLegacyVehicle(legacyKey)
+  } else if (isBadgeVehicle) {
+    // Extract key from badge_xxx format
+    const badgeKey = params.vehicleId.replace('badge_', '')
+    vehicleData = await fetchBadgeVehicle(badgeKey)
+  } else {
+    // Normal vehicle from vehicles table
+    const { data: vehicle } = await firebase.from('vehicles')
       .select('id, plate_number, operator_id')
       .eq('id', params.vehicleId)
-      .single(),
+      .single()
+
+    let operatorData = null
+    if (vehicle?.operator_id) {
+      const { data: op } = await firebase.from('operators').select('id, name, code').eq('id', vehicle.operator_id).single()
+      operatorData = op
+    }
+
+    vehicleData = {
+      plateNumber: vehicle?.plate_number || '',
+      operatorId: vehicle?.operator_id || null,
+      operatorName: operatorData?.name || null,
+      operatorCode: operatorData?.code || null,
+    }
+  }
+
+  // Fetch other entities in parallel
+  const [driverResult, routeResult, userResult] = await Promise.all([
     params.driverId ? firebase.from('drivers')
       .select('id, full_name')
       .eq('id', params.driverId)
@@ -67,32 +143,19 @@ export async function fetchDenormalizedData(params: {
       .single() : Promise.resolve({ data: null })
   ])
 
-  const vehicle = vehicleResult.data
   const driver = driverResult.data
   const route = routeResult.data
   const user = userResult.data
 
-  // Manual join: fetch operator and destination separately (Firebase RTDB doesn't support joins)
-  let operatorData = null
+  // Fetch destination if route has one
   let destinationData = null
-
-  if (vehicle?.operator_id) {
-    const { data: op } = await firebase.from('operators').select('id, name, code').eq('id', vehicle.operator_id).single()
-    operatorData = op
-  }
-
   if (route?.destination_id) {
     const { data: dest } = await firebase.from('destinations').select('id, name, code').eq('id', route.destination_id).single()
     destinationData = dest
   }
 
   return {
-    vehicle: {
-      plateNumber: vehicle?.plate_number || '',
-      operatorId: vehicle?.operator_id || null,
-      operatorName: operatorData?.name || null,
-      operatorCode: operatorData?.code || null,
-    },
+    vehicle: vehicleData,
     driver: {
       fullName: driver?.full_name || '',
     },
