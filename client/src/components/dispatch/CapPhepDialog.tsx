@@ -124,8 +124,15 @@ export function CapPhepDialog({
     };
   }, [open]);
 
+  const [isInitialLoading, setIsInitialLoading] = useState(true);
+  
   useEffect(() => {
-    loadInitialData();
+    const init = async () => {
+      setIsInitialLoading(true);
+      await loadInitialData();
+      setIsInitialLoading(false);
+    };
+    init();
     // Load shifts if not already loaded
     const { shifts: currentShifts, loadShifts } = useUIStore.getState();
     if (currentShifts.length === 0) {
@@ -143,12 +150,14 @@ export function CapPhepDialog({
     calculateTotal();
   }, [serviceCharges]);
 
-  // Load daily trip counts for the month (total vehicles per day)
+  // Load daily trip counts only once when dialog opens (not on every date change)
+  const [tripCountsLoaded, setTripCountsLoaded] = useState(false);
   useEffect(() => {
-    if (departureDate) {
+    if (departureDate && !tripCountsLoaded) {
       loadDailyTripCounts();
+      setTripCountsLoaded(true);
     }
-  }, [departureDate]);
+  }, [departureDate, tripCountsLoaded]);
 
   // Tự động điền seatCount, bedCount và biển số từ dữ liệu xe khi selectedVehicle thay đổi
   useEffect(() => {
@@ -198,65 +207,100 @@ export function CapPhepDialog({
 
   const loadInitialData = async () => {
     try {
-      const [routesData, badgesData, operatorsData, vehiclesData] = await Promise.all([
+      // Load essential data in parallel (excluding vehicleBadges - only needed as fallback)
+      const promises: Promise<any>[] = [
         routeService.getAll(undefined, undefined, true),
-        vehicleBadgeService.getAll(),
-        operatorService.getAll(true), // Only active operators
-        vehicleService.getAll(undefined, true), // All active vehicles
-      ]);
+        operatorService.getAll(true),
+        vehicleService.getAll(undefined, true),
+      ];
+      
+      // Add schedule loading if routeId exists
+      if (record.routeId) {
+        promises.push(scheduleService.getAll(record.routeId, undefined, true));
+      }
+      
+      // Add service charges if record.id exists
+      if (record.id) {
+        promises.push(serviceChargeService.getAll(record.id));
+      }
+
+      const results = await Promise.all(promises);
+      
+      const routesData = results[0];
+      const operatorsData = results[1];
+      const vehiclesData = results[2];
+      
+      let nextIdx = 3;
+      const schedulesData = record.routeId ? results[nextIdx++] : [];
+      const chargesData = record.id ? results[nextIdx] : [];
+
       setRoutes(routesData);
-      setVehicleBadges(badgesData);
       setOperators(operatorsData);
       setVehicles(vehiclesData);
+      
+      if (record.routeId) {
+        setRouteId(record.routeId);
+        setSchedules(schedulesData);
+        if (record.scheduleId) {
+          setScheduleId(record.scheduleId);
+        }
+      }
+      
+      if (record.id && chargesData) {
+        setServiceCharges(chargesData);
+      }
 
-      if (record.vehicleId) {
+      // Find vehicle from already loaded vehicles array
+      let vehicleFound = false;
+      if (record.vehicleId && vehiclesData.length > 0) {
+        const vehicle = vehiclesData.find((v: Vehicle) => v.id === record.vehicleId);
+        if (vehicle) {
+          vehicleFound = true;
+          setSelectedVehicle(vehicle);
+
+          // Tự động điền seatCount và bedCount từ dữ liệu xe
+          if ((!record.seatCount || record.seatCount === 0) && vehicle.seatCapacity) {
+            setSeatCount(vehicle.seatCapacity.toString());
+          }
+          if (vehicle.bedCapacity !== undefined && vehicle.bedCapacity !== null) {
+            setBedCount(vehicle.bedCapacity.toString());
+          }
+
+          // Tự động điền biển số từ vehicle nếu chưa có
+          if (!registeredPlateNumber && vehicle.plateNumber) {
+            setRegisteredPlateNumber(vehicle.plateNumber);
+          }
+          if (!entryPlateNumber && vehicle.plateNumber) {
+            setEntryPlateNumber(vehicle.plateNumber);
+          }
+
+          if (vehicle.operatorId) {
+            setSelectedOperatorId(vehicle.operatorId);
+            if (record.driver) {
+              setDrivers([record.driver]);
+            } else {
+              setDrivers([]);
+            }
+          }
+        }
+      }
+
+      // Only load vehicleBadges as fallback if vehicle not found in vehicles table
+      if (!vehicleFound && record.vehicleId) {
         try {
-          const vehicle = await vehicleService.getById(record.vehicleId);
-          if (vehicle) {
-            setSelectedVehicle(vehicle);
-
-            // Tự động điền seatCount và bedCount từ dữ liệu xe
-            if ((!record.seatCount || record.seatCount === 0) && vehicle.seatCapacity) {
-              setSeatCount(vehicle.seatCapacity.toString());
+          const badgesData = await vehicleBadgeService.getAll();
+          setVehicleBadges(badgesData);
+          const matchingBadge = badgesData.find((b: VehicleBadge) => b.vehicle_id === record.vehicleId);
+          if (matchingBadge && matchingBadge.license_plate_sheet) {
+            if (!registeredPlateNumber) {
+              setRegisteredPlateNumber(matchingBadge.license_plate_sheet);
             }
-            if (vehicle.bedCapacity !== undefined && vehicle.bedCapacity !== null) {
-              setBedCount(vehicle.bedCapacity.toString());
-            }
-
-            // Tự động điền biển số từ vehicle nếu chưa có
-            if (!registeredPlateNumber && vehicle.plateNumber) {
-              setRegisteredPlateNumber(vehicle.plateNumber);
-            }
-            if (!entryPlateNumber && vehicle.plateNumber) {
-              setEntryPlateNumber(vehicle.plateNumber);
-            }
-
-            if (vehicle.operatorId) {
-              // Set operatorId for driver dialog
-              setSelectedOperatorId(vehicle.operatorId);
-              // Only load the assigned driver initially, not all drivers
-              if (record.driver) {
-                setDrivers([record.driver]);
-              } else {
-                setDrivers([]);
-              }
+            if (!entryPlateNumber) {
+              setEntryPlateNumber(matchingBadge.license_plate_sheet);
             }
           }
-        } catch (vehicleError) {
-          console.warn('Could not load vehicle:', vehicleError);
-          // Fallback: Try to get plate number from vehicle badges if available
-          if (badgesData && badgesData.length > 0) {
-            // Try to find a badge that might match by vehicle_id
-            const matchingBadge = badgesData.find((b: VehicleBadge) => b.vehicle_id === record.vehicleId);
-            if (matchingBadge && matchingBadge.license_plate_sheet) {
-              if (!registeredPlateNumber) {
-                setRegisteredPlateNumber(matchingBadge.license_plate_sheet);
-              }
-              if (!entryPlateNumber) {
-                setEntryPlateNumber(matchingBadge.license_plate_sheet);
-              }
-            }
-          }
+        } catch (badgeError) {
+          console.warn("Could not load vehicle badges:", badgeError);
         }
       }
 
@@ -264,33 +308,25 @@ export function CapPhepDialog({
       if (record.seatCount && record.seatCount > 0) {
         setSeatCount(record.seatCount.toString());
       }
-
-      if (record.id) {
-        const charges = await serviceChargeService.getAll(record.id);
-        setServiceCharges(charges);
-      }
-
-      if (record.routeId) {
-        setRouteId(record.routeId);
-        const schedulesData = await scheduleService.getAll(
-          record.routeId,
-          undefined,
-          true
-        );
-        setSchedules(schedulesData);
-        if (record.scheduleId) {
-          setScheduleId(record.scheduleId);
-        }
-      }
     } catch (error) {
       console.error("Failed to load initial data:", error);
     }
   };
 
+  // Cache schedules by routeId to avoid redundant API calls
+  const [schedulesCache, setSchedulesCache] = useState<Record<string, Schedule[]>>({});
+  
   const loadSchedules = async (routeId: string) => {
     try {
+      // Check cache first
+      if (schedulesCache[routeId]) {
+        setSchedules(schedulesCache[routeId]);
+        return;
+      }
       const data = await scheduleService.getAll(routeId, undefined, true);
       setSchedules(data);
+      // Update cache
+      setSchedulesCache(prev => ({ ...prev, [routeId]: data }));
     } catch (error) {
       console.error("Failed to load schedules:", error);
     }
@@ -328,6 +364,9 @@ export function CapPhepDialog({
     return foundShift?.id;
   };
 
+  // Cache for dispatch records to avoid reloading
+  const [cachedDispatchRecords, setCachedDispatchRecords] = useState<DispatchRecord[] | null>(null);
+  
   const loadDailyTripCounts = async () => {
     try {
       if (!departureDate) {
@@ -340,8 +379,12 @@ export function CapPhepDialog({
       const monthStart = startOfMonth(monthDate);
       const monthEnd = endOfMonth(monthDate);
 
-      // Load ALL dispatch records (not just for this vehicle) to get total vehicles per day
-      const dispatchRecords = await dispatchService.getAll();
+      // Use cached records if available, otherwise load once
+      let dispatchRecords = cachedDispatchRecords;
+      if (!dispatchRecords) {
+        dispatchRecords = await dispatchService.getAll();
+        setCachedDispatchRecords(dispatchRecords);
+      }
 
       // Count unique vehicles per day
       const counts: Record<number, number> = {};
@@ -682,6 +725,18 @@ export function CapPhepDialog({
         onClick={(e) => e.stopPropagation()}
       >
         <div className="max-w-[1920px] mx-auto p-8">
+          {/* Loading overlay */}
+          {isInitialLoading && (
+            <div className="flex items-center justify-center h-64">
+              <div className="text-center">
+                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-2"></div>
+                <p className="text-gray-500">Đang tải dữ liệu...</p>
+              </div>
+            </div>
+          )}
+          
+          {!isInitialLoading && (
+            <>
           {/* Header with action buttons */}
           <div className="flex justify-between items-center pb-4 border-b mb-6">
             <h1 className="text-2xl font-bold text-gray-900">
@@ -1373,6 +1428,8 @@ export function CapPhepDialog({
               </div>
             </div>
           </div>
+            </>
+          )}
         </div>
 
         {/* Document Validity Dialog */}

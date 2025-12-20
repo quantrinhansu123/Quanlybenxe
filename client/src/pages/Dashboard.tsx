@@ -1,113 +1,221 @@
-import { useState, useEffect } from "react"
-import { Bus, CheckCircle, DollarSign, AlertTriangle, History, TrendingUp, ArrowUpRight, ArrowDownRight, RefreshCw } from "lucide-react"
+import { useState, useEffect, useMemo } from "react"
+import { 
+  Bus, 
+  CheckCircle, 
+  Banknote, 
+  AlertTriangle, 
+  History, 
+  TrendingUp,
+  TrendingDown,
+  RefreshCw,
+  Clock,
+  MapPin,
+  FileWarning,
+  Calendar,
+  Activity,
+  Zap
+} from "lucide-react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table"
-import { StatusBadge } from "@/components/layout/StatusBadge"
 import { DocumentWarningsTable } from "@/components/dashboard/DocumentWarningsTable"
 import { EditDocumentDialog } from "@/components/dashboard/EditDocumentDialog"
 import { VehicleHistoryTable } from "@/components/dashboard/VehicleHistoryTable"
 import { XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Area, AreaChart } from "recharts"
 import { format } from "date-fns"
+import { vi } from "date-fns/locale"
 import { dashboardService } from "@/services/dashboard.service"
 import type { DashboardStats, ChartDataPoint, RecentActivity, Warning } from "@/services/dashboard.service"
 import { useUIStore } from "@/store/ui.store"
 import { cn } from "@/lib/utils"
 
-interface StatCardProps {
-  title: string
-  value: string | number
-  icon: React.ElementType
-  description?: string
-  trend?: {
-    value: number
-    isPositive: boolean
-  }
-  color: 'blue' | 'green' | 'amber' | 'red'
-  delay?: number
+// Animated counter hook
+function useAnimatedCounter(end: number, duration: number = 1000) {
+  const [count, setCount] = useState(0)
+  
+  useEffect(() => {
+    if (end === 0) {
+      setCount(0)
+      return
+    }
+    
+    let startTime: number | null = null
+    const startValue = 0
+    
+    const animate = (currentTime: number) => {
+      if (startTime === null) startTime = currentTime
+      const progress = Math.min((currentTime - startTime) / duration, 1)
+      const easeOutQuart = 1 - Math.pow(1 - progress, 4)
+      setCount(Math.floor(startValue + (end - startValue) * easeOutQuart))
+      
+      if (progress < 1) {
+        requestAnimationFrame(animate)
+      }
+    }
+    
+    requestAnimationFrame(animate)
+  }, [end, duration])
+  
+  return count
 }
 
-const colorVariants = {
-  blue: {
-    bg: 'bg-blue-50',
-    iconBg: 'bg-blue-100',
-    iconColor: 'text-blue-600',
-    trendPositive: 'text-green-600 bg-green-50',
-    trendNegative: 'text-red-600 bg-red-50',
-  },
-  green: {
-    bg: 'bg-emerald-50',
-    iconBg: 'bg-emerald-100',
-    iconColor: 'text-emerald-600',
-    trendPositive: 'text-green-600 bg-green-50',
-    trendNegative: 'text-red-600 bg-red-50',
-  },
-  amber: {
-    bg: 'bg-amber-50',
-    iconBg: 'bg-amber-100',
-    iconColor: 'text-amber-600',
-    trendPositive: 'text-green-600 bg-green-50',
-    trendNegative: 'text-red-600 bg-red-50',
-  },
-  red: {
-    bg: 'bg-red-50',
-    iconBg: 'bg-red-100',
-    iconColor: 'text-red-600',
-    trendPositive: 'text-red-600 bg-red-50',
-    trendNegative: 'text-green-600 bg-green-50',
-  },
-}
-
-function StatCard({ title, value, icon: Icon, description, trend, color, delay = 0 }: StatCardProps) {
-  const colors = colorVariants[color]
-
+// Live indicator component
+function LiveIndicator() {
   return (
-    <Card
-      className={cn(
-        "relative overflow-hidden border-0 shadow-sm hover:shadow-md transition-all duration-300",
-        "opacity-0 animate-fade-in"
-      )}
-      style={{ animationDelay: `${delay}ms` }}
-    >
-      <div className={cn("absolute inset-0 opacity-50", colors.bg)} />
-      <CardContent className="relative p-6">
+    <div className="flex items-center gap-2">
+      <span className="relative flex h-2.5 w-2.5">
+        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+        <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500"></span>
+      </span>
+      <span className="text-xs font-medium text-emerald-600">Trực tiếp</span>
+    </div>
+  )
+}
+
+// Stat card with modern design
+interface ModernStatCardProps {
+  title: string
+  value: number
+  suffix?: string
+  icon: React.ElementType
+  trend?: { value: number; isPositive: boolean }
+  variant: 'primary' | 'success' | 'warning' | 'danger'
+  subtitle?: string
+  animate?: boolean
+}
+
+const variantStyles = {
+  primary: {
+    card: 'bg-gradient-to-br from-blue-500 to-indigo-600',
+    icon: 'bg-white/20 text-white',
+    text: 'text-white',
+    subtext: 'text-blue-100',
+    trend: 'bg-white/20 text-white'
+  },
+  success: {
+    card: 'bg-gradient-to-br from-emerald-500 to-teal-600',
+    icon: 'bg-white/20 text-white',
+    text: 'text-white',
+    subtext: 'text-emerald-100',
+    trend: 'bg-white/20 text-white'
+  },
+  warning: {
+    card: 'bg-gradient-to-br from-amber-500 to-orange-600',
+    icon: 'bg-white/20 text-white',
+    text: 'text-white',
+    subtext: 'text-amber-100',
+    trend: 'bg-white/20 text-white'
+  },
+  danger: {
+    card: 'bg-gradient-to-br from-rose-500 to-red-600',
+    icon: 'bg-white/20 text-white',
+    text: 'text-white',
+    subtext: 'text-rose-100',
+    trend: 'bg-white/20 text-white'
+  }
+}
+
+function ModernStatCard({ 
+  title, 
+  value, 
+  suffix = '',
+  icon: Icon, 
+  trend, 
+  variant,
+  subtitle,
+  animate = true
+}: ModernStatCardProps) {
+  const styles = variantStyles[variant]
+  const animatedValue = useAnimatedCounter(animate ? value : 0, 1200)
+  const displayValue = animate ? animatedValue : value
+  
+  return (
+    <div className={cn(
+      "relative overflow-hidden rounded-2xl p-6 shadow-lg transition-all duration-300 hover:shadow-xl hover:scale-[1.02]",
+      styles.card
+    )}>
+      {/* Background decoration */}
+      <div className="absolute top-0 right-0 -mt-4 -mr-4 h-24 w-24 rounded-full bg-white/10 blur-2xl" />
+      <div className="absolute bottom-0 left-0 -mb-4 -ml-4 h-20 w-20 rounded-full bg-black/10 blur-xl" />
+      
+      <div className="relative">
         <div className="flex items-start justify-between">
           <div className="space-y-3">
-            <p className="text-sm font-medium text-gray-600">{title}</p>
-            <div className="flex items-baseline gap-2">
-              <span className="text-3xl font-bold text-gray-900">{value}</span>
-              {trend && (
-                <span className={cn(
-                  "inline-flex items-center gap-0.5 px-2 py-0.5 rounded-full text-xs font-medium",
-                  trend.isPositive ? colors.trendPositive : colors.trendNegative
-                )}>
-                  {trend.isPositive ? (
-                    <ArrowUpRight className="w-3 h-3" />
-                  ) : (
-                    <ArrowDownRight className="w-3 h-3" />
-                  )}
-                  {Math.abs(trend.value)}%
-                </span>
+            <p className={cn("text-sm font-medium opacity-90", styles.subtext)}>{title}</p>
+            <div className="flex items-baseline gap-1">
+              <span className={cn("text-4xl font-bold tracking-tight", styles.text)}>
+                {displayValue.toLocaleString('vi-VN')}
+              </span>
+              {suffix && (
+                <span className={cn("text-lg font-medium", styles.subtext)}>{suffix}</span>
               )}
             </div>
-            {description && (
-              <p className="text-xs text-gray-500">{description}</p>
+            {subtitle && (
+              <p className={cn("text-xs", styles.subtext)}>{subtitle}</p>
             )}
           </div>
-          <div className={cn("p-3 rounded-xl", colors.iconBg)}>
-            <Icon className={cn("w-6 h-6", colors.iconColor)} />
+          <div className={cn("p-3 rounded-xl", styles.icon)}>
+            <Icon className="w-6 h-6" />
           </div>
         </div>
-      </CardContent>
-    </Card>
+        
+        {trend && (
+          <div className="mt-4 flex items-center gap-2">
+            <span className={cn(
+              "inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium",
+              styles.trend
+            )}>
+              {trend.isPositive ? (
+                <TrendingUp className="w-3 h-3" />
+              ) : (
+                <TrendingDown className="w-3 h-3" />
+              )}
+              {trend.isPositive ? '+' : ''}{trend.value}%
+            </span>
+            <span className={cn("text-xs", styles.subtext)}>so với hôm qua</span>
+          </div>
+        )}
+      </div>
+    </div>
   )
+}
+
+// Quick action button
+interface QuickActionProps {
+  icon: React.ElementType
+  label: string
+  onClick?: () => void
+  variant?: 'default' | 'primary'
+}
+
+function QuickAction({ icon: Icon, label, onClick, variant = 'default' }: QuickActionProps) {
+  return (
+    <button
+      onClick={onClick}
+      className={cn(
+        "flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200",
+        "hover:scale-[1.02] active:scale-[0.98]",
+        variant === 'primary' 
+          ? "bg-blue-600 text-white hover:bg-blue-700 shadow-lg shadow-blue-600/25"
+          : "bg-gray-100 text-gray-700 hover:bg-gray-200"
+      )}
+    >
+      <Icon className="w-5 h-5" />
+      <span className="font-medium text-sm">{label}</span>
+    </button>
+  )
+}
+
+// Status indicator for recent activity
+function getStatusConfig(status: string) {
+  const configs: Record<string, { color: string; bg: string; label: string }> = {
+    'entered': { color: 'text-blue-700', bg: 'bg-blue-100', label: 'Vào bến' },
+    'passengers_dropped': { color: 'text-purple-700', bg: 'bg-purple-100', label: 'Trả khách' },
+    'permit_issued': { color: 'text-amber-700', bg: 'bg-amber-100', label: 'Đã cấp nốt' },
+    'paid': { color: 'text-emerald-700', bg: 'bg-emerald-100', label: 'Đã thanh toán' },
+    'departure_ordered': { color: 'text-cyan-700', bg: 'bg-cyan-100', label: 'Lệnh xuất bến' },
+    'departed': { color: 'text-gray-700', bg: 'bg-gray-100', label: 'Đã xuất bến' },
+  }
+  return configs[status] || { color: 'text-gray-700', bg: 'bg-gray-100', label: status }
 }
 
 export default function Dashboard() {
@@ -124,23 +232,31 @@ export default function Dashboard() {
   const [editDocumentOpen, setEditDocumentOpen] = useState(false)
   const [selectedWarning, setSelectedWarning] = useState<Warning | null>(null)
   const [vehicleHistoryOpen, setVehicleHistoryOpen] = useState(false)
+  const [lastUpdated, setLastUpdated] = useState<Date>(new Date())
   const setTitle = useUIStore((state) => state.setTitle)
 
   useEffect(() => {
     setTitle("Tổng quan")
     loadDashboardData()
+    
+    // Auto refresh every 30 seconds
+    const interval = setInterval(loadDashboardData, 30000)
+    return () => clearInterval(interval)
   }, [setTitle])
 
   const loadDashboardData = async () => {
     setIsLoading(true)
     try {
+      const data = await dashboardService.getDashboardData()
+      setStats(data.stats)
+      setChartData(data.chartData)
+      setRecentActivity(data.recentActivity)
+      setWarnings(data.warnings)
+      setLastUpdated(new Date())
+    } catch (error) {
+      console.error("Failed to load dashboard data:", error)
+      // Fallback to individual calls
       try {
-        const data = await dashboardService.getDashboardData()
-        setStats(data.stats)
-        setChartData(data.chartData)
-        setRecentActivity(data.recentActivity)
-        setWarnings(data.warnings)
-      } catch {
         const [statsData, chartDataData, activityData, warningsData] = await Promise.all([
           dashboardService.getStats().catch(() => null),
           dashboardService.getChartData().catch(() => []),
@@ -152,9 +268,10 @@ export default function Dashboard() {
         if (chartDataData.length > 0) setChartData(chartDataData)
         if (activityData.length > 0) setRecentActivity(activityData)
         if (warningsData.length > 0) setWarnings(warningsData)
+        setLastUpdated(new Date())
+      } catch {
+        // Silent fail
       }
-    } catch (error) {
-      console.error("Failed to load dashboard data:", error)
     } finally {
       setIsLoading(false)
     }
@@ -175,223 +292,352 @@ export default function Dashboard() {
     loadDashboardData()
   }
 
-  const formatRevenue = (value: number) => {
-    if (value >= 1000000000) {
-      return `${(value / 1000000000).toFixed(1)}B`
-    }
-    if (value >= 1000000) {
-      return `${(value / 1000000).toFixed(1)}M`
-    }
-    return value.toLocaleString('vi-VN')
-  }
+  // Calculate peak hour
+  const peakHour = useMemo(() => {
+    if (chartData.length === 0) return null
+    const max = chartData.reduce((prev, current) => 
+      (prev.count > current.count) ? prev : current
+    )
+    return max.count > 0 ? max : null
+  }, [chartData])
+
+  // Calculate total vehicles today
+  const totalVehiclesToday = useMemo(() => {
+    return chartData.reduce((sum, item) => sum + item.count, 0)
+  }, [chartData])
 
   return (
-    <div className="space-y-8">
-      {/* Header Section */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+    <div className="space-y-6 pb-8">
+      {/* Header */}
+      <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Tổng quan hệ thống</h1>
-          <p className="text-gray-500 mt-1">
-            Theo dõi hoạt động bến xe trong ngày {format(new Date(), 'dd/MM/yyyy')}
+          <div className="flex items-center gap-3">
+            <h1 className="text-2xl font-bold text-gray-900">
+              Bảng điều khiển
+            </h1>
+            <LiveIndicator />
+          </div>
+          <p className="text-gray-500 mt-1 flex items-center gap-2">
+            <Calendar className="w-4 h-4" />
+            {format(new Date(), "EEEE, dd MMMM yyyy", { locale: vi })}
           </p>
         </div>
-        <Button
-          variant="outline"
-          className="gap-2 self-start sm:self-auto"
-          onClick={loadDashboardData}
-          disabled={isLoading}
-        >
-          <RefreshCw className={cn("w-4 h-4", isLoading && "animate-spin")} />
-          Làm mới
-        </Button>
+        
+        <div className="flex items-center gap-3">
+          <div className="text-right hidden sm:block">
+            <p className="text-xs text-gray-500">Cập nhật lần cuối</p>
+            <p className="text-sm font-medium text-gray-700">
+              {format(lastUpdated, "HH:mm:ss")}
+            </p>
+          </div>
+          <Button
+            variant="outline"
+            size="sm"
+            className="gap-2"
+            onClick={loadDashboardData}
+            disabled={isLoading}
+          >
+            <RefreshCw className={cn("w-4 h-4", isLoading && "animate-spin")} />
+            Làm mới
+          </Button>
+        </div>
       </div>
 
-      {/* Stats Cards */}
+      {/* Stats Grid */}
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <StatCard
+        <ModernStatCard
           title="Xe trong bến"
           value={stats.vehiclesInStation}
           icon={Bus}
-          description="Đang chờ xuất bến"
+          variant="primary"
+          subtitle="Đang chờ xuất bến"
           trend={{ value: 12, isPositive: true }}
-          color="blue"
-          delay={0}
+          animate={!isLoading}
         />
-        <StatCard
+        <ModernStatCard
           title="Xe đã xuất bến"
           value={stats.vehiclesDepartedToday}
           icon={CheckCircle}
-          description="Hôm nay"
+          variant="success"
+          subtitle="Trong ngày hôm nay"
           trend={{ value: 8, isPositive: true }}
-          color="green"
-          delay={100}
+          animate={!isLoading}
         />
-        <StatCard
+        <ModernStatCard
           title="Doanh thu"
-          value={formatRevenue(stats.revenueToday)}
-          icon={DollarSign}
-          description="VNĐ hôm nay"
+          value={stats.revenueToday}
+          suffix="đ"
+          icon={Banknote}
+          variant="warning"
+          subtitle="VNĐ trong ngày"
           trend={{ value: 15, isPositive: true }}
-          color="amber"
-          delay={200}
+          animate={!isLoading}
         />
-        <StatCard
+        <ModernStatCard
           title="Cần xử lý"
           value={stats.invalidVehicles}
           icon={AlertTriangle}
-          description="Xe không đủ điều kiện"
-          trend={stats.invalidVehicles > 0 ? { value: stats.invalidVehicles, isPositive: false } : undefined}
-          color="red"
-          delay={300}
+          variant="danger"
+          subtitle="Giấy tờ hết hạn"
+          trend={stats.invalidVehicles > 0 ? { value: stats.invalidVehicles * 5, isPositive: false } : undefined}
+          animate={!isLoading}
         />
       </div>
 
-      {/* Chart Section */}
-      <Card className="border-0 shadow-sm opacity-0 animate-fade-in" style={{ animationDelay: '400ms' }}>
-        <CardHeader className="flex flex-row items-center justify-between pb-2">
-          <div>
-            <CardTitle className="text-lg font-semibold">Lượt xe theo giờ</CardTitle>
-            <p className="text-sm text-gray-500 mt-1">Thống kê số lượng xe xuất bến trong ngày</p>
-          </div>
-          <div className="flex items-center gap-2 text-sm text-gray-500">
-            <TrendingUp className="w-4 h-4 text-blue-500" />
-            <span>Xu hướng tăng</span>
-          </div>
-        </CardHeader>
-        <CardContent className="pt-4">
-          <ResponsiveContainer width="100%" height={320}>
-            {isLoading || chartData.length === 0 ? (
-              <div className="flex items-center justify-center h-full">
+      {/* Charts Section */}
+      <div className="grid gap-6 lg:grid-cols-3">
+        {/* Main Chart */}
+        <Card className="lg:col-span-2 border-0 shadow-sm">
+          <CardHeader className="pb-2">
+            <div className="flex items-center justify-between">
+              <div>
+                <CardTitle className="text-lg font-semibold flex items-center gap-2">
+                  <Activity className="w-5 h-5 text-blue-600" />
+                  Lượt xe theo giờ
+                </CardTitle>
+                <p className="text-sm text-gray-500 mt-1">
+                  Thống kê số lượng xe vào bến trong ngày
+                </p>
+              </div>
+              {peakHour && (
+                <div className="text-right">
+                  <p className="text-xs text-gray-500">Giờ cao điểm</p>
+                  <p className="text-lg font-bold text-blue-600">{peakHour.hour}</p>
+                </div>
+              )}
+            </div>
+          </CardHeader>
+          <CardContent className="pt-4">
+            {isLoading ? (
+              <div className="h-[280px] flex items-center justify-center">
                 <div className="flex flex-col items-center gap-3">
-                  <div className="w-8 h-8 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
-                  <span className="text-gray-500">Đang tải dữ liệu...</span>
+                  <div className="w-10 h-10 border-3 border-blue-500 border-t-transparent rounded-full animate-spin" />
+                  <span className="text-gray-500 text-sm">Đang tải biểu đồ...</span>
+                </div>
+              </div>
+            ) : chartData.length === 0 ? (
+              <div className="h-[280px] flex items-center justify-center">
+                <div className="text-center">
+                  <Activity className="w-12 h-12 text-gray-300 mx-auto mb-3" />
+                  <p className="text-gray-500">Chưa có dữ liệu</p>
                 </div>
               </div>
             ) : (
-              <AreaChart data={chartData}>
-                <defs>
-                  <linearGradient id="colorCount" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#3B82F6" stopOpacity={0.3}/>
-                    <stop offset="95%" stopColor="#3B82F6" stopOpacity={0}/>
-                  </linearGradient>
-                </defs>
-                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E5E7EB" />
-                <XAxis
-                  dataKey="hour"
-                  axisLine={false}
-                  tickLine={false}
-                  tick={{ fill: '#6B7280', fontSize: 12 }}
-                />
-                <YAxis
-                  axisLine={false}
-                  tickLine={false}
-                  tick={{ fill: '#6B7280', fontSize: 12 }}
-                />
-                <Tooltip
-                  contentStyle={{
-                    backgroundColor: 'white',
-                    border: 'none',
-                    borderRadius: '12px',
-                    boxShadow: '0 10px 40px rgba(0,0,0,0.1)'
-                  }}
-                  labelStyle={{ fontWeight: 600, color: '#111827' }}
-                />
-                <Area
-                  type="monotone"
-                  dataKey="count"
-                  stroke="#3B82F6"
-                  strokeWidth={2.5}
-                  fillOpacity={1}
-                  fill="url(#colorCount)"
-                />
-              </AreaChart>
+              <ResponsiveContainer width="100%" height={280}>
+                <AreaChart data={chartData}>
+                  <defs>
+                    <linearGradient id="colorGradient" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="0%" stopColor="#3B82F6" stopOpacity={0.4}/>
+                      <stop offset="100%" stopColor="#3B82F6" stopOpacity={0.05}/>
+                    </linearGradient>
+                  </defs>
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E5E7EB" />
+                  <XAxis
+                    dataKey="hour"
+                    axisLine={false}
+                    tickLine={false}
+                    tick={{ fill: '#6B7280', fontSize: 12 }}
+                  />
+                  <YAxis
+                    axisLine={false}
+                    tickLine={false}
+                    tick={{ fill: '#6B7280', fontSize: 12 }}
+                    width={30}
+                  />
+                  <Tooltip
+                    content={({ active, payload, label }) => {
+                      if (active && payload && payload.length) {
+                        return (
+                          <div className="bg-white rounded-lg shadow-xl border border-gray-100 p-3">
+                            <p className="text-sm font-semibold text-gray-900">{label}</p>
+                            <p className="text-sm text-blue-600 font-medium">
+                              {payload[0].value} lượt xe
+                            </p>
+                          </div>
+                        )
+                      }
+                      return null
+                    }}
+                  />
+                  <Area
+                    type="monotone"
+                    dataKey="count"
+                    stroke="#3B82F6"
+                    strokeWidth={2.5}
+                    fill="url(#colorGradient)"
+                  />
+                </AreaChart>
+              </ResponsiveContainer>
             )}
-          </ResponsiveContainer>
-        </CardContent>
-      </Card>
+          </CardContent>
+        </Card>
 
-      {/* Tables Section */}
-      <div className="grid gap-6 lg:grid-cols-2">
-        {/* Warnings */}
-        <div className="opacity-0 animate-fade-in" style={{ animationDelay: '500ms' }}>
-          <DocumentWarningsTable
-            warnings={warnings}
-            isLoading={isLoading}
-            onEditDocument={handleEditDocument}
-            onViewHistory={handleViewHistory}
-          />
-        </div>
-
-        {/* Recent Activity */}
-        <Card className="border-0 shadow-sm opacity-0 animate-fade-in" style={{ animationDelay: '600ms' }}>
+        {/* Quick Stats Panel */}
+        <Card className="border-0 shadow-sm">
           <CardHeader className="pb-3">
-            <CardTitle className="text-lg font-semibold">Hoạt động gần đây</CardTitle>
-            <p className="text-sm text-gray-500">Các chuyến xe mới nhất trong hệ thống</p>
+            <CardTitle className="text-lg font-semibold flex items-center gap-2">
+              <Zap className="w-5 h-5 text-amber-500" />
+              Thống kê nhanh
+            </CardTitle>
           </CardHeader>
-          <CardContent>
-            <Table>
-              <TableHeader>
-                <TableRow className="border-gray-100">
-                  <TableHead className="text-gray-600 font-medium">Biển số</TableHead>
-                  <TableHead className="text-gray-600 font-medium">Tuyến</TableHead>
-                  <TableHead className="text-gray-600 font-medium">Thời gian</TableHead>
-                  <TableHead className="text-gray-600 font-medium">Trạng thái</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {isLoading ? (
-                  <TableRow>
-                    <TableCell colSpan={4} className="text-center py-8">
-                      <div className="flex items-center justify-center gap-2">
-                        <div className="w-5 h-5 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
-                        <span className="text-gray-500">Đang tải...</span>
-                      </div>
-                    </TableCell>
-                  </TableRow>
-                ) : recentActivity.length === 0 ? (
-                  <TableRow>
-                    <TableCell colSpan={4} className="text-center py-8">
-                      <div className="flex flex-col items-center gap-2">
-                        <Bus className="w-8 h-8 text-gray-300" />
-                        <span className="text-gray-500">Không có hoạt động gần đây</span>
-                      </div>
-                    </TableCell>
-                  </TableRow>
-                ) : (
-                  recentActivity.map((activity) => (
-                    <TableRow
-                      key={activity.id}
-                      className="border-gray-100 hover:bg-gray-50/50 transition-colors"
-                    >
-                      <TableCell className="font-semibold text-gray-900">
-                        {activity.vehiclePlateNumber}
-                      </TableCell>
-                      <TableCell className="text-gray-600">{activity.route}</TableCell>
-                      <TableCell className="text-gray-600">
-                        {format(new Date(activity.entryTime), "HH:mm")}
-                      </TableCell>
-                      <TableCell>
-                        <StatusBadge status={activity.status as any} />
-                      </TableCell>
-                    </TableRow>
-                  ))
-                )}
-              </TableBody>
-            </Table>
+          <CardContent className="space-y-4">
+            {/* Total vehicles today */}
+            <div className="p-4 rounded-xl bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-100">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm text-blue-600 font-medium">Tổng lượt xe hôm nay</p>
+                  <p className="text-2xl font-bold text-blue-700 mt-1">{totalVehiclesToday}</p>
+                </div>
+                <div className="p-3 bg-blue-100 rounded-xl">
+                  <Bus className="w-6 h-6 text-blue-600" />
+                </div>
+              </div>
+            </div>
+
+            {/* Peak hour info */}
+            {peakHour && (
+              <div className="p-4 rounded-xl bg-gradient-to-r from-emerald-50 to-teal-50 border border-emerald-100">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm text-emerald-600 font-medium">Cao điểm ({peakHour.hour})</p>
+                    <p className="text-2xl font-bold text-emerald-700 mt-1">{peakHour.count} xe</p>
+                  </div>
+                  <div className="p-3 bg-emerald-100 rounded-xl">
+                    <TrendingUp className="w-6 h-6 text-emerald-600" />
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Warnings count */}
+            <div className="p-4 rounded-xl bg-gradient-to-r from-rose-50 to-red-50 border border-rose-100">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm text-rose-600 font-medium">Cảnh báo giấy tờ</p>
+                  <p className="text-2xl font-bold text-rose-700 mt-1">{warnings.length}</p>
+                </div>
+                <div className="p-3 bg-rose-100 rounded-xl">
+                  <FileWarning className="w-6 h-6 text-rose-600" />
+                </div>
+              </div>
+            </div>
+
+            {/* Quick actions */}
+            <div className="pt-2">
+              <p className="text-xs font-medium text-gray-500 uppercase tracking-wider mb-3">
+                Thao tác nhanh
+              </p>
+              <div className="space-y-2">
+                <QuickAction 
+                  icon={History} 
+                  label="Lịch sử chỉnh sửa" 
+                  onClick={() => setVehicleHistoryOpen(true)}
+                />
+                <QuickAction 
+                  icon={RefreshCw} 
+                  label="Làm mới dữ liệu" 
+                  onClick={loadDashboardData}
+                />
+              </div>
+            </div>
           </CardContent>
         </Card>
       </div>
 
-      {/* Vehicle History Button */}
-      <div className="flex justify-center opacity-0 animate-fade-in" style={{ animationDelay: '700ms' }}>
-        <Button
-          onClick={() => setVehicleHistoryOpen(true)}
-          className="gap-2 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 shadow-lg shadow-blue-600/25 hover:shadow-blue-600/40 transition-all duration-300"
-          size="lg"
-        >
-          <History className="w-5 h-5" />
-          Xem lịch sử chỉnh sửa thông số xe
-        </Button>
+      {/* Tables Section */}
+      <div className="grid gap-6 lg:grid-cols-2">
+        {/* Document Warnings */}
+        <DocumentWarningsTable
+          warnings={warnings}
+          isLoading={isLoading}
+          onEditDocument={handleEditDocument}
+          onViewHistory={handleViewHistory}
+        />
+
+        {/* Recent Activity */}
+        <Card className="border-0 shadow-sm">
+          <CardHeader className="pb-3">
+            <div className="flex items-center justify-between">
+              <div>
+                <CardTitle className="text-lg font-semibold flex items-center gap-2">
+                  <Clock className="w-5 h-5 text-indigo-600" />
+                  Hoạt động gần đây
+                </CardTitle>
+                <p className="text-sm text-gray-500 mt-1">
+                  Các chuyến xe mới nhất trong hệ thống
+                </p>
+              </div>
+              {recentActivity.length > 0 && (
+                <span className="text-xs font-medium text-gray-500 bg-gray-100 px-2 py-1 rounded-full">
+                  {recentActivity.length} hoạt động
+                </span>
+              )}
+            </div>
+          </CardHeader>
+          <CardContent>
+            {isLoading ? (
+              <div className="py-12 text-center">
+                <div className="w-8 h-8 border-2 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto" />
+                <p className="text-gray-500 text-sm mt-3">Đang tải...</p>
+              </div>
+            ) : recentActivity.length === 0 ? (
+              <div className="py-12 text-center">
+                <Bus className="w-12 h-12 text-gray-300 mx-auto mb-3" />
+                <p className="text-gray-500">Chưa có hoạt động nào</p>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {recentActivity.slice(0, 6).map((activity, index) => {
+                  const statusConfig = getStatusConfig(activity.status)
+                  return (
+                    <div
+                      key={activity.id}
+                      className={cn(
+                        "flex items-center gap-4 p-3 rounded-xl transition-all duration-200",
+                        "hover:bg-gray-50 border border-transparent hover:border-gray-100",
+                        index === 0 && "bg-blue-50/50 border-blue-100"
+                      )}
+                    >
+                      <div className={cn(
+                        "flex-shrink-0 w-10 h-10 rounded-xl flex items-center justify-center",
+                        statusConfig.bg
+                      )}>
+                        <Bus className={cn("w-5 h-5", statusConfig.color)} />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2">
+                          <p className="font-semibold text-gray-900 truncate">
+                            {activity.vehiclePlateNumber}
+                          </p>
+                          {index === 0 && (
+                            <span className="text-xs bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full font-medium">
+                              Mới nhất
+                            </span>
+                          )}
+                        </div>
+                        <div className="flex items-center gap-2 mt-0.5">
+                          <MapPin className="w-3 h-3 text-gray-400" />
+                          <p className="text-sm text-gray-500 truncate">{activity.route || 'N/A'}</p>
+                        </div>
+                      </div>
+                      <div className="flex-shrink-0 text-right">
+                        <span className={cn(
+                          "inline-block px-2 py-1 rounded-lg text-xs font-medium",
+                          statusConfig.bg, statusConfig.color
+                        )}>
+                          {statusConfig.label}
+                        </span>
+                        <p className="text-xs text-gray-400 mt-1">
+                          {format(new Date(activity.entryTime), "HH:mm")}
+                        </p>
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            )}
+          </CardContent>
+        </Card>
       </div>
 
       {/* Dialogs */}

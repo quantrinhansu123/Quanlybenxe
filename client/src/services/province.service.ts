@@ -24,7 +24,7 @@ interface CacheEntry<T> {
   timestamp: number
 }
 
-const CACHE_TTL = 30 * 60 * 1000 // 30 minutes
+const CACHE_TTL = 60 * 60 * 1000 // 60 minutes - tăng cache để giảm API calls
 let provincesV1Cache: CacheEntry<Province[]> | null = null
 let provincesV2Cache: CacheEntry<Province[]> | null = null
 const districtsCache: Map<string, CacheEntry<District[]>> = new Map()

@@ -50,7 +50,7 @@ export default function Login() {
       setIsLoading(true)
       setError("")
       await login(data.usernameOrEmail, data.password, data.rememberMe)
-      navigate("/")
+      navigate("/dashboard")
     } catch {
       setError("Tên đăng nhập/email hoặc mật khẩu không đúng")
     } finally {

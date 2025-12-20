@@ -6,6 +6,7 @@ import { ProtectedRoute } from "@/features/auth"
 import { MainLayout } from "@/components/layout/MainLayout"
 import { PublicLayout } from "@/components/layout/PublicLayout"
 import { PageLoader } from "@/components/common/PageLoader"
+import { ChatWidget } from "@/features/chat"
 
 // ============================================
 // LAZY LOADED PAGES - Grouped by Feature Domain
@@ -675,6 +676,7 @@ function App() {
         {/* Fallback */}
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
+      <ChatWidget />
     </BrowserRouter>
   )
 }

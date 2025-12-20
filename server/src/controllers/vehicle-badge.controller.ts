@@ -1,6 +1,12 @@
 import { Request, Response } from 'express'
 import { db, firebase } from '../config/database.js'
 
+// In-memory cache for vehicle badges (refresh every 30 minutes for production)
+let badgesCache: any[] | null = null
+let badgesCacheTime: number = 0
+const CACHE_TTL = 30 * 60 * 1000 // 30 minutes - badges don't change often
+let cacheLoading: Promise<any[]> | null = null // Prevent multiple simultaneous loads
+
 // Helper function to get active dispatch vehicle plates (vehicles currently in operation)
 const getActiveDispatchPlates = async (): Promise<Set<string>> => {
   try {
@@ -74,27 +80,67 @@ const mapFirebaseDataToBadge = (firebaseData: any, activePlates?: Set<string>) =
   }
 }
 
+// Helper to load and cache badges with deduplication
+const loadBadgesFromDB = async (): Promise<any[]> => {
+  const now = Date.now()
+  
+  // Return cached data if valid
+  if (badgesCache && (now - badgesCacheTime) < CACHE_TTL) {
+    return badgesCache
+  }
+  
+  // If already loading, wait for that instead of starting another load
+  if (cacheLoading) {
+    return cacheLoading
+  }
+  
+  // Start loading
+  cacheLoading = (async () => {
+    try {
+      // Load from Firebase
+      const snapshot = await db!.ref('datasheet/PHUHIEUXE').once('value')
+      const firebaseData = snapshot.val()
+      
+      if (!firebaseData) {
+        badgesCache = []
+        badgesCacheTime = Date.now()
+        return []
+      }
+      
+      // Convert and cache - use Object.values for faster iteration
+      const keys = Object.keys(firebaseData)
+      badgesCache = new Array(keys.length)
+      
+      for (let i = 0; i < keys.length; i++) {
+        badgesCache[i] = mapFirebaseDataToBadge(firebaseData[keys[i]])
+      }
+      
+      // Sort once during caching
+      badgesCache.sort((a, b) => b.badge_number.localeCompare(a.badge_number))
+      badgesCacheTime = Date.now()
+      
+      return badgesCache
+    } finally {
+      cacheLoading = null
+    }
+  })()
+  
+  return cacheLoading
+}
+
+// Invalidate cache (call after create/update/delete)
+export const invalidateBadgesCache = () => {
+  badgesCache = null
+  badgesCacheTime = 0
+  cacheLoading = null
+}
+
 export const getAllVehicleBadges = async (req: Request, res: Response): Promise<void> => {
   try {
-    const { status, badgeType, badgeColor, vehicleId, routeId, operationalStatus } = req.query
+    const { status, badgeType, badgeColor, vehicleId, routeId, page, limit } = req.query
 
-    // Get active dispatch plates to compute operational_status
-    const activePlates = await getActiveDispatchPlates()
-
-    // Get data from Firebase datasheet/PHUHIEUXE path (migrated from old Firebase)
-    const snapshot = await db!.ref('datasheet/PHUHIEUXE').once('value')
-    const firebaseData = snapshot.val()
-
-    if (!firebaseData) {
-      res.json([])
-      return
-    }
-
-    // Convert Firebase object to array and map to VehicleBadge format
-    let badges = Object.keys(firebaseData).map(key => {
-      const item = firebaseData[key]
-      return mapFirebaseDataToBadge(item, activePlates)
-    })
+    // Load from cache
+    let badges = await loadBadgesFromDB()
 
     // Apply filters
     if (status) {
@@ -112,12 +158,15 @@ export const getAllVehicleBadges = async (req: Request, res: Response): Promise<
     if (routeId) {
       badges = badges.filter(badge => badge.route_id === routeId)
     }
-    if (operationalStatus) {
-      badges = badges.filter(badge => badge.operational_status === operationalStatus)
-    }
 
-    // Sort by badge_number descending
-    badges.sort((a, b) => b.badge_number.localeCompare(a.badge_number))
+    // Server-side pagination
+    const pageNum = parseInt(page as string) || 1
+    const limitNum = parseInt(limit as string) || 0 // 0 = no limit
+    
+    if (limitNum > 0) {
+      const startIndex = (pageNum - 1) * limitNum
+      badges = badges.slice(startIndex, startIndex + limitNum)
+    }
 
     res.json(badges)
   } catch (error) {
@@ -209,6 +258,211 @@ export const getVehicleBadgeByPlateNumber = async (req: Request, res: Response):
     console.error('Error fetching vehicle badge by plate number:', error)
     res.status(500).json({
       error: 'Failed to fetch vehicle badge',
+      details: error instanceof Error ? error.message : 'Unknown error'
+    })
+  }
+}
+
+// Create a new vehicle badge
+export const createVehicleBadge = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const {
+      badge_number,
+      license_plate_sheet,
+      badge_type,
+      badge_color,
+      issue_date,
+      expiry_date,
+      status,
+      file_code,
+      issue_type,
+      bus_route_ref,
+      vehicle_type,
+      notes,
+    } = req.body
+
+    // Validate required fields
+    if (!badge_number || !license_plate_sheet) {
+      res.status(400).json({ error: 'Số phù hiệu và biển số xe là bắt buộc' })
+      return
+    }
+
+    // Check for duplicate badge number
+    const snapshot = await db!.ref('datasheet/PHUHIEUXE').once('value')
+    const existingData = snapshot.val() || {}
+    
+    const duplicateBadge = Object.values(existingData).find(
+      (item: any) => item.SoPhuHieu === badge_number
+    )
+    if (duplicateBadge) {
+      res.status(400).json({ error: 'Số phù hiệu đã tồn tại' })
+      return
+    }
+
+    // Generate new ID
+    const newId = `PH_${Date.now()}`
+    
+    // Create new badge data in Firebase format
+    const newBadgeData = {
+      ID_PhuHieu: newId,
+      SoPhuHieu: badge_number,
+      BienSoXe: license_plate_sheet,
+      LoaiPH: badge_type || '',
+      MauPhuHieu: badge_color || '',
+      NgayCap: issue_date || '',
+      NgayHetHan: expiry_date || '',
+      TrangThai: status || 'Còn hiệu lực',
+      MaHoSo: file_code || '',
+      LoaiCap: issue_type || 'Cấp mới',
+      TuyenDuong: bus_route_ref || '',
+      LoaiXe: vehicle_type || '',
+      GhiChu: notes || '',
+      created_at: new Date().toISOString(),
+    }
+
+    // Save to Firebase
+    await db!.ref(`datasheet/PHUHIEUXE/${newId}`).set(newBadgeData)
+
+    // Invalidate cache
+    invalidateBadgesCache()
+
+    // Return mapped badge
+    const createdBadge = mapFirebaseDataToBadge(newBadgeData)
+    
+    res.status(201).json(createdBadge)
+  } catch (error) {
+    console.error('Error creating vehicle badge:', error)
+    res.status(500).json({
+      error: 'Failed to create vehicle badge',
+      details: error instanceof Error ? error.message : 'Unknown error'
+    })
+  }
+}
+
+// Update an existing vehicle badge
+export const updateVehicleBadge = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { id } = req.params
+    const {
+      badge_number,
+      license_plate_sheet,
+      badge_type,
+      badge_color,
+      issue_date,
+      expiry_date,
+      status,
+      file_code,
+      issue_type,
+      bus_route_ref,
+      vehicle_type,
+      notes,
+    } = req.body
+
+    // Find the badge by ID
+    const snapshot = await db!.ref('datasheet/PHUHIEUXE').once('value')
+    const firebaseData = snapshot.val()
+
+    if (!firebaseData) {
+      res.status(404).json({ error: 'Vehicle badge not found' })
+      return
+    }
+
+    // Find badge key by ID
+    const badgeKey = Object.keys(firebaseData).find(key => {
+      const item = firebaseData[key]
+      return item.ID_PhuHieu === id
+    })
+
+    if (!badgeKey) {
+      res.status(404).json({ error: 'Vehicle badge not found' })
+      return
+    }
+
+    // Check for duplicate badge number (excluding current badge)
+    if (badge_number) {
+      const duplicateBadge = Object.entries(firebaseData).find(
+        ([key, item]: [string, any]) => item.SoPhuHieu === badge_number && key !== badgeKey
+      )
+      if (duplicateBadge) {
+        res.status(400).json({ error: 'Số phù hiệu đã tồn tại' })
+        return
+      }
+    }
+
+    // Update badge data
+    const existingData = firebaseData[badgeKey]
+    const updatedData = {
+      ...existingData,
+      SoPhuHieu: badge_number ?? existingData.SoPhuHieu,
+      BienSoXe: license_plate_sheet ?? existingData.BienSoXe,
+      LoaiPH: badge_type ?? existingData.LoaiPH,
+      MauPhuHieu: badge_color ?? existingData.MauPhuHieu,
+      NgayCap: issue_date ?? existingData.NgayCap,
+      NgayHetHan: expiry_date ?? existingData.NgayHetHan,
+      TrangThai: status ?? existingData.TrangThai,
+      MaHoSo: file_code ?? existingData.MaHoSo,
+      LoaiCap: issue_type ?? existingData.LoaiCap,
+      TuyenDuong: bus_route_ref ?? existingData.TuyenDuong,
+      LoaiXe: vehicle_type ?? existingData.LoaiXe,
+      GhiChu: notes ?? existingData.GhiChu,
+      updated_at: new Date().toISOString(),
+    }
+
+    // Save to Firebase
+    await db!.ref(`datasheet/PHUHIEUXE/${badgeKey}`).set(updatedData)
+
+    // Invalidate cache
+    invalidateBadgesCache()
+
+    // Return mapped badge
+    const updatedBadge = mapFirebaseDataToBadge(updatedData)
+    
+    res.json(updatedBadge)
+  } catch (error) {
+    console.error('Error updating vehicle badge:', error)
+    res.status(500).json({
+      error: 'Failed to update vehicle badge',
+      details: error instanceof Error ? error.message : 'Unknown error'
+    })
+  }
+}
+
+// Delete a vehicle badge
+export const deleteVehicleBadge = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { id } = req.params
+
+    // Find the badge by ID
+    const snapshot = await db!.ref('datasheet/PHUHIEUXE').once('value')
+    const firebaseData = snapshot.val()
+
+    if (!firebaseData) {
+      res.status(404).json({ error: 'Vehicle badge not found' })
+      return
+    }
+
+    // Find badge key by ID
+    const badgeKey = Object.keys(firebaseData).find(key => {
+      const item = firebaseData[key]
+      return item.ID_PhuHieu === id
+    })
+
+    if (!badgeKey) {
+      res.status(404).json({ error: 'Vehicle badge not found' })
+      return
+    }
+
+    // Delete from Firebase
+    await db!.ref(`datasheet/PHUHIEUXE/${badgeKey}`).remove()
+
+    // Invalidate cache
+    invalidateBadgesCache()
+
+    res.status(204).send()
+  } catch (error) {
+    console.error('Error deleting vehicle badge:', error)
+    res.status(500).json({
+      error: 'Failed to delete vehicle badge',
       details: error instanceof Error ? error.message : 'Unknown error'
     })
   }

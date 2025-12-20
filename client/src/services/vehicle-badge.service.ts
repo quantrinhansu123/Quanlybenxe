@@ -36,15 +36,51 @@ export interface VehicleBadge {
   operational_status: OperationalStatus  // 'trong_ben' (in station) or 'dang_chay' (running)
 }
 
+export interface CreateVehicleBadgeInput {
+  badge_number: string
+  license_plate_sheet: string
+  badge_type?: string
+  badge_color?: string
+  issue_date?: string
+  expiry_date?: string
+  status?: string
+  file_code?: string
+  issue_type?: string
+  bus_route_ref?: string
+  vehicle_type?: string
+  notes?: string
+}
+
+export interface UpdateVehicleBadgeInput extends Partial<CreateVehicleBadgeInput> {}
+
+// Frontend cache for badges
+let badgesCache: VehicleBadge[] | null = null
+let badgesCacheTime = 0
+const FE_CACHE_TTL = 5 * 60 * 1000 // 5 minutes frontend cache
+
 export const vehicleBadgeService = {
-  getAll: async (): Promise<VehicleBadge[]> => {
+  getAll: async (forceRefresh = false): Promise<VehicleBadge[]> => {
     try {
+      const now = Date.now()
+      
+      // Return cached data if valid and not forcing refresh
+      if (!forceRefresh && badgesCache && (now - badgesCacheTime) < FE_CACHE_TTL) {
+        return badgesCache
+      }
+      
       const response = await api.get<VehicleBadge[]>('/vehicle-badges')
+      badgesCache = response.data
+      badgesCacheTime = now
       return response.data
     } catch (error) {
       console.error('Error fetching vehicle badges:', error)
-      return []
+      return badgesCache || [] // Return stale cache on error
     }
+  },
+  
+  clearCache: () => {
+    badgesCache = null
+    badgesCacheTime = 0
   },
 
   getById: async (id: string): Promise<VehicleBadge | null> => {
@@ -90,5 +126,22 @@ export const vehicleBadgeService = {
         expiringSoon: 0,
       }
     }
+  },
+
+  create: async (data: CreateVehicleBadgeInput): Promise<VehicleBadge> => {
+    const response = await api.post<VehicleBadge>('/vehicle-badges', data)
+    vehicleBadgeService.clearCache()
+    return response.data
+  },
+
+  update: async (id: string, data: UpdateVehicleBadgeInput): Promise<VehicleBadge> => {
+    const response = await api.put<VehicleBadge>(`/vehicle-badges/${id}`, data)
+    vehicleBadgeService.clearCache()
+    return response.data
+  },
+
+  delete: async (id: string): Promise<void> => {
+    await api.delete(`/vehicle-badges/${id}`)
+    vehicleBadgeService.clearCache()
   },
 }

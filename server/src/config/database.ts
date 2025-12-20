@@ -252,8 +252,8 @@ class FirebaseQuery {
           }
 
           const records = Object.keys(allData).map(key => ({
-            id: key,
-            ...allData[key]
+            ...allData[key],
+            id: key
           }))
 
           const filteredRecords = this.applyFilters(records)
@@ -288,8 +288,8 @@ class FirebaseQuery {
           }
 
           const records = Object.keys(allData).map(key => ({
-            id: key,
-            ...allData[key]
+            ...allData[key],
+            id: key
           }))
 
           const filteredRecords = this.applyFilters(records)
@@ -305,14 +305,22 @@ class FirebaseQuery {
         // Handle SELECT (read)
         let queryRef: any = this.ref
 
+        // IMPORTANT: Only apply Firebase-level limit if there are NO filters
+        // When filters exist, we need ALL data first, then filter in JS, then apply limit
+        const hasFilters = this.filters.length > 0
+        
         if (this.orderByField) {
           queryRef = queryRef.orderByChild(this.orderByField)
-          if (this.orderByDirection === 'desc') {
-            queryRef = queryRef.limitToLast(this.limitCount || 1000)
-          } else {
-            queryRef = queryRef.limitToFirst(this.limitCount || 1000)
+          // Only apply limit at Firebase level if no filters
+          if (!hasFilters) {
+            if (this.orderByDirection === 'desc') {
+              queryRef = queryRef.limitToLast(this.limitCount || 1000)
+            } else {
+              queryRef = queryRef.limitToFirst(this.limitCount || 1000)
+            }
           }
-        } else if (this.limitCount) {
+        } else if (this.limitCount && !hasFilters) {
+          // Only apply limit at Firebase level if no filters
           queryRef = queryRef.limitToFirst(this.limitCount)
         }
 
@@ -321,15 +329,21 @@ class FirebaseQuery {
 
         if (data && typeof data === 'object' && !Array.isArray(data)) {
           data = Object.keys(data).map(key => ({
-            id: key,
-            ...data[key]
+            ...data[key],
+            id: key
           }))
         } else if (!data) {
           data = []
         }
 
-        if (this.filters.length > 0 && Array.isArray(data)) {
+        // Apply filters in JavaScript (after fetching all data)
+        if (hasFilters && Array.isArray(data)) {
           data = this.applyFilters(data)
+        }
+        
+        // Apply limit AFTER filtering (when filters were used)
+        if (hasFilters && this.limitCount && Array.isArray(data)) {
+          data = data.slice(0, this.limitCount)
         }
 
         if (this.selectFields && Array.isArray(data)) {

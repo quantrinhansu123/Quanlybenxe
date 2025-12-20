@@ -63,11 +63,24 @@ export const getWarnings = async (_req: AuthRequest, res: Response) => {
   }
 }
 
+// Helper function to get Vietnam timezone date
+function getVietnamDate() {
+  const now = new Date()
+  // Vietnam is UTC+7
+  const vietnamOffset = 7 * 60 // minutes
+  const utcTime = now.getTime() + (now.getTimezoneOffset() * 60000)
+  return new Date(utcTime + (vietnamOffset * 60000))
+}
+
 // Helper functions
 async function getStatsData() {
-  const now = new Date()
-  const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0)
-  const todayEnd = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999)
+  const vietnamNow = getVietnamDate()
+  const todayStart = new Date(vietnamNow.getFullYear(), vietnamNow.getMonth(), vietnamNow.getDate(), 0, 0, 0, 0)
+  const todayEnd = new Date(vietnamNow.getFullYear(), vietnamNow.getMonth(), vietnamNow.getDate(), 23, 59, 59, 999)
+  // Convert back to UTC for comparison
+  const vietnamOffset = 7 * 60 * 60 * 1000
+  const todayStartUTC = new Date(todayStart.getTime() - vietnamOffset)
+  const todayEndUTC = new Date(todayEnd.getTime() - vietnamOffset)
 
   // Get all dispatch records
   const dispatchRecords: any = await firebaseREST.get('dispatch_records') || {}
@@ -86,7 +99,7 @@ async function getStatsData() {
   const vehiclesDepartedToday = dispatchArray.filter((record: any) => {
     if (record.current_status !== 'departed' || !record.exit_time) return false
     const exitTime = new Date(record.exit_time)
-    return exitTime >= todayStart && exitTime <= todayEnd
+    return exitTime >= todayStartUTC && exitTime <= todayEndUTC
   }).length
 
   // Revenue today (from invoices)
@@ -96,7 +109,8 @@ async function getStatsData() {
     ...invoices[key]
   }))
   
-  const todayStr = todayStart.toISOString().split('T')[0]
+  // Format Vietnam date as YYYY-MM-DD string
+  const todayStr = `${vietnamNow.getFullYear()}-${String(vietnamNow.getMonth() + 1).padStart(2, '0')}-${String(vietnamNow.getDate()).padStart(2, '0')}`
   const invoicesToday = invoicesArray.filter((inv: any) => {
     const issueDate = inv.issue_date?.split('T')[0] || inv.issue_date
     return issueDate === todayStr
@@ -113,10 +127,9 @@ async function getStatsData() {
     ...vehicleDocuments[key]
   }))
   
-  const today = new Date().toISOString().split('T')[0]
   const invalidVehicles = documentsArray.filter((doc: any) => {
     const expiryDate = doc.expiry_date?.split('T')[0] || doc.expiry_date
-    return expiryDate && expiryDate < today
+    return expiryDate && expiryDate < todayStr
   }).length
 
   return {

@@ -30,15 +30,15 @@ const LICENSE_CLASSES = [
 ]
 
 const driverSchema = z.object({
-  operatorIds: z.array(z.string().uuid("Invalid operator ID")).min(1, "Vui lòng chọn ít nhất một nhà xe"),
+  operatorIds: z.array(z.string().min(1, "Invalid operator ID")).min(1, "Vui lòng chọn ít nhất một nhà xe"),
   fullName: z.string().min(1, "Họ tên là bắt buộc"),
   idNumber: z.string().min(1, "Số CMND/CCCD là bắt buộc"),
   phone: z.string().optional(),
   licenseNumber: z.string().min(1, "Số bằng lái là bắt buộc"),
   licenseClass: z.string().min(1, "Hạng bằng lái là bắt buộc"),
   licenseExpiryDate: z.string().min(1, "Ngày hết hạn bằng lái là bắt buộc"),
-  province: z.string().min(1, "Tỉnh/Thành phố là bắt buộc"),
-  district: z.string().min(1, "Quận/Huyện/Thị xã là bắt buộc"),
+  province: z.string().optional(), // Optional - có thể không có khi edit
+  district: z.string().optional(), // Optional - có thể không có khi edit
   ward: z.string().optional(), // Phường/Xã (chỉ dùng cho v1)
   address: z.string().optional(),
   imageUrl: z.string().url().optional().or(z.literal("")),
@@ -176,9 +176,14 @@ export function DriverForm({ driver, mode, onClose }: DriverFormProps) {
   }
 
   useEffect(() => {
-    loadOperators()
-    const initProvinces = async () => {
-      const loadedProvinces = await loadProvinces(useApiV2)
+    // Load operators và provinces song song để tăng tốc
+    const initData = async () => {
+      // Start all loads in parallel - cần await cả hai
+      const [loadedProvinces] = await Promise.all([
+        loadProvinces(useApiV2),
+        loadOperators()
+      ])
+
       if (driver) {
         const operatorIds = driver.operatorIds || (driver.operatorId ? [driver.operatorId] : [])
         setSelectedOperatorIds(operatorIds)
@@ -204,7 +209,7 @@ export function DriverForm({ driver, mode, onClose }: DriverFormProps) {
         }
       }
     }
-    initProvinces()
+    initData()
   }, [driver])
 
   // Reload provinces khi đổi API version (skip initial mount)
@@ -258,13 +263,15 @@ export function DriverForm({ driver, mode, onClose }: DriverFormProps) {
     }
   }, [watchDistrict, selectedProvinceCode, districts, selectedDistrictCode, useApiV2, setValue])
 
-  const loadOperators = async () => {
+  const loadOperators = async (): Promise<Operator[]> => {
     try {
       const data = await operatorService.getAll(true) // Only active operators
       setOperators(data)
+      return data
     } catch (error) {
       console.error("Failed to load operators:", error)
       toast.error("Không thể tải danh sách đơn vị vận tải")
+      return []
     }
   }
 
@@ -409,6 +416,8 @@ export function DriverForm({ driver, mode, onClose }: DriverFormProps) {
         licenseNumber: data.licenseNumber,
         licenseClass: data.licenseClass,
         licenseExpiryDate: data.licenseExpiryDate,
+        province: data.province || undefined,
+        district: data.district || undefined,
         address: fullAddress,
         imageUrl: data.imageUrl || undefined,
       }

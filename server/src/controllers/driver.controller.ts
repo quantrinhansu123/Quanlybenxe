@@ -42,9 +42,14 @@ export const getAllDrivers = async (req: Request, res: Response) => {
     const operatorsMap = new Map((operatorsData || []).map((op: any) => [op.id, op]))
 
     // Load junction table for multi-operator relationships
-    const { data: junctionData } = await firebase
+    const { data: junctionData, error: junctionError } = await firebase
       .from('driver_operators')
       .select('*')
+
+    // DEBUG LOG - remove after fixing
+    console.log('[getAllDrivers] Junction data count:', junctionData?.length || 0)
+    console.log('[getAllDrivers] Junction error:', junctionError)
+    console.log('[getAllDrivers] Junction data sample:', junctionData?.slice(0, 2))
 
     // Create a map of driver_id -> operator relationships
     const driverOperatorsMap = new Map<string, any[]>()
@@ -53,11 +58,14 @@ export const getAllDrivers = async (req: Request, res: Response) => {
       list.push(junction)
       driverOperatorsMap.set(junction.driver_id, list)
     })
+    
+    // DEBUG LOG
+    console.log('[getAllDrivers] driverOperatorsMap keys:', Array.from(driverOperatorsMap.keys()))
 
     // Map drivers with operator info
     let drivers = (driversData || []).map((driver: any) => {
       // Get primary operator from operator_id
-      const primaryOperatorData = driver.operator_id ? operatorsMap.get(driver.operator_id) : null
+      const primaryOperatorData = driver.operator_id ? operatorsMap.get(driver.operator_id) as any : null
       const primaryOperator = primaryOperatorData ? {
         id: primaryOperatorData.id,
         name: primaryOperatorData.name,
@@ -67,7 +75,7 @@ export const getAllDrivers = async (req: Request, res: Response) => {
       // Get all operators from junction table
       const junctionRecords = driverOperatorsMap.get(driver.id) || []
       const allOperators = junctionRecords.map((junction: any) => {
-        const opData = operatorsMap.get(junction.operator_id)
+        const opData = operatorsMap.get(junction.operator_id) as any
         return opData ? {
           id: opData.id,
           name: opData.name,
@@ -124,13 +132,10 @@ export const getDriverById = async (req: Request, res: Response) => {
   try {
     const { id } = req.params
 
-    // Get driver with primary operator
+    // Get driver (without join - Firebase RTDB doesn't support joins)
     const { data: driverData, error: driverError } = await firebase
       .from('drivers')
-      .select(`
-        *,
-        operators:operator_id(id, name, code)
-      `)
+      .select('*')
       .eq('id', id)
       .single()
 
@@ -139,32 +144,55 @@ export const getDriverById = async (req: Request, res: Response) => {
       return res.status(404).json({ error: 'Driver not found' })
     }
 
-    // Get all operators from junction table
+    // Manual join: Fetch primary operator
+    let primaryOperator: { id: string; name: string; code: string } | undefined
+    if (driverData.operator_id) {
+      const { data: operatorData } = await firebase
+        .from('operators')
+        .select('id, name, code')
+        .eq('id', driverData.operator_id)
+        .single()
+      if (operatorData) {
+        primaryOperator = {
+          id: operatorData.id,
+          name: operatorData.name,
+          code: operatorData.code,
+        }
+      }
+    }
+
+    // Manual join: Get all operators from junction table
     const { data: junctionData, error: junctionError } = await firebase
       .from('driver_operators')
-      .select(`
-        operator_id,
-        is_primary,
-        operators:operator_id(id, name, code)
-      `)
+      .select('*')
       .eq('driver_id', id)
 
     if (junctionError) throw junctionError
 
-    const primaryOperator = driverData.operators ? {
-      id: driverData.operators.id,
-      name: driverData.operators.name,
-      code: driverData.operators.code,
-    } : undefined
+    // Fetch all operators for junction records
+    let allOperators: Array<{ id: string; name: string; code: string; isPrimary: boolean }> = []
+    if (junctionData && junctionData.length > 0) {
+      const { data: operatorsData } = await firebase
+        .from('operators')
+        .select('id, name, code')
+      
+      if (operatorsData) {
+        const operatorsMap = new Map(operatorsData.map((op: any) => [op.id, op]))
+        allOperators = junctionData
+          .map((j: any) => {
+            const op = operatorsMap.get(j.operator_id) as any
+            return op ? {
+              id: op.id,
+              name: op.name,
+              code: op.code,
+              isPrimary: j.is_primary,
+            } : null
+          })
+          .filter((op: any) => op !== null)
+      }
+    }
 
-    const allOperators = junctionData?.map((do_rel: any) => ({
-      id: do_rel.operators?.id,
-      name: do_rel.operators?.name,
-      code: do_rel.operators?.code,
-      isPrimary: do_rel.is_primary,
-    })).filter((op: any) => op.id) || []
-
-    const operators = allOperators.length > 0 ? allOperators : (primaryOperator ? [primaryOperator] : [])
+    const operators = allOperators.length > 0 ? allOperators : (primaryOperator ? [{ ...primaryOperator, isPrimary: true }] : [])
 
     return res.json({
       id: driverData.id,
@@ -212,7 +240,7 @@ export const createDriver = async (req: Request, res: Response) => {
     // Use first operator as primary (for backward compatibility)
     const primaryOperatorId = operatorIds[0]
 
-    // Create driver with primary operator
+    // Create driver with primary operator (without join - Firebase RTDB doesn't support joins)
     const { data: driverData, error: driverError } = await firebase
       .from('drivers')
       .insert({
@@ -229,10 +257,7 @@ export const createDriver = async (req: Request, res: Response) => {
         image_url: imageUrl || null,
         is_active: true,
       })
-      .select(`
-        *,
-        operators:operator_id(id, name, code)
-      `)
+      .select('*')
       .single()
 
     if (driverError) throw driverError
@@ -250,28 +275,51 @@ export const createDriver = async (req: Request, res: Response) => {
 
     if (junctionError) throw junctionError
 
-    // Get all operators for response
+    // Manual join: Fetch primary operator
+    let primaryOperator: { id: string; name: string; code: string } | undefined
+    if (driverData.operator_id) {
+      const { data: operatorData } = await firebase
+        .from('operators')
+        .select('id, name, code')
+        .eq('id', driverData.operator_id)
+        .single()
+      if (operatorData) {
+        primaryOperator = {
+          id: operatorData.id,
+          name: operatorData.name,
+          code: operatorData.code,
+        }
+      }
+    }
+
+    // Manual join: Get all operators from junction table
     const { data: junctionData } = await firebase
       .from('driver_operators')
-      .select(`
-        operator_id,
-        is_primary,
-        operators:operator_id(id, name, code)
-      `)
+      .select('*')
       .eq('driver_id', driverData.id)
 
-    const allOperators = junctionData?.map((do_rel: any) => ({
-      id: do_rel.operators?.id,
-      name: do_rel.operators?.name,
-      code: do_rel.operators?.code,
-      isPrimary: do_rel.is_primary,
-    })).filter((op: any) => op.id) || []
-
-    const primaryOperator = driverData.operators ? {
-      id: driverData.operators.id,
-      name: driverData.operators.name,
-      code: driverData.operators.code,
-    } : undefined
+    // Fetch all operators for junction records
+    let allOperators: Array<{ id: string; name: string; code: string; isPrimary: boolean }> = []
+    if (junctionData && junctionData.length > 0) {
+      const { data: operatorsData } = await firebase
+        .from('operators')
+        .select('id, name, code')
+      
+      if (operatorsData) {
+        const operatorsMap = new Map(operatorsData.map((op: any) => [op.id, op]))
+        allOperators = junctionData
+          .map((j: any) => {
+            const op = operatorsMap.get(j.operator_id) as any
+            return op ? {
+              id: op.id,
+              name: op.name,
+              code: op.code,
+              isPrimary: j.is_primary,
+            } : null
+          })
+          .filter((op: any) => op !== null)
+      }
+    }
 
     return res.status(201).json({
       id: driverData.id,
@@ -349,14 +397,12 @@ export const updateDriver = async (req: Request, res: Response) => {
       if (junctionError) throw junctionError
     }
 
+    // Update driver data (without join - Firebase RTDB doesn't support joins)
     const { data, error } = await firebase
       .from('drivers')
       .update(updateData)
       .eq('id', id)
-      .select(`
-        *,
-        operators:operator_id(id, name, code)
-      `)
+      .select('*')
       .single()
 
     if (error) throw error
@@ -372,28 +418,51 @@ export const updateDriver = async (req: Request, res: Response) => {
       })
     }
 
-    // Get all operators from junction table
+    // Manual join: Fetch primary operator
+    let primaryOperator: { id: string; name: string; code: string } | undefined
+    if (data.operator_id) {
+      const { data: operatorData } = await firebase
+        .from('operators')
+        .select('id, name, code')
+        .eq('id', data.operator_id)
+        .single()
+      if (operatorData) {
+        primaryOperator = {
+          id: operatorData.id,
+          name: operatorData.name,
+          code: operatorData.code,
+        }
+      }
+    }
+
+    // Manual join: Get all operators from junction table
     const { data: junctionData } = await firebase
       .from('driver_operators')
-      .select(`
-        operator_id,
-        is_primary,
-        operators:operator_id(id, name, code)
-      `)
+      .select('*')
       .eq('driver_id', id)
 
-    const allOperators = junctionData?.map((do_rel: any) => ({
-      id: do_rel.operators?.id,
-      name: do_rel.operators?.name,
-      code: do_rel.operators?.code,
-      isPrimary: do_rel.is_primary,
-    })).filter((op: any) => op.id) || []
-
-    const primaryOperator = data.operators ? {
-      id: data.operators.id,
-      name: data.operators.name,
-      code: data.operators.code,
-    } : undefined
+    // Fetch all operators for junction records
+    let allOperators: Array<{ id: string; name: string; code: string; isPrimary: boolean }> = []
+    if (junctionData && junctionData.length > 0) {
+      const { data: operatorsData } = await firebase
+        .from('operators')
+        .select('id, name, code')
+      
+      if (operatorsData) {
+        const operatorsMap = new Map(operatorsData.map((op: any) => [op.id, op]))
+        allOperators = junctionData
+          .map((j: any) => {
+            const op = operatorsMap.get(j.operator_id) as any
+            return op ? {
+              id: op.id,
+              name: op.name,
+              code: op.code,
+              isPrimary: j.is_primary,
+            } : null
+          })
+          .filter((op: any) => op !== null)
+      }
+    }
 
     return res.json({
       id: data.id,

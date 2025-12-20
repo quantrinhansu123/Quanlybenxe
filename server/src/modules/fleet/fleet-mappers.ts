@@ -58,10 +58,13 @@ export function buildDocumentsMap(documents: VehicleDocumentDB[] | null): Vehicl
 
 /**
  * Map vehicle database record to API format
+ * Note: operator and vehicleType should be passed separately (Firebase RTDB doesn't support joins)
  */
 export function mapVehicleToAPI(
   vehicle: VehicleDBRecord,
-  documents?: VehicleDocumentDB[] | null
+  documents?: VehicleDocumentDB[] | null,
+  operator?: { id: string; name: string; code: string } | null,
+  vehicleType?: { id: string; name: string } | null
 ): VehicleRecord {
   const docsMap = documents ? buildDocumentsMap(documents) : undefined
 
@@ -69,18 +72,18 @@ export function mapVehicleToAPI(
     id: vehicle.id,
     plateNumber: vehicle.plate_number,
     vehicleTypeId: vehicle.vehicle_type_id,
-    vehicleType: vehicle.vehicle_types
+    vehicleType: vehicleType
       ? {
-          id: vehicle.vehicle_types.id,
-          name: vehicle.vehicle_types.name,
+          id: vehicleType.id,
+          name: vehicleType.name,
         }
       : undefined,
     operatorId: vehicle.operator_id,
-    operator: vehicle.operators
+    operator: operator
       ? {
-          id: vehicle.operators.id,
-          name: vehicle.operators.name,
-          code: vehicle.operators.code,
+          id: operator.id,
+          name: operator.name,
+          code: operator.code,
         }
       : undefined,
     seatCapacity: vehicle.seat_capacity,

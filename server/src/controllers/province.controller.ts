@@ -27,7 +27,7 @@ interface CacheEntry {
   timestamp: number
 }
 
-const CACHE_TTL = 30 * 60 * 1000 // 30 minutes
+const CACHE_TTL = 24 * 60 * 60 * 1000 // 24 hours - dữ liệu địa chính ít thay đổi
 const cache: Map<string, CacheEntry> = new Map()
 
 function getCached(key: string): any | null {

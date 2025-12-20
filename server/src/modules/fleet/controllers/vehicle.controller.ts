@@ -5,13 +5,17 @@
 
 import { Request, Response } from 'express'
 import { AuthRequest } from '../../../middleware/auth.js'
-import { firebase } from '../../../config/database.js'
+import { firebase, firebaseDb } from '../../../config/database.js'
 import { syncVehicleChanges } from '../../../utils/denormalization-sync.js'
 import { validateCreateVehicle, validateUpdateVehicle } from '../fleet-validation.js'
 import { mapVehicleToAPI, mapAuditLogToAPI } from '../fleet-mappers.js'
 import type { VehicleDBRecord, VehicleDocumentDB, DocumentType } from '../fleet-types.js'
 
 const DOCUMENT_TYPES: DocumentType[] = ['registration', 'inspection', 'insurance', 'operation_permit', 'emblem']
+
+// Cache for legacy vehicles (30 minutes)
+let legacyVehiclesCache: { data: any[] | null; timestamp: number } = { data: null, timestamp: 0 }
+const LEGACY_CACHE_TTL = 30 * 60 * 1000 // 30 minutes
 
 /**
  * Fetch vehicle documents by vehicle ID
@@ -81,11 +85,11 @@ async function upsertDocuments(
 
 export const getAllVehicles = async (req: Request, res: Response) => {
   try {
-    const { operatorId, isActive } = req.query
+    const { operatorId, isActive, includeLegacy } = req.query
 
     let query = firebase
       .from('vehicles')
-      .select('*, operators:operator_id(id, name, code), vehicle_types:vehicle_type_id(id, name)')
+      .select('*')
       .order('created_at', { ascending: false })
 
     if (operatorId) query = query.eq('operator_id', operatorId as string)
@@ -94,13 +98,92 @@ export const getAllVehicles = async (req: Request, res: Response) => {
     const { data: vehicles, error } = await query
     if (error) throw error
 
+    // Fetch operators and vehicle_types for manual join (Firebase RTDB doesn't support joins)
+    const { data: operators } = await firebase.from('operators').select('id, name, code')
+    const { data: vehicleTypes } = await firebase.from('vehicle_types').select('id, name')
+    
+    const operatorMap = new Map((operators || []).map((op: any) => [op.id, op]))
+    const vehicleTypeMap = new Map((vehicleTypes || []).map((vt: any) => [vt.id, vt]))
+
     const vehicleIds = vehicles.map((v: VehicleDBRecord) => v.id)
     const documents = await fetchVehicleDocumentsBatch(vehicleIds)
 
     const result = vehicles.map((vehicle: VehicleDBRecord) => {
       const vehicleDocs = documents.filter((doc) => doc.vehicle_id === vehicle.id)
-      return mapVehicleToAPI(vehicle, vehicleDocs)
+      const operator = vehicle.operator_id ? operatorMap.get(vehicle.operator_id) as any : null
+      const vehicleType = vehicle.vehicle_type_id ? vehicleTypeMap.get(vehicle.vehicle_type_id) as any : null
+      return mapVehicleToAPI(vehicle, vehicleDocs, operator, vehicleType)
     })
+
+    // Include legacy data from datasheet/Xe if requested or by default
+    if (includeLegacy !== 'false') {
+      try {
+        // Check cache first
+        const now = Date.now()
+        let legacyVehicles: any[] = []
+        
+        if (legacyVehiclesCache.data && (now - legacyVehiclesCache.timestamp) < LEGACY_CACHE_TTL) {
+          legacyVehicles = legacyVehiclesCache.data
+        } else {
+          // Fetch and cache legacy data
+          const legacySnap = await firebaseDb.ref('datasheet/Xe').once('value')
+          const legacyData = legacySnap.val()
+          
+          if (legacyData) {
+            for (const [key, xe] of Object.entries(legacyData)) {
+              const x = xe as any
+              if (!x) continue
+              
+              // Support both new (English) and old (Vietnamese) field names
+              const plateNumber = x.plate_number || x.BienSo || ''
+              if (!plateNumber) continue
+              
+              // Map legacy data to API format with proper object structure
+              legacyVehicles.push({
+                id: `legacy_${key}`,
+                plateNumber,
+                vehicleType: { id: null, name: x.vehicle_type || x.LoaiXe || '' },
+                vehicleTypeName: x.vehicle_type || x.LoaiXe || '',
+                seatCapacity: parseInt(x.seat_count || x.SoCho) || 0,
+                bedCapacity: 0,
+                manufacturer: x.manufacturer || x.NhanHieu || '',
+                modelCode: x.model_code || x.SoLoai || '',
+                manufactureYear: (x.manufacture_year || x.NamSanXuat) ? parseInt(x.manufacture_year || x.NamSanXuat) : null,
+                color: x.color || x.MauSon || '',
+                chassisNumber: x.chassis_number || x.SoKhung || '',
+                engineNumber: x.engine_number || x.SoMay || '',
+                operatorId: null,
+                operator: { id: null, name: x.owner_name || x.TenDangKyXe || '', code: '' },
+                operatorName: x.owner_name || x.TenDangKyXe || '',
+                isActive: true,
+                notes: x.notes || x.GhiChu || '',
+                source: 'legacy',
+                inspectionExpiryDate: x.inspection_expiry || x.NgayHetHanKiemDinh || null,
+                insuranceExpiryDate: x.insurance_expiry || x.NgayHetHanBaoHiem || null,
+                documents: {}
+              })
+            }
+          }
+          
+          // Update cache
+          legacyVehiclesCache = { data: legacyVehicles, timestamp: now }
+        }
+        
+        // Filter out duplicates by plate number
+        const existingPlates = new Set(
+          vehicles.map((v: any) => (v.plate_number || '').toUpperCase())
+        )
+        
+        for (const legacyVehicle of legacyVehicles) {
+          const plate = (legacyVehicle.plateNumber || '').toUpperCase()
+          if (!existingPlates.has(plate)) {
+            result.push(legacyVehicle)
+          }
+        }
+      } catch (legacyError) {
+        console.error('Failed to fetch legacy vehicles:', legacyError)
+      }
+    }
 
     return res.json(result)
   } catch (error: unknown) {
@@ -116,15 +199,27 @@ export const getVehicleById = async (req: Request, res: Response) => {
 
     const { data: vehicle, error } = await firebase
       .from('vehicles')
-      .select('*, operators:operator_id(id, name, code), vehicle_types:vehicle_type_id(id, name)')
+      .select('*')
       .eq('id', id)
       .single()
 
     if (error) throw error
     if (!vehicle) return res.status(404).json({ error: 'Vehicle not found' })
 
+    // Fetch operator and vehicle_type separately (Firebase RTDB doesn't support joins)
+    let operator = null
+    let vehicleType = null
+    if (vehicle.operator_id) {
+      const { data: op } = await firebase.from('operators').select('id, name, code').eq('id', vehicle.operator_id).single()
+      operator = op
+    }
+    if (vehicle.vehicle_type_id) {
+      const { data: vt } = await firebase.from('vehicle_types').select('id, name').eq('id', vehicle.vehicle_type_id).single()
+      vehicleType = vt
+    }
+
     const documents = await fetchVehicleDocuments(id)
-    return res.json(mapVehicleToAPI(vehicle, documents))
+    return res.json(mapVehicleToAPI(vehicle, documents, operator, vehicleType))
   } catch (error: unknown) {
     const err = error as { name?: string; errors?: Array<{ message: string }>; message?: string }
     if (err.name === 'ZodError') return res.status(400).json({ error: err.errors?.[0]?.message })
@@ -159,17 +254,29 @@ export const createVehicle = async (req: Request, res: Response) => {
         notes: validated.notes || null,
         is_active: true,
       })
-      .select('*, operators:operator_id(id, name, code), vehicle_types:vehicle_type_id(id, name)')
+      .select('*')
       .single()
 
     if (error) throw error
+
+    // Fetch operator and vehicle_type separately (Firebase RTDB doesn't support joins)
+    let operator = null
+    let vehicleType = null
+    if (vehicle.operator_id) {
+      const { data: op } = await firebase.from('operators').select('id, name, code').eq('id', vehicle.operator_id).single()
+      operator = op
+    }
+    if (vehicle.vehicle_type_id) {
+      const { data: vt } = await firebase.from('vehicle_types').select('id, name').eq('id', vehicle.vehicle_type_id).single()
+      vehicleType = vt
+    }
 
     if (validated.documents) {
       await upsertDocuments(vehicle.id, validated.documents as Record<string, { number: string; issueDate: string; expiryDate: string; issuingAuthority?: string; documentUrl?: string; notes?: string }>)
     }
 
     const documents = await fetchVehicleDocuments(vehicle.id)
-    return res.status(201).json(mapVehicleToAPI(vehicle, documents))
+    return res.status(201).json(mapVehicleToAPI(vehicle, documents, operator, vehicleType))
   } catch (error: unknown) {
     const err = error as { code?: string; name?: string; errors?: Array<{ message: string }>; message?: string }
     if (err.code === '23505') return res.status(409).json({ error: 'Vehicle with this plate number already exists' })
@@ -221,26 +328,38 @@ export const updateVehicle = async (req: AuthRequest, res: Response) => {
 
     const { data: vehicle } = await firebase
       .from('vehicles')
-      .select('*, operators:operator_id(id, name, code), vehicle_types:vehicle_type_id(id, name)')
+      .select('*')
       .eq('id', id)
       .single()
 
+    if (!vehicle) {
+      return res.status(404).json({ error: 'Vehicle not found after update' })
+    }
+
+    // Fetch operator and vehicle_type separately (Firebase RTDB doesn't support joins)
+    let operator = null
+    let vehicleType = null
+    if (vehicle.operator_id) {
+      const { data: op } = await firebase.from('operators').select('id, name, code').eq('id', vehicle.operator_id).single()
+      operator = op
+    }
+    if (vehicle.vehicle_type_id) {
+      const { data: vt } = await firebase.from('vehicle_types').select('id, name').eq('id', vehicle.vehicle_type_id).single()
+      vehicleType = vt
+    }
+
     // Sync denormalized data if needed
     if (updateData.plate_number || updateData.operator_id !== undefined) {
-      const operatorData = vehicle.operators
-        ? (Array.isArray(vehicle.operators) ? vehicle.operators[0] : vehicle.operators)
-        : null
-
       syncVehicleChanges(id, {
         plateNumber: vehicle.plate_number,
         operatorId: vehicle.operator_id,
-        operatorName: operatorData?.name || null,
-        operatorCode: operatorData?.code || null,
+        operatorName: operator?.name || null,
+        operatorCode: operator?.code || null,
       }).catch((err) => console.error('[Vehicle Update] Failed to sync denormalized data:', err))
     }
 
     const documents = await fetchVehicleDocuments(id)
-    return res.json(mapVehicleToAPI(vehicle, documents))
+    return res.json(mapVehicleToAPI(vehicle, documents, operator, vehicleType))
   } catch (error: unknown) {
     const err = error as { name?: string; errors?: Array<{ message: string }>; message?: string }
     if (err.name === 'ZodError') return res.status(400).json({ error: err.errors?.[0]?.message })

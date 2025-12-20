@@ -55,6 +55,11 @@ export default function QuanLyLaiXe() {
     setIsLoading(true)
     try {
       const data = await driverService.getAll()
+      // DEBUG: Log để kiểm tra data từ API
+      console.log('[DEBUG] Loaded drivers:', data)
+      console.log('[DEBUG] First driver:', data[0])
+      console.log('[DEBUG] First driver operators:', data[0]?.operators)
+      console.log('[DEBUG] First driver operator:', data[0]?.operator)
       setDrivers(data)
     } catch (error) {
       console.error("Failed to load drivers:", error)

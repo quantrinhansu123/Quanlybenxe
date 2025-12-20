@@ -557,15 +557,19 @@ export const updateVehicle = async (req: AuthRequest, res: Response) => {
       .eq('id', id)
       .single()
 
+    if (!vehicle) {
+      return res.status(404).json({ error: 'Vehicle not found after update' })
+    }
+
     // Fetch operator and vehicle_type for manual join
     let operator = null
     let vehicleType = null
     
-    if (vehicle?.operator_id) {
+    if (vehicle.operator_id) {
       const { data: op } = await firebase.from('operators').select('*').eq('id', vehicle.operator_id).single()
       operator = op
     }
-    if (vehicle?.vehicle_type_id) {
+    if (vehicle.vehicle_type_id) {
       const { data: vt } = await firebase.from('vehicle_types').select('*').eq('id', vehicle.vehicle_type_id).single()
       vehicleType = vt
     }

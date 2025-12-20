@@ -15,6 +15,7 @@ router.use(authenticate)
 router.get('/', getDashboardData)
 router.get('/stats', getStats)
 router.get('/chart', getChartData)
+router.get('/chart-data', getChartData)
 router.get('/recent-activity', getRecentActivity)
 router.get('/warnings', getWarnings)
 

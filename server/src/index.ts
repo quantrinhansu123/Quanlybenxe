@@ -24,6 +24,7 @@ import dashboardRoutes from './routes/dashboard.routes.js'
 import uploadRoutes from './routes/upload.routes.js'
 import vehicleBadgeRoutes from './routes/vehicle-badge.routes.js'
 import provinceRoutes from './routes/province.routes.js'
+import chatRoutes from './modules/chat/chat.routes.js'
 
 dotenv.config()
 
@@ -107,6 +108,7 @@ app.use('/api/dashboard', dashboardRoutes)
 app.use('/api/upload', uploadRoutes)
 app.use('/api/vehicle-badges', vehicleBadgeRoutes)
 app.use('/api/provinces', provinceRoutes)
+app.use('/api/chat', chatRoutes)
 
 // Error handling
 app.use(errorHandler)

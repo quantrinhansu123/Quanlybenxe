@@ -27,14 +27,15 @@ import type { Vehicle } from "@/types"
 import { useUIStore } from "@/store/ui.store"
 import { format, isValid, parseISO } from "date-fns"
 
-// Helper functions to extract display values
+// Helper functions to extract display values (supports both new and legacy formats)
 const getVehicleTypeName = (vehicle: Vehicle): string => {
-  // Only return name, not ID (IDs look ugly in UI)
-  return vehicle.vehicleType?.name || ""
+  const v = vehicle as any
+  return vehicle.vehicleType?.name || v.vehicleTypeName || v.vehicleType || ""
 }
 
 const getOperatorName = (vehicle: Vehicle): string => {
-  return vehicle.operator?.name || ""
+  const v = vehicle as any
+  return vehicle.operator?.name || v.operatorName || ""
 }
 
 // Helper function to format date (supports DD/MM/YYYY and ISO formats)
@@ -59,6 +60,8 @@ export default function QuanLyXe() {
   const [viewMode, setViewMode] = useState<"create" | "edit" | "view">("create")
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
   const [vehicleToDelete, setVehicleToDelete] = useState<Vehicle | null>(null)
+  const [currentPage, setCurrentPage] = useState(1)
+  const itemsPerPage = 20
   const setTitle = useUIStore((state) => state.setTitle)
 
   useEffect(() => {
@@ -120,6 +123,17 @@ export default function QuanLyXe() {
 
     return true
   })
+
+  // Pagination calculations
+  const totalPages = Math.ceil(filteredVehicles.length / itemsPerPage)
+  const startIndex = (currentPage - 1) * itemsPerPage
+  const endIndex = startIndex + itemsPerPage
+  const paginatedVehicles = filteredVehicles.slice(startIndex, endIndex)
+
+  // Reset to page 1 when filters change
+  useEffect(() => {
+    setCurrentPage(1)
+  }, [searchQuery, filterVehicleType, filterOperator, filterStatus])
 
   const handleCreate = () => {
     setSelectedVehicle(null)
@@ -263,7 +277,7 @@ export default function QuanLyXe() {
                 </TableCell>
               </TableRow>
             ) : (
-              filteredVehicles.map((vehicle: any) => (
+              paginatedVehicles.map((vehicle: any) => (
                 <TableRow key={vehicle.id}>
                   <TableCell className="font-medium text-center">
                     {vehicle.plateNumber}
@@ -317,6 +331,62 @@ export default function QuanLyXe() {
           </TableBody>
         </Table>
       </Card>
+
+      {/* Pagination */}
+      {filteredVehicles.length > 0 && (
+        <Card>
+          <CardContent className="py-4">
+            <div className="flex items-center justify-between">
+              <p className="text-sm text-gray-600">
+                Hiển thị {startIndex + 1}-{Math.min(endIndex, filteredVehicles.length)} trong tổng số {filteredVehicles.length} xe
+              </p>
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setCurrentPage((prev) => Math.max(1, prev - 1))}
+                  disabled={currentPage === 1}
+                >
+                  Trang trước
+                </Button>
+                <div className="flex items-center gap-1">
+                  {Array.from({ length: totalPages }, (_, i) => i + 1)
+                    .filter((page) => {
+                      return (
+                        page === 1 ||
+                        page === totalPages ||
+                        (page >= currentPage - 1 && page <= currentPage + 1)
+                      )
+                    })
+                    .map((page, index, array) => (
+                      <span key={page}>
+                        {index > 0 && array[index - 1] !== page - 1 && (
+                          <span className="px-2 text-gray-400">...</span>
+                        )}
+                        <Button
+                          variant={currentPage === page ? "default" : "outline"}
+                          size="sm"
+                          onClick={() => setCurrentPage(page)}
+                          className="min-w-[36px]"
+                        >
+                          {page}
+                        </Button>
+                      </span>
+                    ))}
+                </div>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setCurrentPage((prev) => Math.min(totalPages, prev + 1))}
+                  disabled={currentPage === totalPages}
+                >
+                  Trang sau
+                </Button>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Dialog */}
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
