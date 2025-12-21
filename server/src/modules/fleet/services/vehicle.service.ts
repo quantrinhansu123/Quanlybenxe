@@ -1,137 +1,229 @@
 /**
  * Vehicle Service
- * Business logic layer for Vehicle entity
+ * Business logic layer for Vehicle entity with legacy/badge support
  */
 
-import { VehicleAPI } from '../../../shared/mappers/entity-mappers.js'
-import { AlreadyExistsError, ValidationError } from '../../../shared/errors/app-error.js'
-import { vehicleRepository, VehicleRepository } from '../repositories/vehicle.repository.js'
+import { VehicleAPI } from '../../../shared/mappers/entity-mappers.js';
+import { AlreadyExistsError, ValidationError } from '../../../shared/errors/app-error.js';
+import { vehicleRepository, VehicleRepository } from '../repositories/vehicle.repository.js';
+import { vehicleCacheService, LegacyVehicleData, BadgeVehicleData } from './vehicle-cache.service.js';
 
 export interface CreateVehicleDTO {
-  plateNumber: string
-  vehicleTypeId?: string
-  operatorId?: string
-  seatCapacity: number
-  bedCapacity?: number
-  chassisNumber?: string
-  engineNumber?: string
-  imageUrl?: string
-  insuranceExpiryDate?: string
-  inspectionExpiryDate?: string
-  cargoLength?: number
-  cargoWidth?: number
-  cargoHeight?: number
-  gpsProvider?: string
-  gpsUsername?: string
-  gpsPassword?: string
-  province?: string
-  notes?: string
-  isActive?: boolean
+  plateNumber: string;
+  vehicleTypeId?: string;
+  operatorId?: string;
+  seatCapacity: number;
+  bedCapacity?: number;
+  chassisNumber?: string;
+  engineNumber?: string;
+  imageUrl?: string;
+  insuranceExpiryDate?: string;
+  inspectionExpiryDate?: string;
+  cargoLength?: number;
+  cargoWidth?: number;
+  cargoHeight?: number;
+  gpsProvider?: string;
+  gpsUsername?: string;
+  gpsPassword?: string;
+  province?: string;
+  notes?: string;
+  isActive?: boolean;
 }
 
 export interface UpdateVehicleDTO extends Partial<CreateVehicleDTO> {}
 
 export interface VehicleFilters {
-  operatorId?: string
-  isActive?: boolean
+  operatorId?: string;
+  isActive?: boolean | 'all';
+  includeLegacy?: boolean;
 }
+
+export type CombinedVehicle = VehicleAPI | LegacyVehicleData | BadgeVehicleData;
 
 export class VehicleService {
   constructor(private repository: VehicleRepository) {}
 
-  /**
-   * Get all vehicles with optional filters
-   */
-  async getAll(filters?: VehicleFilters): Promise<VehicleAPI[]> {
-    let vehicles = await this.repository.findAllWithRelations()
+  async getAll(filters?: VehicleFilters): Promise<CombinedVehicle[]> {
+    const { operatorId, isActive, includeLegacy = true } = filters || {};
+    const isLegacyOperator = operatorId?.startsWith('legacy_');
 
-    if (filters?.operatorId) {
-      vehicles = vehicles.filter((v) => v.operatorId === filters.operatorId)
-    }
-    if (filters?.isActive !== undefined) {
-      vehicles = vehicles.filter((v) => v.isActive === filters.isActive)
+    // For legacy operators, skip DB queries
+    let dbVehicles: VehicleAPI[] = [];
+    if (!isLegacyOperator) {
+      dbVehicles = await this.getDbVehicles(operatorId, isActive);
     }
 
-    return vehicles
+    // Build plate set for deduplication
+    const existingPlates = new Set(dbVehicles.map((v) => v.plateNumber.toUpperCase()));
+
+    // Merge with legacy/badge if needed
+    let result: CombinedVehicle[] = [...dbVehicles];
+
+    if (includeLegacy && (!operatorId || isLegacyOperator)) {
+      const legacyVehicles = await this.getLegacyVehicles(operatorId, isLegacyOperator ?? false, existingPlates);
+      result = [...result, ...legacyVehicles];
+
+      // Add badge vehicles only when not filtering by legacy operator
+      if (!isLegacyOperator) {
+        const badgeVehicles = await this.getBadgeVehicles(existingPlates);
+        result = [...result, ...badgeVehicles];
+      }
+    }
+
+    return result;
   }
 
-  /**
-   * Get vehicle by ID with relations
-   */
-  async getById(id: string): Promise<VehicleAPI> {
-    const vehicle = await this.repository.findByIdWithRelations(id)
+  private async getDbVehicles(operatorId?: string, isActive?: boolean | 'all'): Promise<VehicleAPI[]> {
+    let vehicles = await this.repository.findAllWithRelations();
+
+    if (operatorId) {
+      vehicles = vehicles.filter((v) => v.operatorId === operatorId);
+    }
+
+    if (isActive !== 'all' && isActive !== undefined) {
+      vehicles = vehicles.filter((v) => v.isActive === isActive);
+    } else if (isActive === undefined) {
+      // Default: only active vehicles
+      vehicles = vehicles.filter((v) => v.isActive === true);
+    }
+
+    return vehicles;
+  }
+
+  private async getLegacyVehicles(
+    operatorId: string | undefined,
+    isLegacyOperator: boolean,
+    existingPlates: Set<string>
+  ): Promise<LegacyVehicleData[]> {
+    const legacyVehicles = await vehicleCacheService.getLegacyVehicles();
+    const result: LegacyVehicleData[] = [];
+
+    if (isLegacyOperator && operatorId) {
+      const operatorName = await vehicleCacheService.getLegacyOperatorName(operatorId);
+      if (operatorName) {
+        const filtered = vehicleCacheService.filterLegacyByOperator(legacyVehicles, operatorName);
+        for (const v of filtered) {
+          const plate = v.plateNumber.toUpperCase();
+          if (!existingPlates.has(plate)) {
+            result.push(v);
+            existingPlates.add(plate);
+          }
+        }
+      }
+    } else {
+      for (const v of legacyVehicles) {
+        const plate = v.plateNumber.toUpperCase();
+        if (!existingPlates.has(plate)) {
+          result.push(v);
+          existingPlates.add(plate);
+        }
+      }
+    }
+
+    return result;
+  }
+
+  private async getBadgeVehicles(existingPlates: Set<string>): Promise<BadgeVehicleData[]> {
+    const badgeVehicles = await vehicleCacheService.getBadgeVehicles();
+    const result: BadgeVehicleData[] = [];
+
+    for (const v of badgeVehicles) {
+      const plate = v.plateNumber.toUpperCase();
+      if (!existingPlates.has(plate)) {
+        result.push(v);
+        existingPlates.add(plate);
+      }
+    }
+
+    return result;
+  }
+
+  async getById(id: string): Promise<CombinedVehicle> {
+    // Handle legacy vehicles
+    if (id.startsWith('legacy_')) {
+      const key = id.replace('legacy_', '');
+      const vehicle = await vehicleCacheService.getLegacyVehicleById(key);
+      if (!vehicle) {
+        throw new ValidationError('Legacy vehicle not found');
+      }
+      return vehicle;
+    }
+
+    // Handle badge vehicles
+    if (id.startsWith('badge_')) {
+      const key = id.replace('badge_', '');
+      const vehicle = await vehicleCacheService.getBadgeVehicleById(key);
+      if (!vehicle) {
+        throw new ValidationError('Badge vehicle not found');
+      }
+      return vehicle;
+    }
+
+    // Normal vehicle
+    const vehicle = await this.repository.findByIdWithRelations(id);
     if (!vehicle) {
-      throw new ValidationError(`Vehicle with ID '${id}' not found`)
+      throw new ValidationError(`Vehicle with ID '${id}' not found`);
     }
-    return vehicle
+    return vehicle;
   }
 
-  /**
-   * Create a new vehicle
-   */
   async create(data: CreateVehicleDTO): Promise<VehicleAPI> {
-    // Validate required fields
     if (!data.plateNumber?.trim()) {
-      throw new ValidationError('Plate number is required')
+      throw new ValidationError('Plate number is required');
     }
     if (data.seatCapacity === undefined || data.seatCapacity < 0) {
-      throw new ValidationError('Valid seat capacity is required')
+      throw new ValidationError('Valid seat capacity is required');
     }
 
-    // Check for duplicate plate number
-    const plateExists = await this.repository.plateNumberExists(data.plateNumber)
+    const plateExists = await this.repository.plateNumberExists(data.plateNumber);
     if (plateExists) {
-      throw new AlreadyExistsError('Vehicle', 'plateNumber', data.plateNumber)
+      throw new AlreadyExistsError('Vehicle', 'plateNumber', data.plateNumber);
     }
 
     return this.repository.create({
       ...data,
       isActive: data.isActive ?? true,
-    })
+    });
   }
 
-  /**
-   * Update a vehicle
-   */
   async update(id: string, data: UpdateVehicleDTO): Promise<VehicleAPI> {
-    // Ensure vehicle exists
-    await this.getById(id)
+    await this.getById(id);
 
-    // Check for duplicate plate number if updating
     if (data.plateNumber) {
-      const plateExists = await this.repository.plateNumberExists(data.plateNumber, id)
+      const plateExists = await this.repository.plateNumberExists(data.plateNumber, id);
       if (plateExists) {
-        throw new AlreadyExistsError('Vehicle', 'plateNumber', data.plateNumber)
+        throw new AlreadyExistsError('Vehicle', 'plateNumber', data.plateNumber);
       }
     }
 
-    await this.repository.updateById(id, data)
-    return this.getById(id)
+    await this.repository.updateById(id, data);
+    const vehicle = await this.repository.findByIdWithRelations(id);
+    if (!vehicle) {
+      throw new ValidationError('Vehicle not found after update');
+    }
+    return vehicle;
   }
 
-  /**
-   * Delete a vehicle
-   */
   async delete(id: string): Promise<void> {
-    await this.repository.deleteById(id)
+    await this.repository.deleteById(id);
   }
 
-  /**
-   * Toggle vehicle active status
-   */
   async toggleActive(id: string): Promise<VehicleAPI> {
-    const vehicle = await this.getById(id)
-    await this.repository.updateById(id, { isActive: !vehicle.isActive })
-    return this.getById(id)
+    const vehicle = await this.getById(id);
+    if ('source' in vehicle) {
+      throw new ValidationError('Cannot toggle active status of legacy/badge vehicles');
+    }
+    await this.repository.updateById(id, { isActive: !vehicle.isActive });
+    const updated = await this.repository.findByIdWithRelations(id);
+    if (!updated) {
+      throw new ValidationError('Vehicle not found after update');
+    }
+    return updated;
   }
 
-  /**
-   * Get vehicles by operator
-   */
   async getByOperator(operatorId: string): Promise<VehicleAPI[]> {
-    return this.repository.findByOperatorId(operatorId)
+    return this.repository.findByOperatorId(operatorId);
   }
 }
 
-// Export singleton instance
-export const vehicleService = new VehicleService(vehicleRepository)
+export const vehicleService = new VehicleService(vehicleRepository);
