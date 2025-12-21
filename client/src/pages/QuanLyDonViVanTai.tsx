@@ -591,20 +591,22 @@ export default function QuanLyDonViVanTai() {
                               {operator.isActive ? "Hoạt động" : "Ngừng"}
                             </span>
                           </td>
-                          <td className="px-6 py-4" onClick={(e) => e.stopPropagation()}>
-                            <div className="flex items-center justify-center gap-1 opacity-60 group-hover:opacity-100 transition-opacity">
+                          <td className="px-6 py-4 relative z-10" onClick={(e) => e.stopPropagation()}>
+                            <div className="flex items-center justify-center gap-1 opacity-100 transition-opacity">
                               <button
+                                type="button"
                                 onClick={(e) => { e.stopPropagation(); handleView(operator); }}
-                                className="p-2 rounded-lg text-slate-500 hover:text-orange-600 hover:bg-orange-50 transition-all"
+                                className="p-2 rounded-lg text-slate-500 hover:text-orange-600 hover:bg-orange-50 transition-all cursor-pointer"
                                 title="Xem chi tiết"
                               >
                                 <Eye className="h-4 w-4" />
                               </button>
                               <button
+                                type="button"
                                 onClick={(e) => { e.stopPropagation(); handleEdit(operator); }}
-                                className={`p-2 rounded-lg transition-all ${
+                                className={`p-2 rounded-lg transition-all cursor-pointer ${
                                   isLegacy 
-                                    ? "text-slate-300 cursor-not-allowed" 
+                                    ? "text-slate-300 cursor-not-allowed pointer-events-none" 
                                     : "text-slate-500 hover:text-amber-600 hover:bg-amber-50"
                                 }`}
                                 title={isLegacy ? "Không thể sửa dữ liệu legacy" : "Chỉnh sửa"}
@@ -613,10 +615,11 @@ export default function QuanLyDonViVanTai() {
                                 <Edit className="h-4 w-4" />
                               </button>
                               <button
+                                type="button"
                                 onClick={(e) => { e.stopPropagation(); handleDelete(operator); }}
-                                className={`p-2 rounded-lg transition-all ${
+                                className={`p-2 rounded-lg transition-all cursor-pointer ${
                                   isLegacy 
-                                    ? "text-slate-300 cursor-not-allowed" 
+                                    ? "text-slate-300 cursor-not-allowed pointer-events-none" 
                                     : "text-slate-500 hover:text-rose-600 hover:bg-rose-50"
                                 }`}
                                 title={isLegacy ? "Không thể xóa dữ liệu legacy" : "Xóa"}
@@ -714,20 +717,22 @@ export default function QuanLyDonViVanTai() {
                     </div>
 
                     <div 
-                      className="flex items-center justify-end gap-1 pt-4 border-t border-slate-100"
+                      className="relative z-10 flex items-center justify-end gap-1 pt-4 border-t border-slate-100"
                       onClick={(e) => e.stopPropagation()}
                     >
                       <button
+                        type="button"
                         onClick={(e) => { e.stopPropagation(); handleView(operator); }}
-                        className="p-2 rounded-lg text-slate-400 hover:text-orange-600 hover:bg-orange-50 transition-all"
+                        className="p-2 rounded-lg text-slate-400 hover:text-orange-600 hover:bg-orange-50 transition-all cursor-pointer"
                       >
                         <Eye className="h-4 w-4" />
                       </button>
                       <button
+                        type="button"
                         onClick={(e) => { e.stopPropagation(); handleEdit(operator); }}
-                        className={`p-2 rounded-lg transition-all ${
+                        className={`p-2 rounded-lg transition-all cursor-pointer ${
                           isLegacy 
-                            ? "text-slate-300 cursor-not-allowed" 
+                            ? "text-slate-300 cursor-not-allowed pointer-events-none" 
                             : "text-slate-400 hover:text-amber-600 hover:bg-amber-50"
                         }`}
                         disabled={isLegacy}
@@ -735,10 +740,11 @@ export default function QuanLyDonViVanTai() {
                         <Edit className="h-4 w-4" />
                       </button>
                       <button
+                        type="button"
                         onClick={(e) => { e.stopPropagation(); handleDelete(operator); }}
-                        className={`p-2 rounded-lg transition-all ${
+                        className={`p-2 rounded-lg transition-all cursor-pointer ${
                           isLegacy 
-                            ? "text-slate-300 cursor-not-allowed" 
+                            ? "text-slate-300 cursor-not-allowed pointer-events-none" 
                             : "text-slate-400 hover:text-rose-600 hover:bg-rose-50"
                         }`}
                         disabled={isLegacy}

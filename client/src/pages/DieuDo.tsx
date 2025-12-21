@@ -6,7 +6,6 @@ import {
   FileCheck,
   Plus,
   Bus,
-  Clock,
   MapPin,
   FileText,
   User,
@@ -20,7 +19,13 @@ import {
   Pencil,
   Trash2,
   Zap,
-  Activity
+  Activity,
+  Radio,
+  Radar,
+  Timer,
+  CheckCircle2,
+  AlertTriangle,
+  Sparkles
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -51,106 +56,144 @@ import { cn } from "@/lib/utils";
 
 type DisplayStatus = "in-station" | "permit-issued" | "paid" | "departed";
 
-// Column configuration with distinct visual styles - Light theme
+// Enhanced Column Configuration with Glass Effect
 const columnConfig: Record<DisplayStatus, {
   title: string;
   shortTitle: string;
   gradient: string;
+  glassGradient: string;
   accentColor: string;
   iconBg: string;
   iconColor: string;
   icon: React.ElementType;
   borderColor: string;
-  headerBg: string;
+  headerGradient: string;
+  glowColor: string;
+  dotColor: string;
 }> = {
   "in-station": {
     title: "Xe trong bến",
     shortTitle: "Trong bến",
-    gradient: "from-sky-50 to-cyan-50",
+    gradient: "from-sky-500/10 via-cyan-500/5 to-transparent",
+    glassGradient: "from-sky-500 via-cyan-500 to-blue-600",
     accentColor: "text-sky-700",
-    iconBg: "bg-sky-100",
-    iconColor: "text-sky-600",
-    icon: Bus,
-    borderColor: "border-sky-200",
-    headerBg: "bg-gradient-to-r from-sky-500 to-cyan-500"
+    iconBg: "bg-gradient-to-br from-sky-500 to-cyan-600",
+    iconColor: "text-white",
+    icon: Radio,
+    borderColor: "border-sky-200/50",
+    headerGradient: "from-sky-600 via-sky-500 to-cyan-500",
+    glowColor: "shadow-sky-500/20",
+    dotColor: "bg-sky-500"
   },
   "permit-issued": {
     title: "Đã cấp nốt",
     shortTitle: "Cấp nốt",
-    gradient: "from-amber-50 to-orange-50",
+    gradient: "from-amber-500/10 via-orange-500/5 to-transparent",
+    glassGradient: "from-amber-500 via-orange-500 to-yellow-600",
     accentColor: "text-amber-700",
-    iconBg: "bg-amber-100",
-    iconColor: "text-amber-600",
+    iconBg: "bg-gradient-to-br from-amber-500 to-orange-600",
+    iconColor: "text-white",
     icon: FileCheck,
-    borderColor: "border-amber-200",
-    headerBg: "bg-gradient-to-r from-amber-500 to-orange-500"
+    borderColor: "border-amber-200/50",
+    headerGradient: "from-amber-600 via-amber-500 to-orange-500",
+    glowColor: "shadow-amber-500/20",
+    dotColor: "bg-amber-500"
   },
   "paid": {
     title: "Đã thanh toán",
     shortTitle: "Thanh toán",
-    gradient: "from-emerald-50 to-teal-50",
+    gradient: "from-emerald-500/10 via-teal-500/5 to-transparent",
+    glassGradient: "from-emerald-500 via-teal-500 to-green-600",
     accentColor: "text-emerald-700",
-    iconBg: "bg-emerald-100",
-    iconColor: "text-emerald-600",
+    iconBg: "bg-gradient-to-br from-emerald-500 to-teal-600",
+    iconColor: "text-white",
     icon: Banknote,
-    borderColor: "border-emerald-200",
-    headerBg: "bg-gradient-to-r from-emerald-500 to-teal-500"
+    borderColor: "border-emerald-200/50",
+    headerGradient: "from-emerald-600 via-emerald-500 to-teal-500",
+    glowColor: "shadow-emerald-500/20",
+    dotColor: "bg-emerald-500"
   },
   "departed": {
-    title: "Sẵn sàng xuất bến",
+    title: "Sẵn sàng xuất",
     shortTitle: "Xuất bến",
-    gradient: "from-violet-50 to-purple-50",
+    gradient: "from-violet-500/10 via-purple-500/5 to-transparent",
+    glassGradient: "from-violet-500 via-purple-500 to-indigo-600",
     accentColor: "text-violet-700",
-    iconBg: "bg-violet-100",
-    iconColor: "text-violet-600",
+    iconBg: "bg-gradient-to-br from-violet-500 to-purple-600",
+    iconColor: "text-white",
     icon: ArrowRight,
-    borderColor: "border-violet-200",
-    headerBg: "bg-gradient-to-r from-violet-500 to-purple-500"
+    borderColor: "border-violet-200/50",
+    headerGradient: "from-violet-600 via-violet-500 to-purple-500",
+    glowColor: "shadow-violet-500/20",
+    dotColor: "bg-violet-500"
   }
 };
 
-// Live indicator component
-function LiveIndicator({ count, color = "emerald" }: { count: number; color?: string }) {
-  const colors: Record<string, { ping: string; dot: string }> = {
-    emerald: { ping: "bg-emerald-400", dot: "bg-emerald-500" },
-    sky: { ping: "bg-sky-400", dot: "bg-sky-500" },
-    amber: { ping: "bg-amber-400", dot: "bg-amber-500" },
-    violet: { ping: "bg-violet-400", dot: "bg-violet-500" },
+// Radar Pulse Animation Component
+function RadarPulse({ count, color }: { count: number; color: string }) {
+  const colors: Record<string, string> = {
+    sky: "bg-sky-500",
+    amber: "bg-amber-500",
+    emerald: "bg-emerald-500",
+    violet: "bg-violet-500",
   };
-  const c = colors[color] || colors.emerald;
   
   return (
-    <div className="flex items-center gap-2 bg-white/80 backdrop-blur-sm px-2.5 py-1 rounded-full shadow-sm">
-      <span className="relative flex h-2 w-2">
-        <span className={cn("animate-ping absolute inline-flex h-full w-full rounded-full opacity-75", c.ping)}></span>
-        <span className={cn("relative inline-flex rounded-full h-2 w-2", c.dot)}></span>
-      </span>
-      <span className="text-xs font-bold text-gray-700 tabular-nums">{count}</span>
+    <div className="flex items-center gap-2.5 px-3 py-1.5 rounded-full bg-white/90 backdrop-blur-sm shadow-lg border border-white/50">
+      <div className="relative">
+        <span className={cn(
+          "absolute inline-flex h-3 w-3 rounded-full opacity-75 animate-ping",
+          colors[color]
+        )} />
+        <span className={cn(
+          "relative inline-flex h-3 w-3 rounded-full",
+          colors[color]
+        )} />
+      </div>
+      <span className="text-sm font-black text-slate-800 tabular-nums">{count}</span>
     </div>
   );
 }
 
-// Status badge component - Light theme
-function VehicleStatusBadge({ type }: { type: 'eligible' | 'ineligible' | 'returned' | 'irregular' }) {
+// Status Ribbon Component
+function StatusRibbon({ type }: { type: 'eligible' | 'ineligible' | 'returned' | 'irregular' }) {
   const configs = {
-    eligible: { bg: 'bg-emerald-100', text: 'text-emerald-700', dot: 'bg-emerald-500' },
-    ineligible: { bg: 'bg-rose-100', text: 'text-rose-700', dot: 'bg-rose-500' },
-    returned: { bg: 'bg-sky-100', text: 'text-sky-700', dot: 'bg-sky-500' },
-    irregular: { bg: 'bg-amber-100', text: 'text-amber-700', dot: 'bg-amber-500' },
+    eligible: { 
+      bg: 'bg-gradient-to-r from-emerald-500 to-teal-500', 
+      text: 'ĐỦ ĐK',
+      icon: CheckCircle2
+    },
+    ineligible: { 
+      bg: 'bg-gradient-to-r from-rose-500 to-red-500', 
+      text: 'THIẾU',
+      icon: XCircle
+    },
+    returned: { 
+      bg: 'bg-gradient-to-r from-sky-500 to-blue-500', 
+      text: 'TRẢ KHÁCH',
+      icon: Users
+    },
+    irregular: { 
+      bg: 'bg-gradient-to-r from-amber-500 to-orange-500', 
+      text: 'VÃNG LAI',
+      icon: AlertTriangle
+    },
   };
   const config = configs[type];
+  const Icon = config.icon;
   
   return (
-    <div className={cn("flex items-center gap-1.5 px-2 py-0.5 rounded-full", config.bg)}>
-      <span className={cn("h-1.5 w-1.5 rounded-full", config.dot)} />
-      <span className={cn("text-[10px] font-semibold uppercase tracking-wider", config.text)}>
-        {type === 'eligible' ? 'Đủ ĐK' : type === 'ineligible' ? 'Thiếu ĐK' : type === 'returned' ? 'Trả khách' : 'Vãng lai'}
-      </span>
+    <div className={cn(
+      "absolute -top-1 -right-1 flex items-center gap-1 px-2 py-0.5 rounded-full text-white text-[10px] font-bold uppercase tracking-wider shadow-lg",
+      config.bg
+    )}>
+      <Icon className="w-3 h-3" />
+      <span>{config.text}</span>
     </div>
   );
 }
 
-// Action button component - Light theme
+// Enhanced Action Button
 function ActionButton({ 
   icon: Icon, 
   onClick, 
@@ -163,24 +206,47 @@ function ActionButton({
   variant?: 'default' | 'success' | 'warning' | 'danger' | 'info';
 }) {
   const variants = {
-    default: 'hover:bg-gray-100 text-gray-500 hover:text-gray-700',
-    success: 'hover:bg-emerald-100 text-emerald-600 hover:text-emerald-700',
-    warning: 'hover:bg-amber-100 text-amber-600 hover:text-amber-700',
-    danger: 'hover:bg-rose-100 text-rose-600 hover:text-rose-700',
-    info: 'hover:bg-sky-100 text-sky-600 hover:text-sky-700',
+    default: 'bg-slate-100 hover:bg-slate-200 text-slate-600 hover:text-slate-800',
+    success: 'bg-emerald-100 hover:bg-emerald-200 text-emerald-600 hover:text-emerald-700 hover:shadow-emerald-200',
+    warning: 'bg-amber-100 hover:bg-amber-200 text-amber-600 hover:text-amber-700 hover:shadow-amber-200',
+    danger: 'bg-rose-100 hover:bg-rose-200 text-rose-600 hover:text-rose-700 hover:shadow-rose-200',
+    info: 'bg-sky-100 hover:bg-sky-200 text-sky-600 hover:text-sky-700 hover:shadow-sky-200',
   };
 
   return (
     <button
       onClick={onClick}
       className={cn(
-        "p-2 rounded-lg transition-all duration-200 hover:shadow-sm",
+        "p-2.5 rounded-xl transition-all duration-200 hover:shadow-lg hover:scale-105 active:scale-95",
         variants[variant]
       )}
       title={title}
     >
       <Icon className="h-4 w-4" />
     </button>
+  );
+}
+
+// Floating Dots Empty State
+function FloatingDotsEmpty({ message }: { message: string }) {
+  return (
+    <div className="flex flex-col items-center justify-center py-16">
+      <div className="relative w-24 h-24">
+        {/* Center icon */}
+        <div className="absolute inset-0 flex items-center justify-center">
+          <div className="w-16 h-16 rounded-2xl bg-slate-100 flex items-center justify-center">
+            <Bus className="w-8 h-8 text-slate-300" />
+          </div>
+        </div>
+        {/* Floating dots */}
+        <div className="absolute top-0 left-1/2 -translate-x-1/2 w-3 h-3 rounded-full bg-blue-300 animate-bounce" style={{ animationDelay: '0s', animationDuration: '1.5s' }} />
+        <div className="absolute bottom-2 left-2 w-2 h-2 rounded-full bg-emerald-300 animate-bounce" style={{ animationDelay: '0.2s', animationDuration: '1.5s' }} />
+        <div className="absolute bottom-2 right-2 w-2 h-2 rounded-full bg-amber-300 animate-bounce" style={{ animationDelay: '0.4s', animationDuration: '1.5s' }} />
+        <div className="absolute top-1/2 -left-1 w-2 h-2 rounded-full bg-violet-300 animate-bounce" style={{ animationDelay: '0.6s', animationDuration: '1.5s' }} />
+        <div className="absolute top-1/2 -right-1 w-2 h-2 rounded-full bg-rose-300 animate-bounce" style={{ animationDelay: '0.8s', animationDuration: '1.5s' }} />
+      </div>
+      <p className="text-slate-400 font-medium mt-4">{message}</p>
+    </div>
   );
 }
 
@@ -210,8 +276,6 @@ export default function DieuDo() {
     setTitle("Điều độ xe");
     loadVehicles();
     loadRecords();
-    
-    // Auto refresh every 30 seconds
     const interval = setInterval(loadRecords, 30000);
     return () => clearInterval(interval);
   }, [setTitle]);
@@ -273,7 +337,6 @@ export default function DieuDo() {
     return records
       .filter((record) => {
         if (record.currentStatus === "departed") return false;
-        
         const displayStatus = getDisplayStatus(record.currentStatus);
         if (status === "in-station") return displayStatus === "in-station";
         if (status === "permit-issued") return displayStatus === "permit-issued";
@@ -317,7 +380,6 @@ export default function DieuDo() {
 
   const vehicleOptions = vehicles
     .filter((v) => {
-      // Allow vehicle if it's not active OR if it's the vehicle being edited
       const isEditingThisVehicle = dialogType === "edit" && selectedRecord?.vehicleId === v.id;
       return !activeVehicleIds.has(v.id) || isEditingThisVehicle;
     })
@@ -419,8 +481,9 @@ export default function DieuDo() {
       }
       if (record.permitStatus === "rejected" || !record.permitStatus) {
         buttons.push(
-          <button
+          <ActionButton
             key="exit"
+            icon={BusEnterIcon}
             onClick={async (e) => {
               e.stopPropagation();
               if (window.confirm("Cho xe ra bến?")) {
@@ -433,23 +496,20 @@ export default function DieuDo() {
                 }
               }
             }}
-            className="p-1.5 rounded-lg hover:bg-rose-500/20 text-rose-400 hover:text-rose-300 transition-all"
             title="Cho xe ra bến"
-          >
-            <BusEnterIcon className="h-4 w-4" />
-          </button>
+            variant="danger"
+          />
         );
       }
     } else if (status === "departed" && record.currentStatus === "departure_ordered") {
       buttons.push(
-        <button
+        <ActionButton
           key="depart"
+          icon={BusEnterIcon}
           onClick={(e) => { e.stopPropagation(); handleAction(record, "depart"); }}
-          className="p-1.5 rounded-lg hover:bg-violet-500/20 text-violet-400 hover:text-violet-300 transition-all"
           title="Cho xe ra bến"
-        >
-          <BusEnterIcon className="h-4 w-4" />
-        </button>
+          variant="success"
+        />
       );
     }
 
@@ -466,7 +526,7 @@ export default function DieuDo() {
 
     if (electronicStatus === "loading") {
       return (
-        <div className="flex items-center gap-2 text-xs text-sky-600">
+        <div className="flex items-center gap-2 text-xs text-sky-600 bg-sky-50 px-2 py-1 rounded-lg">
           <RefreshCw className="h-3 w-3 animate-spin" />
           <span>Đang tải lệnh...</span>
         </div>
@@ -475,11 +535,11 @@ export default function DieuDo() {
 
     if (electronicCode) {
       return (
-        <div className="flex items-center gap-2 text-xs text-sky-600 font-medium">
+        <div className="flex items-center gap-2 text-xs font-semibold text-sky-600 bg-sky-50 px-2 py-1 rounded-lg">
           <Zap className="h-3 w-3" />
           {electronicUrl ? (
             <a href={electronicUrl} target="_blank" rel="noreferrer" 
-               className="hover:underline hover:text-sky-700" onClick={(e) => e.stopPropagation()}>
+               className="hover:underline" onClick={(e) => e.stopPropagation()}>
               {electronicCode}
             </a>
           ) : (
@@ -490,9 +550,9 @@ export default function DieuDo() {
     }
 
     return (
-      <div className="flex items-center gap-2 text-xs text-rose-500">
+      <div className="flex items-center gap-2 text-xs text-rose-500 bg-rose-50 px-2 py-1 rounded-lg">
         <XCircle className="h-3 w-3" />
-        <span>Chưa có lệnh điện tử</span>
+        <span>Chưa có lệnh</span>
       </div>
     );
   };
@@ -505,110 +565,119 @@ export default function DieuDo() {
     return null;
   };
 
-  const getVehicleIconColor = (record: DispatchRecord, status: DisplayStatus) => {
-    if (record.metadata?.type === "irregular") return "text-amber-600";
-    if (record.currentStatus === "passengers_dropped") return "text-sky-600";
-    if (record.permitStatus === "rejected" || (status === "paid" && !record.permitStatus)) return "text-rose-600";
-    if (record.permitStatus === "approved") return "text-emerald-600";
+  const getVehicleIconBg = (record: DispatchRecord, status: DisplayStatus) => {
+    if (record.metadata?.type === "irregular") return "from-amber-500 to-orange-600";
+    if (record.currentStatus === "passengers_dropped") return "from-sky-500 to-blue-600";
+    if (record.permitStatus === "rejected" || (status === "paid" && !record.permitStatus)) return "from-rose-500 to-red-600";
+    if (record.permitStatus === "approved") return "from-emerald-500 to-teal-600";
     
-    switch (status) {
-      case "permit-issued":
-      case "paid":
-      case "departed":
-        return "text-emerald-600";
-      default:
-        return "text-gray-500";
-    }
+    return columnConfig[status].iconBg.replace('bg-gradient-to-br ', '');
   };
 
   const renderVehicleIcon = (record: DispatchRecord, status: DisplayStatus) => {
-    const colorClass = getVehicleIconColor(record, status);
     const type = record.metadata?.type;
-
-    if (type === "augmented") return <BusPlusIcon className={cn("h-5 w-5", colorClass)} />;
-    if (type === "replacement") return <ArrowRightLeft className={cn("h-5 w-5", colorClass)} />;
+    if (type === "augmented") return <BusPlusIcon className="h-5 w-5 text-white" />;
+    if (type === "replacement") return <ArrowRightLeft className="h-5 w-5 text-white" />;
     if (!record.scheduleId && type !== "irregular" && status === "in-station") {
-      return <FileExclamationIcon className={cn("h-5 w-5", colorClass)} />;
+      return <FileExclamationIcon className="h-5 w-5 text-white" />;
     }
-    return <Bus className={cn("h-5 w-5", colorClass)} />;
+    return <Bus className="h-5 w-5 text-white" />;
   };
 
-  const renderVehicleCard = (record: DispatchRecord, status: DisplayStatus) => {
+  const renderVehicleCard = (record: DispatchRecord, status: DisplayStatus, index: number) => {
     const config = columnConfig[status];
     const vehicleStatus = getVehicleStatus(record, status);
+    const iconBg = getVehicleIconBg(record, status);
 
     return (
       <div
         key={record.id}
         className={cn(
-          "group relative rounded-xl p-4 cursor-pointer transition-all duration-300",
-          "bg-white border-2 shadow-sm",
-          "hover:shadow-lg hover:scale-[1.02]",
-          config.borderColor
+          "group relative rounded-2xl cursor-pointer transition-all duration-300",
+          "bg-white/90 backdrop-blur-sm border-2 shadow-md",
+          "hover:shadow-xl hover:scale-[1.02] hover:-translate-y-1",
+          config.borderColor,
+          config.glowColor
         )}
+        style={{
+          animation: `slideUp 0.4s ease-out ${index * 0.05}s backwards`
+        }}
         onClick={() => {
           if (status === "in-station") handleAction(record, "permit");
           else if (status === "permit-issued") navigate(`/thanh-toan/${record.id}`);
           else if (status === "paid") handleAction(record, "depart");
         }}
       >
-        {/* Header */}
-        <div className="flex items-center justify-between gap-3 mb-3">
-          <div className="flex items-center gap-3 min-w-0">
-            <div className={cn("p-2.5 rounded-xl", config.iconBg)}>
+        {/* Status Ribbon */}
+        {vehicleStatus && <StatusRibbon type={vehicleStatus} />}
+
+        <div className="p-4">
+          {/* Header */}
+          <div className="flex items-center gap-3 mb-4">
+            <div className={cn(
+              "p-3 rounded-xl bg-gradient-to-br shadow-lg",
+              iconBg
+            )}>
               {renderVehicleIcon(record, status)}
             </div>
-            <div className="min-w-0">
-              <h3 className="font-bold text-gray-900 text-base tracking-wide truncate">
+            <div className="flex-1 min-w-0">
+              <h3 className="font-black text-slate-900 text-lg tracking-wide">
                 {record.vehiclePlateNumber}
               </h3>
-              {vehicleStatus && <VehicleStatusBadge type={vehicleStatus} />}
-            </div>
-          </div>
-          <div className="flex items-center gap-1.5 text-xs text-gray-500 bg-gray-100 px-2 py-1 rounded-full">
-            <Clock className="h-3.5 w-3.5" />
-            <span className="tabular-nums font-medium">{formatVietnamDateTime(record.entryTime, "HH:mm")}</span>
-          </div>
-        </div>
-
-        {/* Info rows */}
-        <div className="space-y-2 mb-3">
-          {(record.seatCount || record.passengersArrived) && (
-            <div className="flex items-center justify-between text-sm">
-              <div className="flex items-center gap-2 text-gray-600">
-                <Users className="h-3.5 w-3.5" />
-                <span>{record.seatCount || record.passengersArrived} chỗ</span>
+              <div className="flex items-center gap-2 text-xs text-slate-500 mt-0.5">
+                <Timer className="h-3 w-3" />
+                <span className="font-mono font-semibold">
+                  {formatVietnamDateTime(record.entryTime, "HH:mm")}
+                </span>
               </div>
-              {record.boardingPermitTime && (
-                <div className="flex items-center gap-1.5 text-xs text-emerald-600">
-                  <FileCheck className="h-3 w-3" />
-                  <span>{formatVietnamDateTime(record.boardingPermitTime, "HH:mm")}</span>
+            </div>
+          </div>
+
+          {/* Info */}
+          <div className="space-y-2 mb-4">
+            {(record.seatCount || record.passengersArrived) && (
+              <div className="flex items-center justify-between text-sm">
+                <div className="flex items-center gap-2 text-slate-600">
+                  <Users className="h-4 w-4 text-slate-400" />
+                  <span className="font-medium">{record.seatCount || record.passengersArrived} chỗ</span>
                 </div>
-              )}
-            </div>
-          )}
+                {record.boardingPermitTime && (
+                  <div className="flex items-center gap-1.5 text-xs text-emerald-600 bg-emerald-50 px-2 py-1 rounded-lg">
+                    <FileCheck className="h-3 w-3" />
+                    <span className="font-semibold">{formatVietnamDateTime(record.boardingPermitTime, "HH:mm")}</span>
+                  </div>
+                )}
+              </div>
+            )}
 
-          {renderElectronicOrderInfo(record, status)}
+            {renderElectronicOrderInfo(record, status)}
 
-          {record.driverName && (
-            <div className="flex items-center gap-2 text-sm text-gray-600">
-              <User className="h-3.5 w-3.5" />
-              <span className="truncate">{record.driverName}</span>
-            </div>
-          )}
+            {record.driverName && (
+              <div className="flex items-center gap-2 text-sm text-slate-600">
+                <User className="h-4 w-4 text-slate-400" />
+                <span className="font-medium truncate">{record.driverName}</span>
+              </div>
+            )}
 
-          {record.routeName && (
-            <div className="flex items-center gap-2 text-sm text-gray-600">
-              <MapPin className="h-3.5 w-3.5" />
-              <span className="truncate">{record.routeName}</span>
-            </div>
-          )}
+            {record.routeName && (
+              <div className="flex items-center gap-2 text-sm text-slate-600">
+                <MapPin className="h-4 w-4 text-slate-400" />
+                <span className="font-medium truncate">{record.routeName}</span>
+              </div>
+            )}
+          </div>
+
+          {/* Actions - Always visible on mobile, hover on desktop */}
+          <div className="flex items-center justify-end gap-2 pt-3 border-t border-slate-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
+            {getActionButtons(record, status)}
+          </div>
         </div>
 
-        {/* Actions */}
-        <div className="flex items-center justify-end gap-1 pt-3 border-t border-gray-100 opacity-0 group-hover:opacity-100 transition-opacity">
-          {getActionButtons(record, status)}
-        </div>
+        {/* Bottom accent line */}
+        <div className={cn(
+          "absolute bottom-0 left-4 right-4 h-1 rounded-full bg-gradient-to-r opacity-0 group-hover:opacity-100 transition-opacity",
+          config.headerGradient
+        )} />
       </div>
     );
   };
@@ -625,43 +694,56 @@ export default function DieuDo() {
     };
 
     return (
-      <div className={cn(
-        "flex flex-col h-full min-h-0 rounded-2xl overflow-hidden shadow-sm border",
-        `bg-gradient-to-b ${config.gradient}`,
-        config.borderColor
-      )}>
-        {/* Column Header - Gradient */}
-        <div className={cn("relative px-4 py-4", config.headerBg)}>
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <div className="p-2 rounded-xl bg-white/20 backdrop-blur-sm">
-                <Icon className="h-5 w-5 text-white" />
+      <div className="flex flex-col h-full min-h-0 rounded-3xl overflow-hidden shadow-xl border border-white/50 bg-white/60 backdrop-blur-xl">
+        {/* Glass Header */}
+        <div className={cn(
+          "relative px-5 py-5 bg-gradient-to-r overflow-hidden",
+          config.headerGradient
+        )}>
+          {/* Glass overlay */}
+          <div className="absolute inset-0 bg-white/10 backdrop-blur-sm" />
+          
+          {/* Grid pattern */}
+          <div className="absolute inset-0 opacity-10">
+            <div className="absolute inset-0" style={{
+              backgroundImage: `radial-gradient(circle at 2px 2px, white 1px, transparent 0)`,
+              backgroundSize: '20px 20px'
+            }} />
+          </div>
+          
+          <div className="relative flex items-center justify-between">
+            <div className="flex items-center gap-4">
+              <div className="p-3 rounded-2xl bg-white/20 backdrop-blur-sm shadow-inner">
+                <Icon className="h-6 w-6 text-white drop-shadow" />
               </div>
               <div>
-                <h2 className="font-bold text-white text-sm lg:text-base drop-shadow-sm">
+                <h2 className="font-black text-white text-lg drop-shadow-sm tracking-wide">
                   <span className="hidden lg:inline">{config.title}</span>
                   <span className="lg:hidden">{config.shortTitle}</span>
                 </h2>
               </div>
             </div>
-            <LiveIndicator count={columnRecords.length} color={colorMap[status]} />
+            <RadarPulse count={columnRecords.length} color={colorMap[status]} />
           </div>
         </div>
 
-        {/* Column Content */}
-        <div className="flex-1 overflow-y-auto p-3 space-y-3 min-h-0 bg-white/50">
+        {/* Content */}
+        <div className={cn(
+          "flex-1 overflow-y-auto p-4 space-y-4 min-h-0",
+          `bg-gradient-to-b ${config.gradient}`
+        )}>
           {isLoading ? (
-            <div className="flex flex-col items-center justify-center py-12 text-gray-400">
-              <RefreshCw className="h-8 w-8 animate-spin mb-3" />
-              <span className="text-sm font-medium">Đang tải...</span>
+            <div className="flex flex-col items-center justify-center py-16">
+              <div className="relative">
+                <div className="w-16 h-16 rounded-full border-4 border-slate-200 border-t-blue-500 animate-spin" />
+                <Radar className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-8 h-8 text-slate-400" />
+              </div>
+              <p className="text-slate-400 font-medium mt-4">Đang quét...</p>
             </div>
           ) : columnRecords.length === 0 ? (
-            <div className="flex flex-col items-center justify-center py-12 text-gray-400">
-              <Bus className="h-10 w-10 mb-3 opacity-50" />
-              <span className="text-sm font-medium">Không có xe</span>
-            </div>
+            <FloatingDotsEmpty message="Không có xe" />
           ) : (
-            columnRecords.map((record) => renderVehicleCard(record, status))
+            columnRecords.map((record, index) => renderVehicleCard(record, status, index))
           )}
         </div>
       </div>
@@ -669,34 +751,52 @@ export default function DieuDo() {
   };
 
   return (
-    <div className="h-full flex flex-col bg-gradient-to-br from-slate-50 via-gray-50 to-slate-100">
-      {/* Header - Light Theme */}
-      <div className="flex-shrink-0 px-4 lg:px-6 py-4 border-b border-gray-200 bg-white/80 backdrop-blur-sm shadow-sm">
+    <div className="h-full flex flex-col bg-gradient-to-br from-slate-100 via-slate-50 to-white">
+      {/* CSS Animations */}
+      <style>{`
+        @keyframes slideUp {
+          from { opacity: 0; transform: translateY(20px); }
+          to { opacity: 1; transform: translateY(0); }
+        }
+      `}</style>
+
+      {/* Header */}
+      <div className="flex-shrink-0 px-4 lg:px-6 py-4 border-b border-slate-200/50 bg-white/80 backdrop-blur-xl shadow-sm">
         <div className="flex flex-col lg:flex-row lg:items-center gap-4">
           {/* Title & Stats */}
           <div className="flex items-center gap-4 flex-1">
-            <div className="flex items-center gap-3">
-              <div className="p-2.5 rounded-xl bg-gradient-to-br from-sky-500 to-blue-600 shadow-lg shadow-sky-500/30">
-                <Activity className="h-6 w-6 text-white" />
+            <div className="flex items-center gap-4">
+              <div className="relative p-3 rounded-2xl bg-gradient-to-br from-slate-800 to-slate-900 shadow-xl">
+                <Activity className="h-7 w-7 text-white" />
+                {/* Pulse indicator */}
+                <span className="absolute -top-1 -right-1 flex h-4 w-4">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
+                  <span className="relative inline-flex rounded-full h-4 w-4 bg-emerald-500" />
+                </span>
               </div>
               <div>
-                <h1 className="text-lg lg:text-xl font-bold text-gray-900">Bảng điều độ</h1>
-                <p className="text-xs text-gray-500">
-                  {totalActive} xe đang hoạt động
-                </p>
+                <h1 className="text-xl lg:text-2xl font-black text-slate-900 tracking-tight">
+                  Dispatch Control
+                </h1>
+                <div className="flex items-center gap-2 text-sm text-slate-500">
+                  <Sparkles className="h-4 w-4 text-amber-500" />
+                  <span className="font-semibold">{totalActive} xe hoạt động</span>
+                </div>
               </div>
             </div>
             
-            {/* Quick stats */}
-            <div className="hidden md:flex items-center gap-4 ml-6 pl-6 border-l border-gray-200">
+            {/* Quick stats pills */}
+            <div className="hidden lg:flex items-center gap-3 ml-6 pl-6 border-l border-slate-200">
               {(Object.keys(columnConfig) as DisplayStatus[]).map((key) => (
-                <div key={key} className="flex items-center gap-2 bg-gray-100 px-3 py-1.5 rounded-full">
-                  <div className={cn("h-2.5 w-2.5 rounded-full", 
-                    key === 'in-station' ? 'bg-sky-500' :
-                    key === 'permit-issued' ? 'bg-amber-500' :
-                    key === 'paid' ? 'bg-emerald-500' : 'bg-violet-500'
-                  )} />
-                  <span className="text-sm font-semibold text-gray-700 tabular-nums">{stats[key]}</span>
+                <div 
+                  key={key} 
+                  className={cn(
+                    "flex items-center gap-2 px-4 py-2 rounded-xl bg-white shadow-sm border border-slate-100",
+                    "hover:shadow-md transition-shadow"
+                  )}
+                >
+                  <div className={cn("h-3 w-3 rounded-full", columnConfig[key].dotColor)} />
+                  <span className="text-sm font-black text-slate-700 tabular-nums">{stats[key]}</span>
                 </div>
               ))}
             </div>
@@ -704,11 +804,11 @@ export default function DieuDo() {
 
           {/* Search & Actions */}
           <div className="flex items-center gap-3">
-            <div className="relative flex-1 lg:w-72">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+            <div className="relative flex-1 lg:w-80">
+              <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-slate-400" />
               <Input
                 placeholder="Tìm biển số, tuyến, tài xế..."
-                className="pl-10 bg-white border-gray-300 text-gray-900 placeholder:text-gray-400 focus:border-sky-500 focus:ring-sky-500/20"
+                className="pl-12 h-12 bg-white/80 backdrop-blur border-slate-200 text-slate-900 placeholder:text-slate-400 rounded-xl focus:ring-2 focus:ring-blue-500/20"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
               />
@@ -718,26 +818,26 @@ export default function DieuDo() {
               variant="outline" 
               size="icon" 
               onClick={loadRecords}
-              className="border-gray-300 bg-white hover:bg-gray-50 text-gray-600 hover:text-gray-900"
+              className="h-12 w-12 rounded-xl border-slate-200 bg-white/80 hover:bg-slate-100"
             >
-              <RefreshCw className={cn("h-4 w-4", isLoading && "animate-spin")} />
+              <RefreshCw className={cn("h-5 w-5", isLoading && "animate-spin")} />
             </Button>
             
             <Button
               variant="outline"
               onClick={() => { setDialogType("depart-multiple"); setDialogOpen(true); }}
-              className="gap-2 border-gray-300 bg-white hover:bg-gray-50 text-gray-700 hidden sm:flex"
+              className="h-12 gap-2 rounded-xl border-slate-200 bg-white/80 hover:bg-slate-100 hidden sm:flex px-4"
             >
-              <ArrowRight className="h-4 w-4" />
-              <span className="hidden lg:inline">Nhiều xe ra bến</span>
+              <ArrowRight className="h-5 w-5" />
+              <span className="hidden xl:inline font-semibold">Nhiều xe ra bến</span>
             </Button>
           
             <Button
               onClick={() => { setDialogType("entry"); setSelectedRecord(null); setDialogOpen(true); }}
-              className="gap-2 bg-gradient-to-r from-sky-500 to-blue-600 hover:from-sky-600 hover:to-blue-700 text-white shadow-lg shadow-sky-500/30"
+              className="h-12 gap-2 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white shadow-lg shadow-blue-500/30 px-5"
             >
-              <Plus className="h-4 w-4" />
-              <span className="hidden sm:inline">Vào bến</span>
+              <Plus className="h-5 w-5" />
+              <span className="hidden sm:inline font-semibold">Vào bến</span>
             </Button>
           </div>
         </div>
@@ -745,7 +845,7 @@ export default function DieuDo() {
 
       {/* Kanban Board */}
       <div className="flex-1 overflow-hidden p-4 lg:p-6">
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 lg:gap-6 h-full">
+        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4 lg:gap-6 h-full">
           {renderColumn("in-station")}
           {renderColumn("permit-issued")}
           {renderColumn("paid")}
@@ -753,39 +853,39 @@ export default function DieuDo() {
         </div>
       </div>
 
-      {/* Footer Legend - Light Theme */}
-      <div className="flex-shrink-0 px-4 lg:px-6 py-3 border-t border-gray-200 bg-white/80 backdrop-blur-sm">
-        <div className="flex flex-wrap items-center justify-between gap-4 text-xs">
+      {/* Footer Legend */}
+      <div className="flex-shrink-0 px-4 lg:px-6 py-4 border-t border-slate-200/50 bg-white/80 backdrop-blur-xl">
+        <div className="flex flex-wrap items-center justify-between gap-4">
           <div className="flex flex-wrap items-center gap-4 lg:gap-6">
-            <div className="flex items-center gap-2 text-gray-600">
-              <Bus className="h-4 w-4" />
-              <span className="font-medium">Tuyến cố định</span>
+            <div className="flex items-center gap-2 text-sm text-slate-600">
+              <div className="p-1.5 rounded-lg bg-slate-100"><Bus className="h-4 w-4" /></div>
+              <span className="font-semibold">Tuyến cố định</span>
             </div>
-            <div className="flex items-center gap-2 text-gray-600">
-              <BusPlusIcon className="h-4 w-4" />
-              <span className="font-medium">Tăng cường</span>
+            <div className="flex items-center gap-2 text-sm text-slate-600">
+              <div className="p-1.5 rounded-lg bg-blue-100"><BusPlusIcon className="h-4 w-4 text-blue-600" /></div>
+              <span className="font-semibold">Tăng cường</span>
             </div>
-            <div className="flex items-center gap-2 text-gray-600">
-              <ArrowRightLeft className="h-4 w-4" />
-              <span className="font-medium">Đi thay</span>
+            <div className="flex items-center gap-2 text-sm text-slate-600">
+              <div className="p-1.5 rounded-lg bg-violet-100"><ArrowRightLeft className="h-4 w-4 text-violet-600" /></div>
+              <span className="font-semibold">Đi thay</span>
             </div>
           </div>
           <div className="flex flex-wrap items-center gap-4 lg:gap-6">
             <div className="flex items-center gap-2">
-              <span className="h-2.5 w-2.5 rounded-full bg-emerald-500 shadow-sm" />
-              <span className="text-gray-600 font-medium">Đủ ĐK</span>
+              <span className="h-3 w-3 rounded-full bg-emerald-500 shadow-sm" />
+              <span className="text-sm text-slate-600 font-semibold">Đủ ĐK</span>
             </div>
             <div className="flex items-center gap-2">
-              <span className="h-2.5 w-2.5 rounded-full bg-rose-500 shadow-sm" />
-              <span className="text-gray-600 font-medium">Thiếu ĐK</span>
+              <span className="h-3 w-3 rounded-full bg-rose-500 shadow-sm" />
+              <span className="text-sm text-slate-600 font-semibold">Thiếu ĐK</span>
             </div>
             <div className="flex items-center gap-2">
-              <span className="h-2.5 w-2.5 rounded-full bg-sky-500 shadow-sm" />
-              <span className="text-gray-600 font-medium">Trả khách</span>
+              <span className="h-3 w-3 rounded-full bg-sky-500 shadow-sm" />
+              <span className="text-sm text-slate-600 font-semibold">Trả khách</span>
             </div>
             <div className="flex items-center gap-2">
-              <span className="h-2.5 w-2.5 rounded-full bg-amber-500 shadow-sm" />
-              <span className="text-gray-600 font-medium">Vãng lai</span>
+              <span className="h-3 w-3 rounded-full bg-amber-500 shadow-sm" />
+              <span className="text-sm text-slate-600 font-semibold">Vãng lai</span>
             </div>
           </div>
         </div>

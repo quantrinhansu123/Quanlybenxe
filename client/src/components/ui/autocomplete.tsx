@@ -2,7 +2,6 @@ import * as React from "react"
 import { useState, useRef, useEffect } from "react"
 import { cn } from "@/lib/utils"
 import { Input } from "./input"
-import { Popover, PopoverContent, PopoverTrigger } from "./popover"
 import { ChevronDown, X } from "lucide-react"
 
 export interface AutocompleteOption {
@@ -31,18 +30,29 @@ export function Autocomplete({
 }: AutocompleteProps) {
   const [open, setOpen] = useState(false)
   const [inputValue, setInputValue] = useState("")
+  const containerRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLInputElement>(null)
 
   // Sync input value with selected value
   useEffect(() => {
     if (value) {
       const selected = options.find(opt => opt.value === value)
-      // Nếu tìm thấy option thì hiện label, nếu không thì giữ nguyên value
       setInputValue(selected?.label || value)
     } else {
       setInputValue("")
     }
   }, [value, options])
+
+  // Close dropdown when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
+        setOpen(false)
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside)
+    return () => document.removeEventListener("mousedown", handleClickOutside)
+  }, [])
 
   // Filter options based on input and limit to 100 items for performance
   const filteredOptions = options
@@ -54,7 +64,6 @@ export function Autocomplete({
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const newValue = e.target.value
     setInputValue(newValue)
-    // Gọi onChange ngay khi nhập để cho phép nhập giá trị tự do
     onChange?.(newValue)
     if (!open) setOpen(true)
   }
@@ -67,9 +76,11 @@ export function Autocomplete({
 
   const handleClear = (e: React.MouseEvent) => {
     e.stopPropagation()
+    e.preventDefault()
     setInputValue("")
     onChange?.("")
     inputRef.current?.focus()
+    setOpen(true)
   }
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
@@ -77,46 +88,49 @@ export function Autocomplete({
       setOpen(false)
     }
     if (e.key === "Enter") {
-      // Khi nhấn Enter, đóng dropdown và giữ giá trị hiện tại
       setOpen(false)
     }
   }
 
   return (
-    <Popover open={open} onOpenChange={setOpen}>
-      <PopoverTrigger asChild>
-        <div className={cn("relative", className)}>
-          <Input
-            ref={inputRef}
-            id={id}
-            value={inputValue}
-            onChange={handleInputChange}
-            onKeyDown={handleKeyDown}
-            onFocus={() => setOpen(true)}
-            placeholder={placeholder}
-            disabled={disabled}
-            className="pr-16"
-          />
-          <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-1">
-            {inputValue && !disabled && (
-              <button
-                type="button"
-                onClick={handleClear}
-                className="p-1 hover:bg-gray-100 rounded text-gray-400 hover:text-gray-600"
-              >
-                <X className="h-4 w-4" />
-              </button>
-            )}
-            <ChevronDown className="h-4 w-4 text-gray-400" />
-          </div>
-        </div>
-      </PopoverTrigger>
-      <PopoverContent
-        className="p-0 w-[var(--radix-popover-trigger-width)]"
-        align="start"
-        sideOffset={4}
-      >
-        <div className="max-h-60 overflow-y-auto">
+    <div ref={containerRef} className={cn("relative", className)}>
+      <Input
+        ref={inputRef}
+        id={id}
+        value={inputValue}
+        onChange={handleInputChange}
+        onKeyDown={handleKeyDown}
+        onFocus={() => setOpen(true)}
+        onClick={() => setOpen(true)}
+        placeholder={placeholder}
+        disabled={disabled}
+        className="pr-16"
+        autoComplete="off"
+      />
+      <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-1">
+        {inputValue && !disabled && (
+          <button
+            type="button"
+            onClick={handleClear}
+            className="p-1 hover:bg-gray-100 rounded text-gray-400 hover:text-gray-600"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        )}
+        <button
+          type="button"
+          onClick={() => {
+            setOpen(!open)
+            inputRef.current?.focus()
+          }}
+          className="p-1 hover:bg-gray-100 rounded text-gray-400 hover:text-gray-600"
+        >
+          <ChevronDown className={cn("h-4 w-4 transition-transform", open && "rotate-180")} />
+        </button>
+      </div>
+      
+      {open && (
+        <div className="absolute z-50 w-full mt-1 bg-white border border-gray-200 rounded-md shadow-lg max-h-60 overflow-y-auto">
           {filteredOptions.length === 0 ? (
             <div className="py-3 px-4 text-sm text-gray-500">
               Không tìm thấy kết quả
@@ -136,7 +150,7 @@ export function Autocomplete({
             ))
           )}
         </div>
-      </PopoverContent>
-    </Popover>
+      )}
+    </div>
   )
 }

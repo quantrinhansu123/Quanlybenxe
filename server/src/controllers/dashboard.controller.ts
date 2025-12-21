@@ -1,5 +1,5 @@
 import { Response } from 'express'
-import { firebaseREST } from '../lib/firebase-rest.js'
+import { firebase } from '../config/database.js'
 import { AuthRequest } from '../middleware/auth.js'
 
 export const getDashboardData = async (_req: AuthRequest, res: Response) => {
@@ -82,59 +82,65 @@ async function getStatsData() {
   const todayStartUTC = new Date(todayStart.getTime() - vietnamOffset)
   const todayEndUTC = new Date(todayEnd.getTime() - vietnamOffset)
 
-  // Get all dispatch records
-  const dispatchRecords: any = await firebaseREST.get('dispatch_records') || {}
-  const dispatchArray = Object.keys(dispatchRecords).map(key => ({
-    id: key,
-    ...dispatchRecords[key]
-  }))
+  // Get all dispatch records using firebase query builder
+  const { data: dispatchArray } = await firebase
+    .from('dispatch_records')
+    .select('*') as { data: any[] }
 
-  // Vehicles in station (status = 'entered' or other non-departed statuses, and exit_time is NULL)
-  const vehiclesInStation = dispatchArray.filter((record: any) => 
+  const records = dispatchArray || []
+
+  // Vehicles currently in station (any vehicle that hasn't departed yet, regardless of entry date)
+  const vehiclesInStation = records.filter((record: any) => 
     ['entered', 'passengers_dropped', 'permit_issued', 'paid', 'departure_ordered'].includes(record.current_status) &&
     !record.exit_time
   ).length
 
-  // Vehicles departed today
-  const vehiclesDepartedToday = dispatchArray.filter((record: any) => {
+  // Vehicles that departed TODAY (based on exit_time)
+  const vehiclesDepartedToday = records.filter((record: any) => {
     if (record.current_status !== 'departed' || !record.exit_time) return false
     const exitTime = new Date(record.exit_time)
     return exitTime >= todayStartUTC && exitTime <= todayEndUTC
   }).length
 
-  // Revenue today (from invoices)
-  const invoices: any = await firebaseREST.get('invoices') || {}
-  const invoicesArray = Object.keys(invoices).map(key => ({
-    id: key,
-    ...invoices[key]
-  }))
-  
+  // Total vehicles = currently in station + departed today
+  // This represents all vehicles that were active in the station today
+  const totalVehiclesToday = vehiclesInStation + vehiclesDepartedToday
+
   // Format Vietnam date as YYYY-MM-DD string
   const todayStr = `${vietnamNow.getFullYear()}-${String(vietnamNow.getMonth() + 1).padStart(2, '0')}-${String(vietnamNow.getDate()).padStart(2, '0')}`
-  const invoicesToday = invoicesArray.filter((inv: any) => {
-    const issueDate = inv.issue_date?.split('T')[0] || inv.issue_date
-    return issueDate === todayStr
+
+  // Revenue today - from dispatch_records with payment_amount (paid status)
+  // Filter records that were paid today based on payment_time or updated_at
+  const paidRecords = records.filter((record: any) => {
+    if (record.current_status !== 'paid' && record.current_status !== 'departed') return false
+    if (!record.payment_amount) return false
+    
+    // Check payment time or updated_at for today
+    const paymentTime = record.payment_time || record.updated_at
+    if (!paymentTime) return false
+    
+    const paidDate = new Date(paymentTime)
+    return paidDate >= todayStartUTC && paidDate <= todayEndUTC
   })
 
-  const revenueToday = invoicesToday.reduce((sum: number, inv: any) => 
-    sum + (parseFloat(inv.total_amount) || 0), 0
+  const revenueToday = paidRecords.reduce((sum: number, record: any) => 
+    sum + (parseFloat(record.payment_amount) || 0), 0
   )
 
   // Invalid vehicles (vehicles with expired documents)
-  const vehicleDocuments: any = await firebaseREST.get('vehicle_documents') || {}
-  const documentsArray = Object.keys(vehicleDocuments).map(key => ({
-    id: key,
-    ...vehicleDocuments[key]
-  }))
+  const { data: documentsArray } = await firebase
+    .from('vehicle_documents')
+    .select('*') as { data: any[] }
   
-  const invalidVehicles = documentsArray.filter((doc: any) => {
+  const invalidVehicles = (documentsArray || []).filter((doc: any) => {
     const expiryDate = doc.expiry_date?.split('T')[0] || doc.expiry_date
     return expiryDate && expiryDate < todayStr
   }).length
 
   return {
-    vehiclesInStation,
-    vehiclesDepartedToday,
+    totalVehiclesToday,    // Total unique vehicles entered today (main KPI)
+    vehiclesInStation,     // Currently in station (subset of totalVehiclesToday)
+    vehiclesDepartedToday, // Already departed (subset of totalVehiclesToday)
     revenueToday,
     invalidVehicles,
   }
@@ -145,11 +151,11 @@ async function getChartDataData() {
   const hours = Array.from({ length: 12 }, (_, i) => i + 6) // 6h to 17h
 
   // Get all dispatch records
-  const dispatchRecords: any = await firebaseREST.get('dispatch_records') || {}
-  const dispatchArray = Object.keys(dispatchRecords).map(key => ({
-    id: key,
-    ...dispatchRecords[key]
-  }))
+  const { data: dispatchArray } = await firebase
+    .from('dispatch_records')
+    .select('*') as { data: any[] }
+
+  const records = dispatchArray || []
 
   const chartData = hours.map((hour) => {
     const hourStart = new Date(chartDate)
@@ -157,7 +163,7 @@ async function getChartDataData() {
     const hourEnd = new Date(chartDate)
     hourEnd.setHours(hour, 59, 59, 999)
 
-    const count = dispatchArray.filter((record: any) => {
+    const count = records.filter((record: any) => {
       if (!record.entry_time) return false
       const entryTime = new Date(record.entry_time)
       return entryTime >= hourStart && entryTime <= hourEnd
@@ -174,23 +180,25 @@ async function getChartDataData() {
 
 async function getRecentActivityData() {
   // Get all dispatch records
-  const dispatchRecords: any = await firebaseREST.get('dispatch_records') || {}
-  const dispatchArray = Object.keys(dispatchRecords).map(key => ({
-    id: key,
-    ...dispatchRecords[key]
-  }))
+  const { data: dispatchArray } = await firebase
+    .from('dispatch_records')
+    .select('*')
+    .order('entry_time', { ascending: false })
+    .limit(10) as { data: any[] }
 
   // Get vehicles and routes
-  const vehicles: any = await firebaseREST.get('vehicles') || {}
-  const routes: any = await firebaseREST.get('routes') || {}
+  const { data: vehiclesArray } = await firebase.from('vehicles').select('*') as { data: any[] }
+  const { data: routesArray } = await firebase.from('routes').select('*') as { data: any[] }
 
-  // Sort by entry_time descending and take first 10
-  const sorted = dispatchArray
-    .filter((r: any) => r.entry_time)
-    .sort((a: any, b: any) => 
-      new Date(b.entry_time).getTime() - new Date(a.entry_time).getTime()
-    )
-    .slice(0, 10)
+  // Convert to lookup maps
+  const vehicles: Record<string, any> = {}
+  const routes: Record<string, any> = {}
+  
+  ;(vehiclesArray || []).forEach((v: any) => { vehicles[v.id] = v })
+  ;(routesArray || []).forEach((r: any) => { routes[r.id] = r })
+
+  // Filter records with entry_time
+  const sorted = (dispatchArray || []).filter((r: any) => r.entry_time)
 
   return sorted.map((record: any) => {
     const vehicle = vehicles[record.vehicle_id] || {}
@@ -198,7 +206,7 @@ async function getRecentActivityData() {
     
     return {
       id: record.id,
-      vehiclePlateNumber: vehicle.plate_number || '',
+      vehiclePlateNumber: vehicle.plate_number || record.vehicle_plate_number || '',
       route: route.route_name || '',
       entryTime: record.entry_time,
       status: record.current_status,
@@ -215,13 +223,17 @@ async function getWarningsData() {
   const warnings: any[] = []
 
   // Get vehicle documents and vehicles
-  const vehicleDocuments: any = await firebaseREST.get('vehicle_documents') || {}
-  const documentsArray = Object.keys(vehicleDocuments).map(key => ({
-    id: key,
-    ...vehicleDocuments[key]
-  }))
+  const { data: documentsArray } = await firebase
+    .from('vehicle_documents')
+    .select('*') as { data: any[] }
   
-  const vehicles: any = await firebaseREST.get('vehicles') || {}
+  const { data: vehiclesArray } = await firebase
+    .from('vehicles')
+    .select('*') as { data: any[] }
+
+  // Convert to lookup map
+  const vehicles: Record<string, any> = {}
+  ;(vehiclesArray || []).forEach((v: any) => { vehicles[v.id] = v })
 
   // Check vehicle documents expiring within 30 days
   const docTypeMap: Record<string, string> = {
@@ -232,7 +244,7 @@ async function getWarningsData() {
     'emblem': 'Phù hiệu',
   }
 
-  for (const doc of documentsArray) {
+  for (const doc of (documentsArray || [])) {
     if (!doc.expiry_date) continue
     
     const expiryDate = doc.expiry_date.split('T')[0] || doc.expiry_date
@@ -248,13 +260,11 @@ async function getWarningsData() {
   }
 
   // Check driver licenses expiring within 30 days
-  const drivers: any = await firebaseREST.get('drivers') || {}
-  const driversArray = Object.keys(drivers).map(key => ({
-    id: key,
-    ...drivers[key]
-  }))
+  const { data: driversArray } = await firebase
+    .from('drivers')
+    .select('*') as { data: any[] }
 
-  for (const driver of driversArray) {
+  for (const driver of (driversArray || [])) {
     if (!driver.license_expiry_date) continue
     
     const expiryDate = driver.license_expiry_date.split('T')[0] || driver.license_expiry_date

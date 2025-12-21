@@ -277,19 +277,18 @@ export default function ThanhToan() {
   const [selectedItems, setSelectedItems] = useState<Set<string>>(new Set())
   const [orderType, setOrderType] = useState<string>("all")
   const [searchQuery, setSearchQuery] = useState("")
-  const [dateRange, setDateRange] = useState<DateRange | undefined>(() => {
-    const today = new Date()
-    const fromDate = new Date(today.setHours(0, 0, 0, 0))
-    const toDate = new Date(today.setHours(23, 59, 59, 999))
-    return { from: fromDate, to: toDate }
-  })
+  // Default: no date filter to show all pending orders
+  const [dateRange, setDateRange] = useState<DateRange | undefined>(undefined)
 
   // Calculate stats
   const stats = {
     total: listData.length,
     pending: listData.filter(i => i.currentStatus !== 'paid' && i.currentStatus !== 'departed').length,
-    paid: listData.filter(i => i.currentStatus === 'paid').length,
-    totalAmount: listData.reduce((sum, i) => sum + (i.paymentAmount || 0), 0)
+    paid: listData.filter(i => i.currentStatus === 'paid' || i.currentStatus === 'departed').length,
+    // Only count revenue from paid/departed records
+    totalAmount: listData
+      .filter(i => i.currentStatus === 'paid' || i.currentStatus === 'departed')
+      .reduce((sum, i) => sum + (i.paymentAmount || 0), 0)
   }
 
   useEffect(() => {

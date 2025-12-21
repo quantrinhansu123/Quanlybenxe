@@ -78,3 +78,5 @@ NUL
 
 # Plans folder (internal planning docs)
 plans/
+docs/
+.claude/

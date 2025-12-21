@@ -1,12 +1,13 @@
-import { useState, useEffect, useRef } from "react"
+import { useState, useEffect } from "react"
 import { createPortal } from "react-dom"
-import { Search, RefreshCw, ChevronDown } from "lucide-react"
+import { Search, RefreshCw } from "lucide-react"
 import { toast } from "react-toastify"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select } from "@/components/ui/select"
 import { Checkbox } from "@/components/ui/checkbox"
+import { Autocomplete } from "@/components/ui/autocomplete"
 import { DateTimePicker } from "@/components/DatePicker"
 import { vehicleService } from "@/services/vehicle.service"
 import { routeService } from "@/services/route.service"
@@ -15,7 +16,6 @@ import { dispatchService } from "@/services/dispatch.service"
 import { driverService } from "@/services/driver.service"
 import { CapPhepDialog } from "./CapPhepDialog"
 import type { Route, Schedule, Driver, DispatchInput, DispatchRecord } from "@/types"
-import { cn } from "@/lib/utils"
 import { useUIStore } from "@/store/ui.store"
 import type { Shift } from "@/services/shift.service"
 
@@ -36,9 +36,6 @@ export function ChoXeVaoBenDialog({
 }: ChoXeVaoBenDialogProps) {
   const isEditMode = !!editRecord
   const [vehicleId, setVehicleId] = useState("")
-  const [vehicleSearchQuery, setVehicleSearchQuery] = useState("")
-  const [showVehicleDropdown, setShowVehicleDropdown] = useState(false)
-  const vehicleDropdownRef = useRef<HTMLDivElement>(null)
   const [entryDateTime, setEntryDateTime] = useState<Date | undefined>(new Date())
   
   const [performPermitAfterEntry, setPerformPermitAfterEntry] = useState(false)
@@ -86,13 +83,25 @@ export function ChoXeVaoBenDialog({
     if (open) {
       setIsAnimating(true)
       document.body.style.overflow = "hidden"
+      // Reset form when opening in non-edit mode
+      if (!isEditMode) {
+        setVehicleId("")
+        setRouteId("")
+        setScheduleId("")
+        setEntryDateTime(new Date())
+        setPassengersArrived("")
+        setTransportOrderCode("")
+        setConfirmPassengerDrop(false)
+        setPerformPermitAfterEntry(false)
+        setSelectedDriver(null)
+      }
     } else {
       document.body.style.overflow = "unset"
     }
     return () => {
       document.body.style.overflow = "unset"
     }
-  }, [open])
+  }, [open, isEditMode])
 
   useEffect(() => {
     loadRoutes()
@@ -106,29 +115,10 @@ export function ChoXeVaoBenDialog({
   useEffect(() => {
     if (vehicleId) {
       loadVehicleDetails(vehicleId)
-      // Set search query to selected vehicle's plate number
-      const selectedVehicle = vehicleOptions.find(v => v.id === vehicleId)
-      if (selectedVehicle) {
-        setVehicleSearchQuery(selectedVehicle.plateNumber)
-      }
     } else {
       setSelectedDriver(null)
     }
   }, [vehicleId])
-
-  // Close dropdown when clicking outside
-  useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      if (vehicleDropdownRef.current && !vehicleDropdownRef.current.contains(event.target as Node)) {
-        setShowVehicleDropdown(false)
-      }
-    }
-
-    document.addEventListener("mousedown", handleClickOutside)
-    return () => {
-      document.removeEventListener("mousedown", handleClickOutside)
-    }
-  }, [])
 
   useEffect(() => {
     if (routeId) {
@@ -142,7 +132,6 @@ export function ChoXeVaoBenDialog({
   useEffect(() => {
     if (isEditMode && editRecord) {
       setVehicleId(editRecord.vehicleId)
-      setVehicleSearchQuery(editRecord.vehiclePlateNumber || '')
       setRouteId(editRecord.routeId || '')
       if (editRecord.entryTime) {
         setEntryDateTime(new Date(editRecord.entryTime))
@@ -209,32 +198,8 @@ export function ChoXeVaoBenDialog({
     }
   }
 
-  // Filter vehicles based on search query
-  const filteredVehicles = vehicleOptions.filter((vehicle) =>
-    vehicle.plateNumber.toLowerCase().includes(vehicleSearchQuery.toLowerCase())
-  )
-
-  const handleVehicleSelect = (vehicleId: string, plateNumber: string) => {
-    setVehicleId(vehicleId)
-    setVehicleSearchQuery(plateNumber)
-    setShowVehicleDropdown(false)
-  }
-
-  const handleVehicleSearchChange = (value: string) => {
-    setVehicleSearchQuery(value)
-    setShowVehicleDropdown(true)
-    // Clear selection if input is cleared
-    if (!value) {
-      setVehicleId("")
-    } else {
-      // Auto-select if exact match found (case-insensitive)
-      const exactMatch = vehicleOptions.find(
-        v => v.plateNumber.toLowerCase() === value.toLowerCase()
-      )
-      if (exactMatch) {
-        setVehicleId(exactMatch.id)
-      }
-    }
+  const handleVehicleSelect = (id: string) => {
+    setVehicleId(id)
   }
 
   const handleRefreshTransportOrder = () => {
@@ -434,44 +399,16 @@ export function ChoXeVaoBenDialog({
                     <Label htmlFor="vehicle" className="text-sm font-medium mb-2 block">
                       Biển kiểm soát <span className="text-red-500">(*)</span>
                     </Label>
-                    <div className="relative mt-1" ref={vehicleDropdownRef}>
-                      <div className="relative">
-                        <Input
-                          id="vehicle"
-                          type="text"
-                          value={vehicleSearchQuery}
-                          onChange={(e) => handleVehicleSearchChange(e.target.value)}
-                          onFocus={() => setShowVehicleDropdown(true)}
-                          placeholder="Nhập biển kiểm soát để tìm kiếm"
-                          className="pr-10 h-11"
-                          required
-                        />
-                        <ChevronDown className="absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400 pointer-events-none" />
-                      </div>
-                      
-                      {showVehicleDropdown && filteredVehicles.length > 0 && (
-                        <div className="absolute z-50 w-full mt-1 bg-white border border-gray-300 rounded-md shadow-lg max-h-60 overflow-auto">
-                          {filteredVehicles.map((vehicle) => (
-                            <div
-                              key={vehicle.id}
-                              onClick={() => handleVehicleSelect(vehicle.id, vehicle.plateNumber)}
-                              className={cn(
-                                "px-3 py-2 cursor-pointer hover:bg-blue-50 transition-colors",
-                                vehicleId === vehicle.id && "bg-blue-100"
-                              )}
-                            >
-                              {vehicle.plateNumber}
-                            </div>
-                          ))}
-                        </div>
-                      )}
-                      
-                      {showVehicleDropdown && vehicleSearchQuery && filteredVehicles.length === 0 && (
-                        <div className="absolute z-50 w-full mt-1 bg-white border border-gray-300 rounded-md shadow-lg px-3 py-2 text-gray-500 text-sm">
-                          Không tìm thấy kết quả
-                        </div>
-                      )}
-                    </div>
+                    <Autocomplete
+                      value={vehicleId}
+                      onChange={(value) => handleVehicleSelect(value)}
+                      options={vehicleOptions.map((v) => ({
+                        value: v.id,
+                        label: v.plateNumber,
+                      }))}
+                      placeholder="Nhập biển kiểm soát để tìm kiếm..."
+                      className="w-full"
+                    />
                   </div>
 
                   <div>

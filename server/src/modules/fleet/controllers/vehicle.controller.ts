@@ -15,6 +15,8 @@ const DOCUMENT_TYPES: DocumentType[] = ['registration', 'inspection', 'insurance
 
 // Cache for legacy vehicles (30 minutes)
 let legacyVehiclesCache: { data: any[] | null; timestamp: number } = { data: null, timestamp: 0 }
+// Index cache: operator name (lowercase) -> vehicle indices for O(1) lookup
+let legacyVehiclesByOperator: Map<string, number[]> | null = null
 const LEGACY_CACHE_TTL = 30 * 60 * 1000 // 30 minutes
 
 /**
@@ -86,45 +88,75 @@ async function upsertDocuments(
 export const getAllVehicles = async (req: Request, res: Response) => {
   try {
     const { operatorId, isActive, includeLegacy } = req.query
-
-    let query = firebase
-      .from('vehicles')
-      .select('*')
-      .order('created_at', { ascending: false })
-
-    if (operatorId) query = query.eq('operator_id', operatorId as string)
-    // Default to active vehicles only, unless explicitly set to 'false' or 'all'
-    if (isActive === 'all') {
-      // Return all vehicles (active and inactive)
-    } else if (isActive === 'false') {
-      query = query.eq('is_active', false)
-    } else {
-      // Default: only active vehicles
-      query = query.eq('is_active', true)
+    const opId = operatorId as string | undefined
+    const isLegacyOperator = opId?.startsWith('legacy_')
+    
+    // For legacy operators, we need to find vehicles by operator name from legacy data
+    // Legacy operator IDs are in format: legacy_op_XXX where XXX is the key of the first vehicle with that owner
+    let legacyOperatorName: string | null = null
+    if (isLegacyOperator && opId) {
+      // Extract the vehicle key from operator ID (format: legacy_op_XXX)
+      const vehicleKey = opId.replace('legacy_op_', '').replace('legacy_', '')
+      // Get the owner name from that vehicle in datasheet/Xe
+      const xeSnap = await firebaseDb.ref(`datasheet/Xe/${vehicleKey}`).once('value')
+      const xeData = xeSnap.val()
+      if (xeData) {
+        legacyOperatorName = (xeData.owner_name || xeData.TenDangKyXe || '').trim()
+        console.log(`[Legacy Operator] Vehicle Key: ${vehicleKey}, Owner Name: "${legacyOperatorName}"`)
+      } else {
+        console.log(`[Legacy Operator] Vehicle Key: ${vehicleKey} - NOT FOUND in datasheet/Xe`)
+      }
     }
 
-    const { data: vehicles, error } = await query
-    if (error) throw error
-
-    // Fetch operators and vehicle_types for manual join (Firebase RTDB doesn't support joins)
-    const { data: operators } = await firebase.from('operators').select('id, name, code')
-    const { data: vehicleTypes } = await firebase.from('vehicle_types').select('id, name')
+    // For legacy operators, skip main DB queries entirely for performance
+    let result: any[] = []
+    let vehicles: any[] = []
     
-    const operatorMap = new Map((operators || []).map((op: any) => [op.id, op]))
-    const vehicleTypeMap = new Map((vehicleTypes || []).map((vt: any) => [vt.id, vt]))
+    if (!isLegacyOperator) {
+      let query = firebase
+        .from('vehicles')
+        .select('*')
+        .order('created_at', { ascending: false })
 
-    const vehicleIds = vehicles.map((v: VehicleDBRecord) => v.id)
-    const documents = await fetchVehicleDocumentsBatch(vehicleIds)
+      if (opId) {
+        query = query.eq('operator_id', opId)
+      }
+      // Default to active vehicles only, unless explicitly set to 'false' or 'all'
+      if (isActive === 'all') {
+        // Return all vehicles (active and inactive)
+      } else if (isActive === 'false') {
+        query = query.eq('is_active', false)
+      } else {
+        // Default: only active vehicles
+        query = query.eq('is_active', true)
+      }
 
-    const result = vehicles.map((vehicle: VehicleDBRecord) => {
-      const vehicleDocs = documents.filter((doc) => doc.vehicle_id === vehicle.id)
-      const operator = vehicle.operator_id ? operatorMap.get(vehicle.operator_id) as any : null
-      const vehicleType = vehicle.vehicle_type_id ? vehicleTypeMap.get(vehicle.vehicle_type_id) as any : null
-      return mapVehicleToAPI(vehicle, vehicleDocs, operator, vehicleType)
-    })
+      const { data: vehiclesData, error } = await query
+      if (error) throw error
+      vehicles = vehiclesData || []
 
-    // Include legacy data from datasheet/Xe if requested or by default
-    if (includeLegacy !== 'false') {
+      // Fetch operators and vehicle_types for manual join (Firebase RTDB doesn't support joins)
+      const { data: operators } = await firebase.from('operators').select('id, name, code')
+      const { data: vehicleTypes } = await firebase.from('vehicle_types').select('id, name')
+      
+      const operatorMap = new Map((operators || []).map((op: any) => [op.id, op]))
+      const vehicleTypeMap = new Map((vehicleTypes || []).map((vt: any) => [vt.id, vt]))
+
+      const vehicleIds = vehicles.map((v: VehicleDBRecord) => v.id)
+      const documents = await fetchVehicleDocumentsBatch(vehicleIds)
+
+      result = vehicles.map((vehicle: VehicleDBRecord) => {
+        const vehicleDocs = documents.filter((doc) => doc.vehicle_id === vehicle.id)
+        const operator = vehicle.operator_id ? operatorMap.get(vehicle.operator_id) as any : null
+        const vehicleType = vehicle.vehicle_type_id ? vehicleTypeMap.get(vehicle.vehicle_type_id) as any : null
+        return mapVehicleToAPI(vehicle, vehicleDocs, operator, vehicleType)
+      })
+    }
+
+    // Include legacy data from datasheet/Xe if:
+    // 1. No operatorId filter (load all), OR
+    // 2. Legacy operator (filter by name)
+    if (includeLegacy !== 'false' && (!opId || isLegacyOperator)) {
       try {
         // Check cache first
         const now = Date.now()
@@ -137,7 +169,11 @@ export const getAllVehicles = async (req: Request, res: Response) => {
           const legacySnap = await firebaseDb.ref('datasheet/Xe').once('value')
           const legacyData = legacySnap.val()
           
+          // Also build operator index for O(1) lookup
+          const operatorIndex = new Map<string, number[]>()
+          
           if (legacyData) {
+            let idx = 0
             for (const [key, xe] of Object.entries(legacyData)) {
               const x = xe as any
               if (!x) continue
@@ -145,6 +181,8 @@ export const getAllVehicles = async (req: Request, res: Response) => {
               // Support both new (English) and old (Vietnamese) field names
               const plateNumber = x.plate_number || x.BienSo || ''
               if (!plateNumber) continue
+              
+              const operatorName = (x.owner_name || x.TenDangKyXe || '').trim().toLowerCase()
               
               // Map legacy data to API format with proper object structure
               legacyVehicles.push({
@@ -170,11 +208,21 @@ export const getAllVehicles = async (req: Request, res: Response) => {
                 insuranceExpiryDate: x.insurance_expiry || x.NgayHetHanBaoHiem || null,
                 documents: {}
               })
+              
+              // Build operator index
+              if (operatorName) {
+                if (!operatorIndex.has(operatorName)) {
+                  operatorIndex.set(operatorName, [])
+                }
+                operatorIndex.get(operatorName)!.push(idx)
+              }
+              idx++
             }
           }
           
-          // Update cache
+          // Update caches
           legacyVehiclesCache = { data: legacyVehicles, timestamp: now }
+          legacyVehiclesByOperator = operatorIndex
         }
         
         // Filter out duplicates by plate number
@@ -182,56 +230,106 @@ export const getAllVehicles = async (req: Request, res: Response) => {
           vehicles.map((v: any) => (v.plate_number || '').toUpperCase())
         )
         
-        for (const legacyVehicle of legacyVehicles) {
-          const plate = (legacyVehicle.plateNumber || '').toUpperCase()
-          if (!existingPlates.has(plate)) {
+        // If filtering by legacy operator, filter by operator name
+        if (isLegacyOperator && legacyOperatorName) {
+          const targetName = legacyOperatorName.trim().toLowerCase()
+          console.log(`[Legacy Filter] Looking for vehicles with operator name containing: "${targetName}"`)
+          
+          // Try exact match from index first (O(1))
+          let indices = legacyVehiclesByOperator?.get(targetName) || []
+          console.log(`[Legacy Filter] Exact match found: ${indices.length} vehicles`)
+          
+          // If no exact match, do partial match (slower but more flexible)
+          if (indices.length === 0) {
+            // Normalize target name - remove common prefixes for better matching
+            const normalizedTarget = targetName
+              .replace(/^(ông|bà|anh|chị|mr\.|mrs\.|ms\.)\s*/i, '')
+              .trim()
+            
+            // Linear search with partial matching
+            for (let i = 0; i < legacyVehicles.length; i++) {
+              const vehicleOpName = (legacyVehicles[i].operatorName || '').trim().toLowerCase()
+              if (!vehicleOpName) continue
+              
+              // Check various matching strategies
+              const isMatch = 
+                vehicleOpName.includes(targetName) || 
+                targetName.includes(vehicleOpName) ||
+                vehicleOpName.includes(normalizedTarget) ||
+                normalizedTarget.includes(vehicleOpName)
+              
+              if (isMatch) {
+                indices.push(i)
+              }
+            }
+            console.log(`[Legacy Filter] Partial match found: ${indices.length} vehicles (normalized: "${normalizedTarget}")`)
+          }
+          
+          for (const idx of indices) {
+            const legacyVehicle = legacyVehicles[idx]
+            if (!legacyVehicle) continue
+            const plate = (legacyVehicle.plateNumber || '').toUpperCase()
+            if (existingPlates.has(plate)) continue
+            result.push(legacyVehicle)
+            existingPlates.add(plate)
+          }
+          console.log(`[Legacy Filter] Final result: ${result.length} vehicles`)
+        } else if (!isLegacyOperator && !opId) {
+          // No operator filter - return all legacy vehicles
+          for (const legacyVehicle of legacyVehicles) {
+            const plate = (legacyVehicle.plateNumber || '').toUpperCase()
+            if (existingPlates.has(plate)) continue
             result.push(legacyVehicle)
             existingPlates.add(plate)
           }
         }
+        // If non-legacy operator with opId, don't add any legacy vehicles
         
-        // Also fetch vehicles from PHUHIEUXE (vehicle badges)
-        // Only include Buýt and Tuyến cố định types
-        const allowedBadgeTypes = ['Buýt', 'Tuyến cố định']
-        const badgeSnap = await firebaseDb.ref('datasheet/PHUHIEUXE').once('value')
-        const badgeData = badgeSnap.val()
-        
-        if (badgeData) {
-          for (const [key, badge] of Object.entries(badgeData)) {
-            const b = badge as any
-            if (!b || !b.BienSoXe) continue
-            
-            // Filter by badge type
-            if (!allowedBadgeTypes.includes(b.LoaiPH || '')) continue
-            
-            const plate = (b.BienSoXe || '').toUpperCase()
-            if (existingPlates.has(plate)) continue
-            
-            result.push({
-              id: `badge_${key}`,
-              plateNumber: b.BienSoXe,
-              vehicleType: { id: null, name: b.LoaiPH || '' },
-              vehicleTypeName: b.LoaiPH || '',
-              seatCapacity: 0,
-              bedCapacity: 0,
-              manufacturer: '',
-              modelCode: '',
-              manufactureYear: null,
-              color: '',
-              chassisNumber: '',
-              engineNumber: '',
-              operatorId: null,
-              operator: { id: null, name: '', code: '' },
-              operatorName: '',
-              isActive: b.TrangThai !== 'Thu hồi',
-              notes: `Phù hiệu: ${b.SoPhuHieu || ''}`,
-              source: 'badge',
-              badgeNumber: b.SoPhuHieu || '',
-              badgeType: b.LoaiPH || '',
-              badgeExpiryDate: b.NgayHetHan || null,
-              documents: {}
-            })
-            existingPlates.add(plate)
+        // Skip badge vehicles when filtering by legacy operator (they don't have operator info)
+        if (!isLegacyOperator) {
+          // Also fetch vehicles from PHUHIEUXE (vehicle badges)
+          // Only include Buýt and Tuyến cố định types
+          const allowedBadgeTypes = ['Buýt', 'Tuyến cố định']
+          const badgeSnap = await firebaseDb.ref('datasheet/PHUHIEUXE').once('value')
+          const badgeData = badgeSnap.val()
+          
+          if (badgeData) {
+            for (const [key, badge] of Object.entries(badgeData)) {
+              const b = badge as any
+              if (!b || !b.BienSoXe) continue
+              
+              // Filter by badge type
+              if (!allowedBadgeTypes.includes(b.LoaiPH || '')) continue
+              
+              const plate = (b.BienSoXe || '').toUpperCase()
+              if (existingPlates.has(plate)) continue
+              
+              result.push({
+                id: `badge_${key}`,
+                plateNumber: b.BienSoXe,
+                vehicleType: { id: null, name: b.LoaiPH || '' },
+                vehicleTypeName: b.LoaiPH || '',
+                seatCapacity: 0,
+                bedCapacity: 0,
+                manufacturer: '',
+                modelCode: '',
+                manufactureYear: null,
+                color: '',
+                chassisNumber: '',
+                engineNumber: '',
+                operatorId: null,
+                operator: { id: null, name: '', code: '' },
+                operatorName: '',
+                isActive: b.TrangThai !== 'Thu hồi',
+                notes: `Phù hiệu: ${b.SoPhuHieu || ''}`,
+                source: 'badge',
+                badgeNumber: b.SoPhuHieu || '',
+                badgeType: b.LoaiPH || '',
+                badgeExpiryDate: b.NgayHetHan || null,
+                documents: {}
+              })
+              existingPlates.add(plate)
+            }
           }
         }
       } catch (legacyError) {

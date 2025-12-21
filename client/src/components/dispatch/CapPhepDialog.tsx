@@ -1199,20 +1199,17 @@ export function CapPhepDialog({
                       </div>
 
                       <FormField label="Tuyến vận chuyển" required>
-                        <StyledSelect
+                        <Autocomplete
                           value={routeId}
-                          onChange={(e) => setRouteId(e.target.value)}
-                          required
+                          onChange={(value) => setRouteId(value)}
+                          options={routes.map((r) => ({
+                            value: r.id,
+                            label: `${r.routeName} (${r.routeCode})${r.distanceKm ? ` - ${r.distanceKm} Km` : ""}`,
+                          }))}
+                          placeholder="Gõ để tìm tuyến..."
                           disabled={readOnly}
-                        >
-                          <option value="">Chọn tuyến</option>
-                          {routes.map((r) => (
-                            <option key={r.id} value={r.id}>
-                              {r.routeName} ({r.routeCode})
-                              {r.distanceKm ? ` - ${r.distanceKm} Km` : ""}
-                            </option>
-                          ))}
-                        </StyledSelect>
+                          className="w-full"
+                        />
                       </FormField>
 
                       <div className="grid grid-cols-2 gap-4">
@@ -1329,20 +1326,20 @@ export function CapPhepDialog({
                     </div>
                   </GlassCard>
 
-                  {/* Điều kiện cấp phép */}
+                  {/* Điều kiện cấp phép - Flight Check Style */}
                   <GlassCard>
                     <SectionHeader 
                       icon={Shield} 
-                      title="Điều kiện cấp phép"
+                      title="Pre-Flight Check"
                       badge={(() => {
                         const { isValid, validCount, totalCount } = getOverallStatus();
                         return (
-                          <span className={`text-xs px-2.5 py-1 rounded-full font-semibold ${
+                          <span className={`text-xs px-3 py-1.5 rounded-full font-bold ${
                             isValid
-                              ? 'bg-emerald-100 text-emerald-700'
-                              : 'bg-rose-100 text-rose-700'
+                              ? 'bg-gradient-to-r from-emerald-500 to-teal-500 text-white shadow-lg shadow-emerald-500/30'
+                              : 'bg-gradient-to-r from-rose-500 to-red-500 text-white shadow-lg shadow-rose-500/30'
                           }`}>
-                            {validCount}/{totalCount}
+                            {validCount}/{totalCount} OK
                           </span>
                         );
                       })()}
@@ -1356,85 +1353,150 @@ export function CapPhepDialog({
                         </Button>
                       }
                     />
-                    <div className="divide-y divide-gray-100">
-                      {getDocumentsCheckResults().map((doc, index) => (
-                        <div
-                          key={index}
-                          className={`flex items-center justify-between px-5 py-3 ${
-                            doc.status === 'expired' ? 'bg-rose-50' :
-                            doc.status === 'missing' ? 'bg-gray-50' :
-                            doc.status === 'expiring_soon' ? 'bg-amber-50' : ''
-                          }`}
-                        >
-                          <div className="flex items-center gap-3">
-                            {doc.status === 'valid' && (
-                              <div className="w-6 h-6 rounded-full bg-emerald-100 flex items-center justify-center">
-                                <CheckCircle className="h-3.5 w-3.5 text-emerald-600" />
+                    
+                    {/* Document Cards Grid */}
+                    <div className="p-4">
+                      <div className="grid grid-cols-2 gap-3">
+                        {getDocumentsCheckResults().map((doc, index) => {
+                          const statusStyles = {
+                            valid: {
+                              bg: 'bg-gradient-to-br from-emerald-50 to-teal-50',
+                              border: 'border-emerald-200',
+                              iconBg: 'bg-gradient-to-br from-emerald-500 to-teal-500',
+                              text: 'text-emerald-700',
+                              badge: 'bg-emerald-100 text-emerald-700',
+                              glow: 'shadow-emerald-100'
+                            },
+                            expiring_soon: {
+                              bg: 'bg-gradient-to-br from-amber-50 to-orange-50',
+                              border: 'border-amber-200',
+                              iconBg: 'bg-gradient-to-br from-amber-500 to-orange-500',
+                              text: 'text-amber-700',
+                              badge: 'bg-amber-100 text-amber-700',
+                              glow: 'shadow-amber-100'
+                            },
+                            expired: {
+                              bg: 'bg-gradient-to-br from-rose-50 to-red-50',
+                              border: 'border-rose-200',
+                              iconBg: 'bg-gradient-to-br from-rose-500 to-red-500',
+                              text: 'text-rose-700',
+                              badge: 'bg-rose-100 text-rose-700',
+                              glow: 'shadow-rose-100'
+                            },
+                            missing: {
+                              bg: 'bg-gradient-to-br from-slate-50 to-gray-100',
+                              border: 'border-gray-200',
+                              iconBg: 'bg-gradient-to-br from-slate-400 to-gray-500',
+                              text: 'text-gray-500',
+                              badge: 'bg-gray-100 text-gray-500',
+                              glow: 'shadow-gray-100'
+                            }
+                          };
+                          const style = statusStyles[doc.status];
+                          
+                          return (
+                            <div
+                              key={index}
+                              className={`
+                                relative p-4 rounded-xl border-2 transition-all duration-300
+                                hover:scale-[1.02] hover:shadow-lg
+                                ${style.bg} ${style.border} ${style.glow}
+                              `}
+                            >
+                              {/* Status Icon */}
+                              <div className={`
+                                w-10 h-10 rounded-xl flex items-center justify-center mb-3
+                                ${style.iconBg} shadow-lg
+                              `}>
+                                {doc.status === 'valid' && <CheckCircle className="h-5 w-5 text-white" />}
+                                {doc.status === 'expiring_soon' && <Clock className="h-5 w-5 text-white" />}
+                                {doc.status === 'expired' && <AlertCircle className="h-5 w-5 text-white" />}
+                                {doc.status === 'missing' && <FileX className="h-5 w-5 text-white" />}
                               </div>
-                            )}
-                            {doc.status === 'expiring_soon' && (
-                              <div className="w-6 h-6 rounded-full bg-amber-100 flex items-center justify-center">
-                                <Clock className="h-3.5 w-3.5 text-amber-600" />
+                              
+                              {/* Document Name */}
+                              <p className={`text-sm font-semibold ${style.text} mb-2 line-clamp-2`}>
+                                {doc.name}
+                              </p>
+                              
+                              {/* Status Badge */}
+                              <div className={`
+                                inline-flex items-center gap-1.5 px-2 py-1 rounded-lg text-xs font-bold
+                                ${style.badge}
+                              `}>
+                                {doc.status === 'valid' && (
+                                  <>
+                                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+                                    {doc.daysRemaining && doc.daysRemaining < 999 
+                                      ? `${doc.daysRemaining}d` 
+                                      : 'OK'}
+                                  </>
+                                )}
+                                {doc.status === 'expiring_soon' && (
+                                  <>
+                                    <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse" />
+                                    {doc.daysRemaining === 0 ? 'HÔM NAY!' : `${doc.daysRemaining}d`}
+                                  </>
+                                )}
+                                {doc.status === 'expired' && (
+                                  <>
+                                    <span className="w-1.5 h-1.5 rounded-full bg-rose-500" />
+                                    HẾT HẠN
+                                  </>
+                                )}
+                                {doc.status === 'missing' && (
+                                  <>
+                                    <span className="w-1.5 h-1.5 rounded-full bg-gray-400" />
+                                    THIẾU
+                                  </>
+                                )}
                               </div>
-                            )}
-                            {doc.status === 'expired' && (
-                              <div className="w-6 h-6 rounded-full bg-rose-100 flex items-center justify-center">
-                                <AlertCircle className="h-3.5 w-3.5 text-rose-600" />
-                              </div>
-                            )}
-                            {doc.status === 'missing' && (
-                              <div className="w-6 h-6 rounded-full bg-gray-200 flex items-center justify-center">
-                                <FileX className="h-3.5 w-3.5 text-gray-500" />
-                              </div>
-                            )}
-                            <span className={`text-sm ${
-                              doc.status === 'missing' ? 'text-gray-500' : 'text-gray-700'
-                            }`}>
-                              {doc.name}
-                            </span>
-                          </div>
-                          <div className="text-right">
-                            {doc.status === 'valid' && doc.daysRemaining && doc.daysRemaining < 999 && (
-                              <span className="text-xs text-emerald-600">Còn {doc.daysRemaining} ngày</span>
-                            )}
-                            {doc.status === 'valid' && (!doc.daysRemaining || doc.daysRemaining >= 999) && (
-                              <span className="text-xs text-emerald-600">Hợp lệ</span>
-                            )}
-                            {doc.status === 'expiring_soon' && doc.daysRemaining !== undefined && (
-                              <span className="text-xs text-amber-600 font-medium">
-                                {doc.daysRemaining === 0 ? 'Hết hạn hôm nay!' : `Còn ${doc.daysRemaining} ngày`}
-                              </span>
-                            )}
-                            {doc.status === 'expired' && doc.daysRemaining && (
-                              <span className="text-xs text-rose-600 font-medium">
-                                Hết hạn {Math.abs(doc.daysRemaining)} ngày
-                              </span>
-                            )}
-                            {doc.status === 'missing' && (
-                              <span className="text-xs text-gray-400">Chưa có</span>
-                            )}
-                          </div>
-                        </div>
-                      ))}
+                            </div>
+                          );
+                        })}
+                      </div>
                     </div>
                     
-                    {/* Status footer */}
-                    <div className={`px-5 py-4 border-t ${
-                      checkAllDocumentsValid()
-                        ? 'bg-emerald-50 border-emerald-100'
-                        : 'bg-rose-50 border-rose-100'
-                    }`}>
-                      {checkAllDocumentsValid() ? (
-                        <div className="flex items-center gap-2 text-emerald-700">
-                          <CheckCircle className="h-4 w-4" />
-                          <span className="text-sm font-medium">Đủ điều kiện cấp phép</span>
-                        </div>
-                      ) : (
-                        <div className="flex items-center gap-2 text-rose-700">
-                          <XIcon className="h-4 w-4" />
-                          <span className="text-sm font-medium">Cần bổ sung giấy tờ</span>
-                        </div>
-                      )}
+                    {/* Status Footer - Enhanced */}
+                    <div className={`
+                      relative overflow-hidden px-5 py-4 border-t
+                      ${checkAllDocumentsValid()
+                        ? 'bg-gradient-to-r from-emerald-500 to-teal-500 border-emerald-400'
+                        : 'bg-gradient-to-r from-rose-500 to-red-500 border-rose-400'
+                      }
+                    `}>
+                      {/* Background pattern */}
+                      <div className="absolute inset-0 opacity-10">
+                        <div className="absolute inset-0" style={{
+                          backgroundImage: `radial-gradient(circle at 2px 2px, white 1px, transparent 0)`,
+                          backgroundSize: '16px 16px'
+                        }} />
+                      </div>
+                      
+                      <div className="relative flex items-center justify-between">
+                        {checkAllDocumentsValid() ? (
+                          <div className="flex items-center gap-3">
+                            <div className="p-2 rounded-lg bg-white/20 backdrop-blur">
+                              <CheckCircle className="h-5 w-5 text-white" />
+                            </div>
+                            <div>
+                              <p className="text-white font-bold">CLEARED FOR PERMIT</p>
+                              <p className="text-white/80 text-xs">Đủ điều kiện cấp phép</p>
+                            </div>
+                          </div>
+                        ) : (
+                          <div className="flex items-center gap-3">
+                            <div className="p-2 rounded-lg bg-white/20 backdrop-blur">
+                              <XIcon className="h-5 w-5 text-white" />
+                            </div>
+                            <div>
+                              <p className="text-white font-bold">DOCUMENTS REQUIRED</p>
+                              <p className="text-white/80 text-xs">Cần bổ sung giấy tờ</p>
+                            </div>
+                          </div>
+                        )}
+                        <ChevronRight className="h-5 w-5 text-white/60" />
+                      </div>
                     </div>
                   </GlassCard>
 

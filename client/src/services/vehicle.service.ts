@@ -2,11 +2,12 @@ import api from '@/lib/api'
 import type { Vehicle, VehicleInput } from '@/types'
 
 export const vehicleService = {
-  getAll: async (operatorId?: string, isActive?: boolean): Promise<Vehicle[]> => {
+  getAll: async (operatorId?: string, isActive?: boolean, includeLegacy?: boolean): Promise<Vehicle[]> => {
     try {
       const params = new URLSearchParams()
       if (operatorId) params.append('operatorId', operatorId)
       if (isActive !== undefined) params.append('isActive', String(isActive))
+      if (includeLegacy !== undefined) params.append('includeLegacy', String(includeLegacy))
 
       const queryString = params.toString()
       const url = queryString ? `/vehicles?${queryString}` : '/vehicles'

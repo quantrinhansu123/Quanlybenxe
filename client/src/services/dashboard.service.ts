@@ -1,8 +1,9 @@
 import api from '@/lib/api'
 
 export interface DashboardStats {
-  vehiclesInStation: number
-  vehiclesDepartedToday: number
+  totalVehiclesToday: number    // Total unique vehicles entered today
+  vehiclesInStation: number     // Currently in station
+  vehiclesDepartedToday: number // Already departed
   revenueToday: number
   invalidVehicles: number
 }
@@ -43,6 +44,7 @@ export const dashboardService = {
     } catch (error) {
       console.error('Error fetching dashboard stats:', error)
       return {
+        totalVehiclesToday: 0,
         vehiclesInStation: 0,
         vehiclesDepartedToday: 0,
         revenueToday: 0,
