@@ -34,9 +34,9 @@ export function ChatWidget() {
 
   return (
     <>
-      {/* Chat Window */}
+      {/* Chat Window - z-[9999] to appear above all dialogs */}
       {isOpen && (
-        <div className="fixed bottom-20 right-4 w-96 h-[500px] bg-white rounded-lg shadow-2xl flex flex-col z-50 border overflow-hidden">
+        <div className="fixed bottom-20 right-4 w-96 h-[500px] bg-white rounded-lg shadow-2xl flex flex-col z-[9999] border overflow-hidden">
           {/* Header */}
           <div className="flex items-center justify-between p-3 border-b bg-blue-500 text-white">
             <div className="flex items-center gap-2">
@@ -109,10 +109,10 @@ export function ChatWidget() {
         </div>
       )}
 
-      {/* Toggle Button */}
+      {/* Toggle Button - z-[9999] to appear above all dialogs */}
       <Button
         onClick={toggleChat}
-        className="fixed bottom-4 right-4 w-14 h-14 rounded-full shadow-lg z-50 bg-blue-500 hover:bg-blue-600"
+        className="fixed bottom-4 right-4 w-14 h-14 rounded-full shadow-lg z-[9999] bg-blue-500 hover:bg-blue-600"
         size="icon"
       >
         {isOpen ? (

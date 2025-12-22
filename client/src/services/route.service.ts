@@ -37,7 +37,6 @@ let legacyRoutesCache: { data: LegacyRoute[]; timestamp: number } | null = null
 const CACHE_TTL = 5 * 60 * 1000 // 5 minutes
 
 export const routeService = {
-  // Support legacy call: getAll(operatorId?, limit?, isActive?)
   getAll: async (_operatorId?: string, _limit?: number, isActive?: boolean): Promise<Route[]> => {
     try {
       const params = new URLSearchParams()
@@ -70,7 +69,6 @@ export const routeService = {
       return response.data
     } catch (error) {
       console.error('Error fetching legacy routes:', error)
-      // Return stale cache if available
       if (legacyRoutesCache) {
         return legacyRoutesCache.data
       }

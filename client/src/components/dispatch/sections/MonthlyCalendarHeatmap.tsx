@@ -7,26 +7,26 @@ interface MonthlyCalendarHeatmapProps {
 
 export function MonthlyCalendarHeatmap({ departureDate, dailyTripCounts }: MonthlyCalendarHeatmapProps) {
   return (
-    <div className="space-y-3">
+    <div className="space-y-4">
       <div className="flex items-center justify-between">
-        <Label className="text-sm font-semibold text-gray-700">
+        <Label className="text-base font-semibold text-gray-800">
           Lịch hoạt động tháng {departureDate ? new Date(departureDate).toLocaleDateString('vi-VN', { month: 'long', year: 'numeric' }) : ''}
         </Label>
-        <div className="flex items-center gap-2 text-xs text-gray-500">
-          <span className="flex items-center gap-1">
-            <span className="w-3 h-3 rounded-sm bg-gray-100 border border-gray-200"></span>
+        <div className="flex items-center gap-3 text-sm text-gray-600">
+          <span className="flex items-center gap-1.5">
+            <span className="w-3.5 h-3.5 rounded-sm bg-gray-100 border border-gray-200"></span>
             0
           </span>
-          <span className="flex items-center gap-1">
-            <span className="w-3 h-3 rounded-sm bg-emerald-200"></span>
+          <span className="flex items-center gap-1.5">
+            <span className="w-3.5 h-3.5 rounded-sm bg-emerald-200"></span>
             1-2
           </span>
-          <span className="flex items-center gap-1">
-            <span className="w-3 h-3 rounded-sm bg-emerald-400"></span>
+          <span className="flex items-center gap-1.5">
+            <span className="w-3.5 h-3.5 rounded-sm bg-emerald-400"></span>
             3-5
           </span>
-          <span className="flex items-center gap-1">
-            <span className="w-3 h-3 rounded-sm bg-emerald-600"></span>
+          <span className="flex items-center gap-1.5">
+            <span className="w-3.5 h-3.5 rounded-sm bg-emerald-600"></span>
             6+
           </span>
         </div>
@@ -34,16 +34,16 @@ export function MonthlyCalendarHeatmap({ departureDate, dailyTripCounts }: Month
 
       <div className="bg-gradient-to-br from-slate-50 to-gray-100 rounded-xl p-4 border border-gray-200/60 shadow-sm">
         {/* Week day headers */}
-        <div className="grid grid-cols-7 gap-1 mb-2">
+        <div className="grid grid-cols-7 gap-1.5 mb-2">
           {['CN', 'T2', 'T3', 'T4', 'T5', 'T6', 'T7'].map((d) => (
-            <div key={d} className="text-center text-[10px] font-medium text-gray-400 uppercase tracking-wide">
+            <div key={d} className="text-center text-xs font-semibold text-gray-500 uppercase tracking-wide py-1">
               {d}
             </div>
           ))}
         </div>
 
         {/* Calendar grid */}
-        <div className="grid grid-cols-7 gap-1">
+        <div className="grid grid-cols-7 gap-1.5">
           {(() => {
             const today = new Date();
             const currentDay = today.getDate();
@@ -83,15 +83,15 @@ export function MonthlyCalendarHeatmap({ departureDate, dailyTripCounts }: Month
                   `}
                   title={`Ngày ${day}: ${count} xe`}
                 >
-                  <span className={`text-xs font-semibold ${count > 2 ? '' : 'text-gray-700'}`}>
+                  <span className={`text-sm font-semibold ${count > 2 ? '' : 'text-gray-700'}`}>
                     {day}
                   </span>
                   {count > 0 && (
-                    <span className={`text-[9px] font-bold ${count > 2 ? '' : 'text-emerald-700'}`}>
+                    <span className={`text-xs font-bold ${count > 2 ? '' : 'text-emerald-700'}`}>
                       {count}
                     </span>
                   )}
-                  <div className="absolute -top-8 left-1/2 -translate-x-1/2 px-2 py-1 bg-gray-900 text-white text-[10px] rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none z-20 shadow-lg">
+                  <div className="absolute -top-9 left-1/2 -translate-x-1/2 px-2.5 py-1 bg-gray-900 text-white text-xs rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none z-20 shadow-lg">
                     {count} chuyến
                   </div>
                 </div>
@@ -103,15 +103,15 @@ export function MonthlyCalendarHeatmap({ departureDate, dailyTripCounts }: Month
         </div>
 
         {/* Summary footer */}
-        <div className="mt-3 pt-3 border-t border-gray-200/60 flex items-center justify-between text-xs">
-          <div className="flex items-center gap-1.5 text-gray-600">
+        <div className="mt-4 pt-3 border-t border-gray-200/60 flex items-center justify-between text-sm">
+          <div className="flex items-center gap-2 text-gray-700">
             <span className="font-medium">Tổng tháng:</span>
-            <span className="px-2 py-0.5 bg-emerald-100 text-emerald-700 rounded-full font-bold">
+            <span className="px-2.5 py-1 bg-emerald-100 text-emerald-700 rounded-full font-bold">
               {Object.values(dailyTripCounts).reduce((a, b) => a + b, 0)} chuyến
             </span>
           </div>
-          <div className="text-gray-400">
-            Ngày cao nhất: <span className="font-semibold text-gray-600">{Math.max(...Object.values(dailyTripCounts), 0)}</span>
+          <div className="text-gray-500">
+            Ngày cao nhất: <span className="font-semibold text-gray-700">{Math.max(...Object.values(dailyTripCounts), 0)}</span>
           </div>
         </div>
       </div>

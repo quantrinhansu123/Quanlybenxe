@@ -3,6 +3,7 @@ import { AuthRequest } from '../middleware/auth.js'
 import { firebase } from '../config/database.js'
 import { z } from 'zod'
 import { syncVehicleChanges } from '../utils/denormalization-sync.js'
+import { cachedData } from '../services/cached-data.service.js'
 
 const vehicleSchema = z.object({
   plateNumber: z.string().min(1, 'Plate number is required'),
@@ -75,36 +76,26 @@ const vehicleSchema = z.object({
 export const getAllVehicles = async (req: Request, res: Response) => {
   try {
     const { operatorId, isActive } = req.query
+    const activeOnly = isActive !== 'all' && isActive !== 'false'
 
-    let query = firebase
-      .from('vehicles')
-      .select('*')
-      .order('created_at', { ascending: false })
-
-    if (operatorId) {
-      query = query.eq('operator_id', operatorId as string)
-    }
-    // Default to active vehicles only, unless explicitly set to 'false' or 'all'
-    if (isActive === 'all') {
-      // Return all vehicles (active and inactive)
-    } else if (isActive === 'false') {
-      query = query.eq('is_active', false)
-    } else {
-      // Default: only active vehicles
-      query = query.eq('is_active', true)
-    }
-
-    const { data: vehicles, error: vehiclesError } = await query
-
-    if (vehiclesError) throw vehiclesError
-
-    // Fetch operators and vehicle_types for manual join (Firebase RTDB doesn't support joins)
-    const { data: operators } = await firebase.from('operators').select('*')
-    const { data: vehicleTypes } = await firebase.from('vehicle_types').select('*')
+    // Use cached data for vehicles, operators, and vehicle types
+    let vehicles = await cachedData.getAllVehicles(activeOnly)
     
-    // Create lookup maps
-    const operatorMap = new Map((operators || []).map((op: any) => [op.id, op]))
-    const vehicleTypeMap = new Map((vehicleTypes || []).map((vt: any) => [vt.id, vt]))
+    // Filter by operatorId if provided
+    if (operatorId) {
+      vehicles = vehicles.filter((v: any) => v.operator_id === operatorId)
+    }
+    
+    // Filter inactive if specifically requested
+    if (isActive === 'false') {
+      vehicles = vehicles.filter((v: any) => v.is_active === false)
+    }
+
+    // Use cached operators and vehicle types (parallel fetch)
+    const [operatorMap, vehicleTypeMap] = await Promise.all([
+      cachedData.getOperatorsMap(),
+      cachedData.getVehicleTypesMap(),
+    ])
 
     // Fetch documents
     const vehicleIds = vehicles.map((v: any) => v.id)
@@ -393,6 +384,9 @@ export const createVehicle = async (req: Request, res: Response) => {
       }
     })
 
+    // Invalidate vehicle cache after create
+    cachedData.invalidateVehicles()
+
     return res.status(201).json({
       id: vehicle.id,
       plateNumber: vehicle.plate_number,
@@ -593,6 +587,9 @@ export const updateVehicle = async (req: AuthRequest, res: Response) => {
       })
     }
 
+    // Invalidate vehicle cache after update
+    cachedData.invalidateVehicles()
+
     const { data: documents } = await firebase
       .from('vehicle_documents')
       .select('*')
@@ -745,6 +742,96 @@ export const getVehicleDocumentAuditLogs = async (req: Request, res: Response) =
   }
 }
 
+/**
+ * Get all document audit logs for all vehicles (optimized single query)
+ */
+export const getAllDocumentAuditLogs = async (_req: Request, res: Response) => {
+  try {
+    // Get all audit logs for vehicle_documents in one query
+    const { data: auditLogs, error: auditError } = await firebase
+      .from('audit_logs')
+      .select('*')
+      .eq('table_name', 'vehicle_documents')
+      .order('created_at', { ascending: false })
+      .limit(500)
+
+    if (auditError) throw auditError
+
+    if (!auditLogs || auditLogs.length === 0) {
+      return res.json([])
+    }
+
+    // Get unique vehicle_document IDs
+    const docIds = [...new Set(auditLogs.map((log: any) => log.record_id))]
+
+    // Fetch vehicle_documents to get vehicle_id
+    const { data: vehicleDocs } = await firebase
+      .from('vehicle_documents')
+      .select('id, vehicle_id')
+      .in('id', docIds)
+
+    const docToVehicleMap = new Map(
+      (vehicleDocs || []).map((doc: any) => [doc.id, doc.vehicle_id])
+    )
+
+    // Get unique vehicle IDs
+    const vehicleIds = [...new Set(
+      (vehicleDocs || []).map((doc: any) => doc.vehicle_id).filter(Boolean)
+    )]
+
+    // Fetch vehicles to get plate numbers
+    const { data: vehicles } = await firebase
+      .from('vehicles')
+      .select('id, plate_number')
+      .in('id', vehicleIds)
+
+    const vehicleMap = new Map(
+      (vehicles || []).map((v: any) => [v.id, v.plate_number])
+    )
+
+    // Fetch users for names
+    const userIds = [...new Set(auditLogs.map((log: any) => log.user_id).filter(Boolean))]
+    const { data: users } = await firebase
+      .from('users')
+      .select('id, full_name, username')
+      .in('id', userIds)
+
+    const userMap = new Map(
+      (users || []).map((u: any) => [u.id, u.full_name || u.username || 'Không xác định'])
+    )
+
+    // Format response
+    const formattedLogs = auditLogs.map((log: any) => {
+      const vehicleId = docToVehicleMap.get(log.record_id)
+      const plateNumber = vehicleId ? vehicleMap.get(vehicleId) : null
+
+      let createdAt = log.created_at
+      if (createdAt && typeof createdAt === 'string' && createdAt.endsWith('Z')) {
+        const utcDate = new Date(createdAt)
+        const vietnamDate = new Date(utcDate.getTime() + 7 * 60 * 60 * 1000)
+        createdAt = vietnamDate.toISOString().replace('Z', '+07:00')
+      }
+
+      return {
+        id: log.id,
+        userId: log.user_id,
+        userName: userMap.get(log.user_id) || 'Không xác định',
+        action: log.action,
+        recordId: log.record_id,
+        oldValues: log.old_values,
+        newValues: log.new_values,
+        createdAt,
+        vehiclePlateNumber: plateNumber || '-',
+      }
+    })
+
+    return res.json(formattedLogs)
+  } catch (error: any) {
+    console.error('Error fetching all document audit logs:', error)
+    return res.status(500).json({ error: error.message || 'Failed to fetch audit logs' })
+  }
+}
+
 export const deleteVehicle = async (req: Request, res: Response) => {
   try {
     const { id } = req.params
@@ -761,6 +848,9 @@ export const deleteVehicle = async (req: Request, res: Response) => {
     if (!data) {
       return res.status(404).json({ error: 'Vehicle not found' })
     }
+
+    // Invalidate vehicle cache after delete
+    cachedData.invalidateVehicles()
 
     return res.json({
       id: data.id,

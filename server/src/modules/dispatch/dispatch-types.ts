@@ -33,6 +33,7 @@ export interface DispatchRecord {
   }
   entryTime: string
   entryBy?: string | null
+  entryImageUrl?: string | null
   passengerDropTime?: string | null
   passengersArrived?: number | null
   passengerDropBy?: string | null
@@ -79,6 +80,7 @@ export interface DispatchDBRecord {
   entry_time: string
   entry_by?: string | null
   entry_by_name?: string | null
+  entry_image_url?: string | null
   passenger_drop_time?: string | null
   passengers_arrived?: number | null
   passenger_drop_by?: string | null

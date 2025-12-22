@@ -12,6 +12,7 @@ import {
   updateVehicle,
   deleteVehicle,
   getVehicleDocumentAuditLogs,
+  getAllDocumentAuditLogs,
 } from './controllers/vehicle.controller.js'
 
 const router = Router()
@@ -21,6 +22,7 @@ router.use(authenticate)
 
 // Vehicle CRUD
 router.get('/', getAllVehicles)
+router.get('/document-audit-logs/all', getAllDocumentAuditLogs)
 router.get('/:id/document-audit-logs', getVehicleDocumentAuditLogs)
 router.get('/:id', getVehicleById)
 router.post('/', createVehicle)

@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo, useCallback } from "react";
+import { useSearchParams } from "react-router-dom";
 import { toast } from "react-toastify";
 import { useDispatchStore } from "@/store/dispatch.store";
 import { dispatchService } from "@/services/dispatch.service";
@@ -19,6 +20,7 @@ export type DialogType =
   | "depart-multiple";
 
 export function useDieuDo() {
+  const [searchParams, setSearchParams] = useSearchParams();
   const { records, setRecords } = useDispatchStore();
   const [searchQuery, setSearchQuery] = useState("");
   const [isLoading, setIsLoading] = useState(false);
@@ -28,6 +30,23 @@ export function useDieuDo() {
   const [dialogType, setDialogType] = useState<DialogType>("entry");
   const [isReadOnly, setIsReadOnly] = useState(false);
   const setTitle = useUIStore((state) => state.setTitle);
+
+  // Restore dialog state from URL params
+  useEffect(() => {
+    const dispatchId = searchParams.get("dispatch");
+    const action = searchParams.get("action") as DialogType | null;
+    const readonly = searchParams.get("readonly") === "true";
+
+    if (dispatchId && records.length > 0) {
+      const record = records.find((r) => r.id === dispatchId);
+      if (record) {
+        setSelectedRecord(record);
+        setDialogType(action || "permit");
+        setIsReadOnly(readonly);
+        setDialogOpen(true);
+      }
+    }
+  }, [searchParams, records]);
 
   useEffect(() => {
     setTitle("Điều độ xe");
@@ -71,11 +90,29 @@ export function useDieuDo() {
     }
   };
 
+  const updateUrlParams = useCallback((record: DispatchRecord | null, type: DialogType, readonly = false) => {
+    if (record) {
+      const params = new URLSearchParams();
+      params.set("dispatch", record.id);
+      params.set("action", type);
+      if (readonly) params.set("readonly", "true");
+      setSearchParams(params, { replace: true });
+    } else {
+      setSearchParams({}, { replace: true });
+    }
+  }, [setSearchParams]);
+
+  const closeDialog = useCallback(() => {
+    setDialogOpen(false);
+    setSearchParams({}, { replace: true });
+  }, [setSearchParams]);
+
   const handleEdit = (record: DispatchRecord) => {
     setSelectedRecord(record);
     setDialogType("edit");
     setIsReadOnly(false);
     setDialogOpen(true);
+    updateUrlParams(record, "edit");
   };
 
   const handleAction = (record: DispatchRecord, type: DialogType) => {
@@ -83,6 +120,7 @@ export function useDieuDo() {
     setDialogType(type);
     setDialogOpen(true);
     setIsReadOnly(false);
+    updateUrlParams(record, type);
   };
 
   const handleOpenPermitReadOnly = (record: DispatchRecord) => {
@@ -90,6 +128,7 @@ export function useDieuDo() {
     setDialogType("permit");
     setIsReadOnly(true);
     setDialogOpen(true);
+    updateUrlParams(record, "permit", true);
   };
 
   const handleRecordExit = async (record: DispatchRecord) => {
@@ -194,6 +233,7 @@ export function useDieuDo() {
     setSelectedRecord,
     dialogOpen,
     setDialogOpen,
+    closeDialog,
     dialogType,
     setDialogType,
     isReadOnly,

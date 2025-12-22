@@ -48,4 +48,15 @@ export const vehicleService = {
       return []
     }
   },
+
+  // Get all document audit logs for all vehicles (optimized)
+  getAllDocumentAuditLogs: async (): Promise<any[]> => {
+    try {
+      const response = await api.get<any[]>('/vehicles/document-audit-logs/all')
+      return response.data
+    } catch (error) {
+      console.error('Error fetching all document audit logs:', error)
+      return []
+    }
+  },
 }

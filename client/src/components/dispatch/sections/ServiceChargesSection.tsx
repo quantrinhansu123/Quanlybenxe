@@ -1,5 +1,4 @@
-import { CreditCard, ChevronRight, Plus } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { CreditCard, ChevronRight, Plus, Wallet } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
 import { GlassCard, SectionHeader } from "@/components/shared/styled-components";
 import type { ServiceCharge } from "@/types";
@@ -29,24 +28,33 @@ export function ServiceChargesSection({
         icon={CreditCard}
         title="Giá dịch vụ"
         action={
-          <Button
+          <button
             type="button"
             onClick={onAddService}
             disabled={!recordId || readOnly}
-            className="h-8 px-3 rounded-lg bg-blue-50 text-blue-600 hover:bg-blue-100 border-0 text-xs font-medium transition-all"
+            className="
+              inline-flex items-center gap-2 h-11 px-5 rounded-xl
+              bg-gradient-to-r from-blue-600 to-blue-500 text-white
+              font-semibold text-sm
+              shadow-lg shadow-blue-500/25
+              hover:shadow-xl hover:shadow-blue-500/30 hover:from-blue-700 hover:to-blue-600
+              active:scale-[0.98]
+              transition-all duration-200
+              disabled:opacity-50 disabled:cursor-not-allowed
+            "
           >
-            <Plus className="h-3.5 w-3.5 mr-1" />
-            Thêm
-          </Button>
+            <Plus className="h-5 w-5" />
+            Thêm dịch vụ
+          </button>
         }
       />
       <div className="divide-y divide-gray-100">
         {/* Service list header */}
         <div
-          className="flex items-center justify-between px-5 py-3 cursor-pointer hover:bg-gray-50 transition-colors"
+          className="flex items-center justify-between px-6 py-5 cursor-pointer hover:bg-gray-50 transition-colors"
           onClick={() => setServiceDetailsExpanded(!serviceDetailsExpanded)}
         >
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-4">
             <Checkbox
               checked={true}
               onChange={() => {}}
@@ -54,33 +62,36 @@ export function ServiceChargesSection({
               disabled={readOnly}
             />
             <ChevronRight
-              className={`h-4 w-4 text-gray-400 transition-transform duration-200 ${
+              className={`h-5 w-5 text-gray-400 transition-transform duration-300 ${
                 serviceDetailsExpanded ? "rotate-90" : ""
               }`}
             />
-            <span className="text-sm text-gray-600">Dịch vụ chuyến đi</span>
+            <span className="text-base font-medium text-gray-800">Dịch vụ chuyến đi</span>
           </div>
-          <span className="text-sm font-semibold text-gray-800">
+          <span className="text-lg font-bold text-gray-900">
             {totalAmount.toLocaleString("vi-VN")} ₫
           </span>
         </div>
 
         {/* Service details */}
         {serviceDetailsExpanded && (
-          <div className="bg-gray-50/50">
+          <div className="bg-gradient-to-b from-gray-50 to-white">
             {serviceCharges.length === 0 ? (
-              <div className="px-5 py-8 text-center">
-                <CreditCard className="h-8 w-8 text-gray-300 mx-auto mb-2" />
-                <p className="text-gray-400 text-sm">Chưa có dịch vụ</p>
+              <div className="px-6 py-10 text-center">
+                <div className="p-4 rounded-2xl bg-gray-100 w-fit mx-auto mb-4">
+                  <Wallet className="h-12 w-12 text-gray-400" />
+                </div>
+                <p className="text-gray-500 font-semibold text-lg mb-1">Chưa có dịch vụ</p>
+                <p className="text-gray-400 text-sm">Nhấn "Thêm dịch vụ" để bắt đầu</p>
               </div>
             ) : (
               <div className="divide-y divide-gray-100">
                 {serviceCharges.map((charge) => (
-                  <div key={charge.id} className="flex items-center justify-between px-5 py-3">
-                    <span className="text-sm text-gray-600">
+                  <div key={charge.id} className="flex items-center justify-between px-6 py-4 hover:bg-gray-50 transition-colors">
+                    <span className="text-base font-medium text-gray-700">
                       {charge.serviceType?.name || "Dịch vụ"}
                     </span>
-                    <span className="text-sm text-gray-700">
+                    <span className="text-base text-gray-900 font-semibold">
                       {charge.totalAmount.toLocaleString("vi-VN")} ₫
                     </span>
                   </div>
@@ -90,12 +101,28 @@ export function ServiceChargesSection({
           </div>
         )}
 
-        {/* Total */}
-        <div className="flex items-center justify-between px-5 py-4 bg-gradient-to-r from-blue-50 to-cyan-50">
-          <span className="text-sm font-semibold text-gray-700">Tổng tiền</span>
-          <span className="text-lg font-bold text-blue-600">
-            {totalAmount.toLocaleString("vi-VN")} ₫
-          </span>
+        {/* Total - Much more prominent */}
+        <div className="relative overflow-hidden">
+          {/* Background pattern */}
+          <div className="absolute inset-0 bg-gradient-to-r from-blue-600 to-cyan-500" />
+          <div className="absolute inset-0 opacity-10">
+            <div className="absolute inset-0" style={{
+              backgroundImage: `radial-gradient(circle at 2px 2px, white 1px, transparent 0)`,
+              backgroundSize: '20px 20px'
+            }} />
+          </div>
+          
+          <div className="relative flex items-center justify-between px-6 py-6">
+            <div className="flex items-center gap-3">
+              <div className="p-2.5 rounded-xl bg-white/20 backdrop-blur">
+                <Wallet className="h-6 w-6 text-white" />
+              </div>
+              <span className="text-lg font-bold text-white">TỔNG TIỀN</span>
+            </div>
+            <span className="text-3xl font-extrabold text-white tracking-tight">
+              {totalAmount.toLocaleString("vi-VN")} ₫
+            </span>
+          </div>
         </div>
       </div>
     </GlassCard>

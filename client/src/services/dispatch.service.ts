@@ -17,7 +17,6 @@ export const dispatchService = {
 
       const queryString = params.toString()
       const url = queryString ? `/dispatch?${queryString}` : '/dispatch'
-
       const response = await api.get<DispatchRecord[]>(url)
       return response.data
     } catch (error) {
@@ -103,6 +102,13 @@ export const dispatchService = {
       exitShiftId,
     })
     return response.data
+  },
+
+  updateEntryImage: async (id: string, entryImageUrl: string): Promise<DispatchRecord> => {
+    const response = await api.patch<{ dispatch: DispatchRecord }>(`/dispatch/${id}/entry-image`, {
+      entryImageUrl,
+    })
+    return response.data.dispatch
   },
 
   // Legacy methods for backward compatibility

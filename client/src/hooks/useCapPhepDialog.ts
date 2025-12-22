@@ -315,21 +315,67 @@ export function useCapPhepDialog(record: DispatchRecord, onClose: () => void, on
     }
   }, [departureTime, departureDate, record, transportOrderCode, seatCount, routeId, scheduleId, replacementVehicleId, getShiftIdFromCurrentShift, onSuccess, onClose]);
 
-  const handleEligible = useCallback(async () => {
-    if (!transportOrderCode || !routeId || !departureDate) {
-      toast.warning("Vui lòng điền đầy đủ các trường bắt buộc");
-      return;
+  const [validationErrors, setValidationErrors] = useState<Record<string, string>>({});
+  const [hasAttemptedSubmit, setHasAttemptedSubmit] = useState(false);
+
+  const validatePermitFields = useCallback((): { isValid: boolean; errors: string[]; fieldErrors: Record<string, string> } => {
+    const errors: string[] = [];
+    const fieldErrors: Record<string, string> = {};
+    
+    if (!transportOrderCode?.trim()) {
+      errors.push("Mã lệnh vận chuyển");
+      fieldErrors.transportOrderCode = "Vui lòng nhập mã lệnh vận chuyển";
+    }
+    if (!routeId) {
+      errors.push("Tuyến đường");
+      fieldErrors.routeId = "Vui lòng chọn tuyến đường";
+    }
+    if (!departureDate) {
+      errors.push("Ngày xuất bến");
+      fieldErrors.departureDate = "Vui lòng chọn ngày xuất bến";
     }
     if (!scheduleId && !departureTime) {
-      toast.warning("Vui lòng chọn biểu đồ giờ hoặc nhập giờ xuất bến khác");
+      errors.push("Biểu đồ giờ hoặc Giờ xuất bến");
+      fieldErrors.departureTime = "Vui lòng chọn biểu đồ giờ hoặc nhập giờ xuất bến";
+    }
+    if (!seatCount || parseInt(seatCount) <= 0) {
+      errors.push("Số ghế (phải lớn hơn 0)");
+      fieldErrors.seatCount = "Số ghế phải lớn hơn 0";
+    }
+    
+    return { isValid: errors.length === 0, errors, fieldErrors };
+  }, [transportOrderCode, routeId, departureDate, scheduleId, departureTime, seatCount]);
+
+  const handleEligible = useCallback(async () => {
+    setHasAttemptedSubmit(true);
+    const { isValid, errors, fieldErrors } = validatePermitFields();
+    setValidationErrors(fieldErrors);
+    
+    if (!isValid) {
+      const errorMessage = errors.length === 1
+        ? `Vui lòng điền: ${errors[0]}`
+        : `Vui lòng điền các trường sau:\n• ${errors.join("\n• ")}`;
+      toast.error(errorMessage, {
+        autoClose: 5000,
+        style: { whiteSpace: 'pre-line' }
+      });
       return;
     }
+    
     if (totalAmount === 0) {
       setShowZeroAmountConfirm(true);
       return;
     }
     await submitPermit();
-  }, [transportOrderCode, routeId, departureDate, scheduleId, departureTime, totalAmount, submitPermit]);
+  }, [validatePermitFields, totalAmount, submitPermit]);
+
+  // Clear validation error when field value changes
+  useEffect(() => {
+    if (hasAttemptedSubmit) {
+      const { fieldErrors } = validatePermitFields();
+      setValidationErrors(fieldErrors);
+    }
+  }, [transportOrderCode, routeId, departureDate, scheduleId, departureTime, seatCount, hasAttemptedSubmit, validatePermitFields]);
 
   const handleNotEligibleConfirm = useCallback(async (
     selectedReasons: string[],
@@ -475,6 +521,7 @@ export function useCapPhepDialog(record: DispatchRecord, onClose: () => void, on
     serviceDetailsExpanded, setServiceDetailsExpanded,
     showZeroAmountConfirm, setShowZeroAmountConfirm,
     dailyTripCounts,
+    validationErrors,
     // Methods
     submitPermit, handleEligible, handleNotEligibleConfirm,
     handleDocumentDialogSuccess, handleAddServiceSuccess, handleAddDriverSuccess,

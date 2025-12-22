@@ -54,6 +54,10 @@ temp/
 *.tmp
 *.local
 
+# Uploads (keep folder but ignore contents)
+server/uploads/*
+!server/uploads/.gitkeep
+
 # Firebase
 .firebase/
 firebase-debug.log
@@ -80,3 +84,4 @@ NUL
 plans/
 docs/
 .claude/
+.factory/

@@ -1,6 +1,7 @@
 import { initializeApp, getApps, cert, App } from 'firebase-admin/app'
 import { getDatabase, Database } from 'firebase-admin/database'
-import { readFileSync } from 'fs'
+// Note: Storage is imported in upload.controller.ts, bucket config is set in initializeApp
+import { readFileSync, existsSync } from 'fs'
 import { resolve } from 'path'
 import dotenv from 'dotenv'
 
@@ -27,30 +28,45 @@ function initializeFirebase(): Database {
     try {
       if (serviceAccountPath) {
         const absolutePath = resolve(process.cwd(), serviceAccountPath)
+        
+        // Validate service account file exists
+        if (!existsSync(absolutePath)) {
+          throw new Error(`Service account file not found at: ${absolutePath}`)
+        }
+        
         const serviceAccount = JSON.parse(readFileSync(absolutePath, 'utf-8'))
+        const projectId = serviceAccount.project_id || 'benxe-management-20251218'
         app = initializeApp({
           credential: cert(serviceAccount),
-          databaseURL: firebaseDatabaseURL
+          databaseURL: firebaseDatabaseURL,
+          storageBucket: `${projectId}.firebasestorage.app`
         })
+        console.log('[Firebase] Initialized with service account:', serviceAccount.client_email)
+        console.log('[Firebase] Storage bucket:', `${projectId}.firebasestorage.app`)
       } else if (googleApplicationCredentials) {
         app = initializeApp({
           databaseURL: firebaseDatabaseURL
         })
+        console.log('[Firebase] Initialized with GOOGLE_APPLICATION_CREDENTIALS')
       } else {
         app = initializeApp({
           databaseURL: firebaseDatabaseURL
         })
-        console.warn('Firebase initialized without explicit credentials. Make sure you have:')
-        console.warn('   1. Service account JSON file and set SERVICE_ACCOUNT_PATH, OR')
-        console.warn('   2. Set GOOGLE_APPLICATION_CREDENTIALS environment variable, OR')
-        console.warn('   3. Running on GCP/Firebase with default credentials')
+        console.warn('[Firebase] WARNING: Initialized without explicit credentials!')
+        console.warn('   Database access may fail if Firebase rules require authentication.')
+        console.warn('   To fix, set one of these environment variables:')
+        console.warn('   - SERVICE_ACCOUNT_PATH=./firebase-service-account.json')
+        console.warn('   - GOOGLE_APPLICATION_CREDENTIALS=/path/to/service-account.json')
       }
+      
+      console.log('[Firebase] Database URL:', firebaseDatabaseURL)
     } catch (error: any) {
-      console.error('Firebase initialization error:', error)
-      throw new Error(`Failed to initialize Firebase: ${error.message}. Please check RTDB_URL and authentication setup.`)
+      console.error('[Firebase] Initialization error:', error.message)
+      throw new Error(`Failed to initialize Firebase: ${error.message}`)
     }
   } else {
     app = getApps()[0]
+    console.log('[Firebase] Using existing app instance')
   }
 
   if (!app) {
@@ -60,6 +76,22 @@ function initializeFirebase(): Database {
   db = getDatabase(app)
   initialized = true
   return db
+}
+
+/**
+ * Test Firebase connection by attempting a simple read
+ * Call this on server startup to verify configuration
+ */
+export async function testFirebaseConnection(): Promise<boolean> {
+  try {
+    const database = initializeFirebase()
+    await database.ref('.info/connected').once('value')
+    console.log('[Firebase] Connection test: SUCCESS')
+    return true
+  } catch (error: any) {
+    console.error('[Firebase] Connection test: FAILED -', error.message)
+    return false
+  }
 }
 
 // Getter for database instance (triggers lazy init)

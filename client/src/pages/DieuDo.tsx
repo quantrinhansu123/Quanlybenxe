@@ -56,6 +56,7 @@ export default function DieuDo() {
     selectedRecord,
     dialogOpen,
     setDialogOpen,
+    closeDialog,
     dialogType,
     setDialogType,
     isReadOnly,
@@ -255,26 +256,26 @@ export default function DieuDo() {
 
       {/* Dialogs */}
       {dialogType === "permit" && selectedRecord && (
-        <CapPhepDialog key={selectedRecord.id} record={selectedRecord} open={dialogOpen} readOnly={isReadOnly} onClose={() => setDialogOpen(false)} onSuccess={loadRecords} />
+        <CapPhepDialog key={selectedRecord.id} record={selectedRecord} open={dialogOpen} readOnly={isReadOnly} onClose={closeDialog} onSuccess={loadRecords} />
       )}
 
       {(dialogType === "entry" || dialogType === "edit") && (
-        <ChoXeVaoBenDialog open={dialogOpen} vehicleOptions={vehicleOptions} onClose={() => setDialogOpen(false)} onSuccess={loadRecords} editRecord={dialogType === "edit" ? selectedRecord : null} />
+        <ChoXeVaoBenDialog open={dialogOpen} vehicleOptions={vehicleOptions} onClose={closeDialog} onSuccess={loadRecords} editRecord={dialogType === "edit" ? selectedRecord : null} />
       )}
 
       {dialogType === "depart-multiple" && (
-        <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+        <Dialog open={dialogOpen} onOpenChange={(open) => !open && closeDialog()}>
           <DialogContent className="max-h-[95vh] overflow-y-auto w-[95vw] max-w-[1800px]">
-            <DialogClose onClose={() => setDialogOpen(false)} />
+            <DialogClose onClose={closeDialog} />
             <DialogHeader><DialogTitle>Cho nhiều xe ra bến</DialogTitle></DialogHeader>
-            <ChoNhieuXeRaBenDialog records={records.filter((r) => r.currentStatus === "departure_ordered")} onClose={() => setDialogOpen(false)} onSuccess={loadRecords} open={dialogOpen} />
+            <ChoNhieuXeRaBenDialog records={records.filter((r) => r.currentStatus === "departure_ordered")} onClose={closeDialog} onSuccess={loadRecords} open={dialogOpen} />
           </DialogContent>
         </Dialog>
       )}
 
-      <Dialog open={dialogOpen && !["permit", "entry", "edit", "depart-multiple"].includes(dialogType)} onOpenChange={setDialogOpen}>
+      <Dialog open={dialogOpen && !["permit", "entry", "edit", "depart-multiple"].includes(dialogType)} onOpenChange={(open) => !open && closeDialog()}>
         <DialogContent className={cn("max-h-[95vh] overflow-y-auto w-[95vw]", dialogType === "depart" ? "max-w-xl" : "max-w-5xl")}>
-          <DialogClose onClose={() => setDialogOpen(false)} />
+          <DialogClose onClose={closeDialog} />
           <DialogHeader>
             <DialogTitle>
               {dialogType === "return" && "Xác nhận trả khách"}
@@ -284,10 +285,10 @@ export default function DieuDo() {
             </DialogTitle>
           </DialogHeader>
           <div className="space-y-4">
-            {dialogType === "return" && selectedRecord && <XeTraKhachDialog record={selectedRecord} onClose={() => setDialogOpen(false)} onSuccess={loadRecords} />}
-            {dialogType === "depart" && selectedRecord && <ChoXeRaBenDialog record={selectedRecord} onClose={() => setDialogOpen(false)} onSuccess={loadRecords} />}
-            {dialogType === "departure-order" && selectedRecord && <CapLenhXuatBenDialog record={selectedRecord} onClose={() => setDialogOpen(false)} onSuccess={loadRecords} />}
-            {dialogType === "monthly-payment" && selectedRecord && <ThanhToanTheoThangDialog record={selectedRecord} onClose={() => setDialogOpen(false)} onSuccess={loadRecords} />}
+            {dialogType === "return" && selectedRecord && <XeTraKhachDialog record={selectedRecord} onClose={closeDialog} onSuccess={loadRecords} />}
+            {dialogType === "depart" && selectedRecord && <ChoXeRaBenDialog record={selectedRecord} onClose={closeDialog} onSuccess={loadRecords} />}
+            {dialogType === "departure-order" && selectedRecord && <CapLenhXuatBenDialog record={selectedRecord} onClose={closeDialog} onSuccess={loadRecords} />}
+            {dialogType === "monthly-payment" && selectedRecord && <ThanhToanTheoThangDialog record={selectedRecord} onClose={closeDialog} onSuccess={loadRecords} />}
           </div>
         </DialogContent>
       </Dialog>

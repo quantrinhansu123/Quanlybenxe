@@ -261,3 +261,84 @@ export const getVehicleDocumentAuditLogs = async (req: Request, res: Response) =
     return res.status(500).json({ error: err.message || 'Failed to fetch audit logs' });
   }
 };
+
+/**
+ * Get all document audit logs for all vehicles (optimized single query)
+ */
+export const getAllDocumentAuditLogs = async (_req: Request, res: Response) => {
+  try {
+    // Get all audit logs for vehicle_documents in one query
+    const { data: auditLogs, error: auditError } = await firebase
+      .from('audit_logs')
+      .select('*')
+      .eq('table_name', 'vehicle_documents')
+      .order('created_at', { ascending: false })
+      .limit(500);
+
+    if (auditError) throw auditError;
+    if (!auditLogs || auditLogs.length === 0) return res.json([]);
+
+    // Get unique vehicle_document IDs
+    const docIds = [...new Set(auditLogs.map((log: any) => log.record_id))];
+
+    // Fetch vehicle_documents to get vehicle_id
+    const { data: vehicleDocs } = await firebase
+      .from('vehicle_documents')
+      .select('id, vehicle_id')
+      .in('id', docIds);
+
+    const docToVehicleMap = new Map(
+      (vehicleDocs || []).map((doc: any) => [doc.id, doc.vehicle_id])
+    );
+
+    // Get unique vehicle IDs
+    const vehicleIds = [...new Set(
+      (vehicleDocs || []).map((doc: any) => doc.vehicle_id).filter(Boolean)
+    )];
+
+    // Fetch vehicles to get plate numbers
+    const { data: vehicles } = await firebase
+      .from('vehicles')
+      .select('id, plate_number')
+      .in('id', vehicleIds);
+
+    const vehicleMap = new Map(
+      (vehicles || []).map((v: any) => [v.id, v.plate_number])
+    );
+
+    // Fetch users for names
+    const userIds = [...new Set(auditLogs.map((log: any) => log.user_id).filter(Boolean))];
+    const { data: users } = await firebase
+      .from('users')
+      .select('id, full_name, username')
+      .in('id', userIds);
+
+    const userMap = new Map(
+      (users || []).map((u: any) => [u.id, u.full_name || u.username || 'Không xác định'])
+    );
+
+    // Format response
+    const formattedLogs = auditLogs.map((log: any) => {
+      const vehicleId = docToVehicleMap.get(log.record_id);
+      const plateNumber = vehicleId ? vehicleMap.get(vehicleId) : null;
+
+      return {
+        id: log.id,
+        userId: log.user_id,
+        userName: userMap.get(log.user_id) || 'Không xác định',
+        action: log.action,
+        recordId: log.record_id,
+        oldValues: log.old_values,
+        newValues: log.new_values,
+        createdAt: log.created_at,
+        vehiclePlateNumber: plateNumber || '-',
+      };
+    });
+
+    return res.json(formattedLogs);
+  } catch (error: unknown) {
+    const err = error as { message?: string };
+    console.error('Error fetching all document audit logs:', err);
+    return res.status(500).json({ error: err.message || 'Failed to fetch audit logs' });
+  }
+};

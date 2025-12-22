@@ -2,6 +2,7 @@ import { Request, Response } from 'express'
 import { firebase } from '../config/database.js'
 import { z } from 'zod'
 import { syncDriverChanges } from '../utils/denormalization-sync.js'
+import { cachedData } from '../services/cached-data.service.js'
 
 const driverSchema = z.object({
   operatorIds: z.array(z.string().min(1, 'Invalid operator ID')).min(1, 'At least one operator is required'),
@@ -21,25 +22,17 @@ export const getAllDrivers = async (req: Request, res: Response) => {
   try {
     const { operatorId, isActive } = req.query
 
-    // Load all drivers first
-    let driversQuery = firebase
-      .from('drivers')
-      .select('*')
-      .order('created_at', { ascending: false })
+    // Use cached drivers and operators (parallel fetch)
+    let [driversData, operatorsMap] = await Promise.all([
+      cachedData.getAllDrivers(),
+      cachedData.getOperatorsMap(),
+    ])
 
+    // Filter by isActive if specified
     if (isActive !== undefined) {
-      driversQuery = driversQuery.eq('is_active', isActive === 'true')
+      const active = isActive === 'true'
+      driversData = driversData.filter((d: any) => d.is_active === active)
     }
-
-    const { data: driversData, error: driversError } = await driversQuery
-    if (driversError) throw driversError
-
-    // Load operators for lookup
-    const { data: operatorsData } = await firebase
-      .from('operators')
-      .select('id, name, code')
-
-    const operatorsMap = new Map((operatorsData || []).map((op: any) => [op.id, op]))
 
     // Load junction table for multi-operator relationships
     const { data: junctionData, error: junctionError } = await firebase
@@ -321,6 +314,9 @@ export const createDriver = async (req: Request, res: Response) => {
       }
     }
 
+    // Invalidate driver cache after create
+    cachedData.invalidateDrivers()
+
     return res.status(201).json({
       id: driverData.id,
       operatorId: driverData.operator_id, // Keep for backward compatibility
@@ -464,6 +460,9 @@ export const updateDriver = async (req: Request, res: Response) => {
       }
     }
 
+    // Invalidate driver cache after update
+    cachedData.invalidateDrivers()
+
     return res.json({
       id: data.id,
       operatorId: data.operator_id, // Keep for backward compatibility
@@ -503,6 +502,9 @@ export const deleteDriver = async (req: Request, res: Response) => {
       .eq('id', id)
 
     if (error) throw error
+
+    // Invalidate driver cache after delete
+    cachedData.invalidateDrivers()
 
     return res.status(204).send()
   } catch (error) {

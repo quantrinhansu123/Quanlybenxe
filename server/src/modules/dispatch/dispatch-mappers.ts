@@ -40,6 +40,7 @@ export function mapDispatchToAPI(record: DispatchDBRecord): DispatchRecord {
     routeName: record.route_name || '',
     entryTime: record.entry_time,
     entryBy: record.entry_by_name || record.entry_by,
+    entryImageUrl: record.entry_image_url,
     passengerDropTime: record.passenger_drop_time,
     passengersArrived: record.passengers_arrived,
     passengerDropBy: record.passenger_drop_by_name || record.passenger_drop_by,

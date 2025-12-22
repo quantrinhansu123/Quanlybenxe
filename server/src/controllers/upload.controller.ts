@@ -1,6 +1,19 @@
 import { Request, Response } from 'express';
-import cloudinary from '../config/cloudinary.js';
+import { getStorage } from 'firebase-admin/storage';
+import { getApps } from 'firebase-admin/app';
 import fs from 'fs';
+import path from 'path';
+
+// Import to trigger Firebase initialization  
+import '../config/database.js';
+
+// Get Firebase Storage bucket (uses default bucket configured in initializeApp)
+function getStorageBucket() {
+  if (getApps().length === 0) {
+    throw new Error('Firebase not initialized. Make sure database.ts is imported first.');
+  }
+  return getStorage().bucket();
+}
 
 export const uploadImage = async (req: Request, res: Response): Promise<Response> => {
   try {
@@ -8,26 +21,48 @@ export const uploadImage = async (req: Request, res: Response): Promise<Response
       return res.status(400).json({ message: 'No file uploaded' });
     }
 
-    // Upload to Cloudinary
-    const result = await cloudinary.uploader.upload(req.file.path, {
-      folder: 'ben-xe-manager', // Optional: organize uploads in a folder
-      use_filename: true,
-      unique_filename: true,
+    const bucket = getStorageBucket();
+    const timestamp = Date.now();
+    const ext = path.extname(req.file.originalname);
+    const fileName = `dispatch-images/${timestamp}-${Math.random().toString(36).substring(7)}${ext}`;
+
+    // Upload to Firebase Storage
+    await bucket.upload(req.file.path, {
+      destination: fileName,
+      metadata: {
+        contentType: req.file.mimetype,
+        metadata: {
+          originalName: req.file.originalname,
+          uploadedAt: new Date().toISOString(),
+        },
+      },
     });
 
-    // Remove file from local uploads folder
+    // Make file publicly accessible
+    const file = bucket.file(fileName);
+    await file.makePublic();
+
+    // Get public URL
+    const publicUrl = `https://storage.googleapis.com/${bucket.name}/${fileName}`;
+
+    // Remove temp file
     fs.unlinkSync(req.file.path);
 
     return res.status(200).json({
-      url: result.secure_url,
-      public_id: result.public_id,
+      url: publicUrl,
+      fileName: fileName,
     });
-  } catch (error) {
+  } catch (error: any) {
     console.error('Upload error:', error);
-    // Try to remove file if it exists and upload failed
+    
+    // Try to remove temp file if it exists
     if (req.file && fs.existsSync(req.file.path)) {
       fs.unlinkSync(req.file.path);
     }
-    return res.status(500).json({ message: 'Image upload failed', error });
+    
+    return res.status(500).json({ 
+      message: 'Image upload failed', 
+      error: error.message || 'Unknown error'
+    });
   }
 };

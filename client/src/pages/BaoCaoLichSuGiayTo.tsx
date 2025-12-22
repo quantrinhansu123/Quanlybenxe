@@ -90,30 +90,8 @@ export default function BaoCaoLichSuGiayTo() {
   const loadAllAuditLogs = async () => {
     setIsLoading(true)
     try {
-      // Lấy tất cả xe
-      const vehicles = await vehicleService.getAll()
-      
-      // Lấy audit logs của tất cả xe
-      const allLogs: AuditLogEntry[] = []
-      
-      for (const vehicle of vehicles) {
-        try {
-          const vehicleLogs = await vehicleService.getDocumentAuditLogs(vehicle.id)
-          // Thêm thông tin biển số vào mỗi log
-          const logsWithPlate = vehicleLogs.map((log: any) => ({
-            ...log,
-            vehiclePlateNumber: vehicle.plateNumber,
-          }))
-          allLogs.push(...logsWithPlate)
-        } catch (error) {
-          // Bỏ qua lỗi của từng xe
-          console.error(`Failed to load logs for vehicle ${vehicle.id}:`, error)
-        }
-      }
-      
-      // Sắp xếp theo thời gian mới nhất
-      allLogs.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
-      
+      // Use optimized API endpoint that fetches all logs in one request
+      const allLogs = await vehicleService.getAllDocumentAuditLogs()
       setLogs(allLogs)
     } catch (error) {
       console.error("Failed to load audit logs:", error)

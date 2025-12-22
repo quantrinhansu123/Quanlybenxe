@@ -290,6 +290,33 @@ export const recordExit = async (req: AuthRequest, res: Response) => {
   }
 }
 
+/**
+ * Update entry image URL (set or remove)
+ */
+export const updateEntryImage = async (req: AuthRequest, res: Response) => {
+  try {
+    const { id } = req.params
+    const { entryImageUrl } = req.body
+
+    // Allow null to remove image, or string to set image
+    if (entryImageUrl !== null && typeof entryImageUrl !== 'string') {
+      return res.status(400).json({ error: 'entryImageUrl must be a string or null' })
+    }
+
+    const record = await dispatchRepository.update(id, {
+      entry_image_url: entryImageUrl,
+    })
+
+    if (!record) return res.status(404).json({ error: 'Dispatch record not found' })
+
+    const message = entryImageUrl ? 'Entry image updated' : 'Entry image removed'
+    return res.json({ message, dispatch: mapDispatchToAPI(record) })
+  } catch (error: unknown) {
+    console.error('Error updating entry image:', error)
+    return res.status(500).json({ error: getErrorMessage(error, 'Failed to update entry image') })
+  }
+}
+
 // Legacy endpoints
 export const updateDispatchStatus = async (_req: Request, res: Response) => {
   return res.status(400).json({ error: 'This endpoint is deprecated. Use specific workflow endpoints instead.' })

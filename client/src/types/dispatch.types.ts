@@ -31,6 +31,7 @@ export interface DispatchRecord {
   // Entry
   entryTime: string
   entryBy?: string
+  entryImageUrl?: string
 
   // Passenger drop-off
   passengerDropTime?: string

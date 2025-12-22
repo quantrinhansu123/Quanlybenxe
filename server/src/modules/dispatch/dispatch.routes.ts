@@ -14,6 +14,7 @@ import {
   processPayment,
   issueDepartureOrder,
   recordExit,
+  updateEntryImage,
   updateDispatchStatus,
   depart,
 } from './controllers/dispatch.controller.js'
@@ -34,6 +35,7 @@ router.post('/:id/permit', issuePermit)
 router.post('/:id/payment', processPayment)
 router.post('/:id/departure-order', issueDepartureOrder)
 router.post('/:id/exit', recordExit)
+router.patch('/:id/entry-image', updateEntryImage)
 
 // Legacy deprecated endpoints
 router.put('/:id/status', updateDispatchStatus)

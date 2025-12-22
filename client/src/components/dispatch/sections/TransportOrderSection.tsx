@@ -1,4 +1,4 @@
-import { FileText } from "lucide-react";
+import { FileText, Hash, MapPin, Clock } from "lucide-react";
 import { format } from "date-fns";
 import { Autocomplete } from "@/components/ui/autocomplete";
 import { DatePicker } from "@/components/DatePicker";
@@ -25,6 +25,7 @@ interface TransportOrderSectionProps {
   departureDate: string;
   setDepartureDate: (value: string) => void;
   scheduleId: string;
+  validationErrors?: Record<string, string>;
 }
 
 export function TransportOrderSection({
@@ -47,29 +48,39 @@ export function TransportOrderSection({
   departureDate,
   setDepartureDate,
   scheduleId,
+  validationErrors = {},
 }: TransportOrderSectionProps) {
   return (
     <GlassCard>
       <SectionHeader icon={FileText} title="Lệnh vận chuyển" />
-      <div className="p-5 space-y-4">
-        <FormField label="Mã lệnh vận chuyển" required>
-          <StyledInput
-            value={transportOrderCode}
-            onChange={(e) => setTransportOrderCode(e.target.value)}
-            placeholder="Nhập mã lệnh vận chuyển"
-            autoComplete="off"
-            readOnly={readOnly}
-          />
+      <div className="p-6 space-y-5">
+        {/* Transport Order Code - Prominent input */}
+        <FormField label="Mã lệnh vận chuyển" required error={validationErrors.transportOrderCode}>
+          <div className="relative">
+            <div className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400">
+              <Hash className="h-5 w-5" />
+            </div>
+            <StyledInput
+              value={transportOrderCode}
+              onChange={(e) => setTransportOrderCode(e.target.value)}
+              placeholder="Nhập mã lệnh vận chuyển"
+              autoComplete="off"
+              readOnly={readOnly}
+              className={`pl-12 ${validationErrors.transportOrderCode ? "border-rose-400 focus:border-rose-500 focus:ring-rose-500/30" : ""}`}
+            />
+          </div>
         </FormField>
 
-        <div className="grid grid-cols-4 gap-3">
-          <FormField label="Số ghế">
+        {/* Capacity Grid */}
+        <div className="grid grid-cols-4 gap-4">
+          <FormField label="Số ghế" required error={validationErrors.seatCount}>
             <StyledInput
               type="number"
               value={seatCount}
               onChange={(e) => setSeatCount(e.target.value)}
-              min="0"
+              min="1"
               readOnly={readOnly}
+              className={`text-center ${validationErrors.seatCount ? "!border-rose-400 focus:border-rose-500 focus:ring-rose-500/30" : ""}`}
             />
           </FormField>
           <FormField label="Số giường">
@@ -79,6 +90,7 @@ export function TransportOrderSection({
               onChange={(e) => setBedCount(e.target.value)}
               min="0"
               readOnly={readOnly}
+              className="text-center"
             />
           </FormField>
           <FormField label="Số vé HH">
@@ -88,6 +100,7 @@ export function TransportOrderSection({
               onChange={(e) => setHhTicketCount(e.target.value)}
               min="0"
               readOnly={readOnly}
+              className="text-center"
             />
           </FormField>
           <FormField label="% HH">
@@ -98,35 +111,49 @@ export function TransportOrderSection({
               min="0"
               max="100"
               readOnly={readOnly}
+              className="text-center"
             />
           </FormField>
         </div>
 
-        <FormField label="Tuyến vận chuyển" required>
-          <Autocomplete
-            value={routeId}
-            onChange={(value) => setRouteId(value)}
-            options={routes.map((r) => ({
-              value: r.id,
-              label: `${r.routeName} (${r.routeCode})${r.distanceKm ? ` - ${r.distanceKm} Km` : ""}`,
-            }))}
-            placeholder="Gõ để tìm tuyến..."
-            disabled={readOnly}
-            className="w-full"
-          />
+        {/* Route Selection */}
+        <FormField label="Tuyến vận chuyển" required error={validationErrors.routeId}>
+          <div className="relative">
+            <div className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 z-10 pointer-events-none">
+              <MapPin className="h-5 w-5" />
+            </div>
+            <Autocomplete
+              value={routeId}
+              onChange={(value) => setRouteId(value)}
+              options={routes.map((r) => ({
+                value: r.id,
+                label: `${r.routeName} (${r.routeCode})${r.distanceKm ? ` - ${r.distanceKm} Km` : ""}`,
+              }))}
+              placeholder="Gõ để tìm tuyến..."
+              disabled={readOnly}
+              className={`w-full [&_input]:pl-12 ${validationErrors.routeId ? "[&_input]:border-rose-400" : ""}`}
+            />
+          </div>
         </FormField>
 
-        <div className="grid grid-cols-2 gap-4">
-          <FormField label="Giờ xuất bến khác" required={!scheduleId}>
-            <StyledInput
-              type="time"
-              value={departureTime}
-              onChange={(e) => setDepartureTime(e.target.value)}
-              readOnly={readOnly}
-            />
-          </FormField>
-          <FormField label="Ngày xuất bến" required>
+        {/* Time & Date - Side by side with icons */}
+        <div className="grid grid-cols-2 gap-5">
+          <FormField label="Giờ xuất bến khác" required={!scheduleId} error={validationErrors.departureTime}>
             <div className="relative">
+              <div className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400">
+                <Clock className="h-5 w-5" />
+              </div>
+              <StyledInput
+                type="time"
+                value={departureTime}
+                onChange={(e) => setDepartureTime(e.target.value)}
+                readOnly={readOnly}
+                className={`pl-12 font-bold ${validationErrors.departureTime ? "border-rose-400 focus:border-rose-500 focus:ring-rose-500/30" : ""}`}
+              />
+            </div>
+          </FormField>
+          <FormField label="Ngày xuất bến" required error={validationErrors.departureDate}>
+            <div className={`relative ${validationErrors.departureDate ? "[&_button]:border-rose-400" : ""}`}>
               <DatePicker
                 date={departureDate ? new Date(departureDate) : null}
                 onDateChange={(date) => setDepartureDate(date ? format(date, "yyyy-MM-dd") : "")}

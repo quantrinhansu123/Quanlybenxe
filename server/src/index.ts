@@ -133,10 +133,36 @@ const isCloudFunction = process.env.FUNCTION_TARGET ||
 const isMainModule = process.argv[1]?.includes('index.js') || process.argv[1]?.includes('index.ts')
 
 if (!isCloudFunction && isMainModule) {
-  app.listen(PORT, () => {
-    console.log(`Server is running on http://localhost:${PORT}`)
-    console.log(`API available at http://localhost:${PORT}/api`)
-    console.log(`Health check: http://localhost:${PORT}/health`)
+  // Import and test Firebase connection on startup
+  import('./config/database.js').then(async ({ testFirebaseConnection }) => {
+    const isConnected = await testFirebaseConnection()
+    if (!isConnected) {
+      console.error('========================================')
+      console.error('WARNING: Firebase connection failed!')
+      console.error('API calls to database will fail.')
+      console.error('Please check:')
+      console.error('  1. SERVICE_ACCOUNT_PATH points to valid JSON file')
+      console.error('  2. RTDB_URL is correct')
+      console.error('  3. Service account has database access')
+      console.error('========================================')
+    }
+
+    // Preload cache for faster first requests
+    try {
+      const { cachedData } = await import('./services/cached-data.service.js')
+      await cachedData.preloadCommonData()
+    } catch (error) {
+      console.warn('[Cache] Failed to preload:', error)
+    }
+    
+    app.listen(PORT, () => {
+      console.log(`Server is running on http://localhost:${PORT}`)
+      console.log(`API available at http://localhost:${PORT}/api`)
+      console.log(`Health check: http://localhost:${PORT}/health`)
+    })
+  }).catch((error) => {
+    console.error('Failed to import database config:', error)
+    process.exit(1)
   })
 }
 
