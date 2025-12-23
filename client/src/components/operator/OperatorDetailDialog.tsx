@@ -32,7 +32,9 @@ export function OperatorDetailDialog({
     setActiveTab,
     vehicles,
     invoices,
+    allDispatchRecords,
     paidDispatchRecords,
+    unpaidDispatchRecords,
     isLoading,
     error,
     loadData,
@@ -86,7 +88,7 @@ export function OperatorDetailDialog({
             vehicleCount={vehicles.length}
             totalDebt={totalDebt}
             totalPaid={totalPaid}
-            invoiceCount={invoices.length}
+            invoiceCount={allDispatchRecords.length}
             formatCurrency={formatCurrency}
           />
 
@@ -97,7 +99,7 @@ export function OperatorDetailDialog({
                 Xe trực thuộc ({vehicles.length})
               </TabsTrigger>
               <TabsTrigger value="debt">
-                Công nợ ({unpaidInvoices.length})
+                Công nợ ({unpaidDispatchRecords.length + unpaidInvoices.length})
               </TabsTrigger>
               <TabsTrigger value="payment-info">Thông tin thanh toán</TabsTrigger>
               <TabsTrigger value="payment-history">
@@ -164,12 +166,12 @@ export function OperatorDetailDialog({
             <TabsContent value="debt" className="mt-6">
               <Card>
                 <CardHeader>
-                  <CardTitle>Công nợ chưa thanh toán ({unpaidInvoices.length})</CardTitle>
+                  <CardTitle>Công nợ chưa thanh toán ({unpaidDispatchRecords.length + unpaidInvoices.length})</CardTitle>
                 </CardHeader>
                 <CardContent>
                   {isLoading ? (
                     <div className="text-center py-8">Đang tải...</div>
-                  ) : unpaidInvoices.length === 0 ? (
+                  ) : (unpaidDispatchRecords.length === 0 && unpaidInvoices.length === 0) ? (
                     <div className="text-center py-8 text-gray-500">Không có công nợ</div>
                   ) : (
                     <>
@@ -181,44 +183,92 @@ export function OperatorDetailDialog({
                           </span>
                         </p>
                       </div>
-                      <Table>
-                        <TableHeader>
-                          <TableRow>
-                            <TableHead className="text-center">Số hóa đơn</TableHead>
-                            <TableHead className="text-center">Ngày phát hành</TableHead>
-                            <TableHead className="text-center">Hạn thanh toán</TableHead>
-                            <TableHead className="text-center">Tổng tiền</TableHead>
-                            <TableHead className="text-center">Trạng thái</TableHead>
-                          </TableRow>
-                        </TableHeader>
-                        <TableBody>
-                          {unpaidInvoices.map((invoice) => (
-                            <TableRow key={invoice.id}>
-                              <TableCell className="font-medium text-center">
-                                {invoice.invoiceNumber}
-                              </TableCell>
-                              <TableCell className="text-center">
-                                {formatDate(invoice.issueDate)}
-                              </TableCell>
-                              <TableCell className="text-center">
-                                {formatDate(invoice.dueDate)}
-                              </TableCell>
-                              <TableCell className="text-center">
-                                {formatCurrency(invoice.totalAmount)}
-                              </TableCell>
-                              <TableCell className="text-center">
-                                {invoice.paymentStatus === "overdue" ? (
-                                  <StatusBadge status="inactive" />
-                                ) : (
-                                  <span className="px-2 py-1 rounded-full text-xs bg-yellow-100 text-yellow-800">
-                                    Chưa thanh toán
-                                  </span>
-                                )}
-                              </TableCell>
-                            </TableRow>
-                          ))}
-                        </TableBody>
-                      </Table>
+                      
+                      {/* Dispatch Records chưa thanh toán */}
+                      {unpaidDispatchRecords.length > 0 && (
+                        <>
+                          <h4 className="font-medium text-gray-700 mb-3">Đơn hàng chưa thanh toán ({unpaidDispatchRecords.length})</h4>
+                          <Table className="mb-6">
+                            <TableHeader>
+                              <TableRow>
+                                <TableHead className="text-center">Mã đơn</TableHead>
+                                <TableHead className="text-center">Biển số xe</TableHead>
+                                <TableHead className="text-center">Ngày vào bến</TableHead>
+                                <TableHead className="text-center">Tuyến</TableHead>
+                                <TableHead className="text-center">Trạng thái</TableHead>
+                              </TableRow>
+                            </TableHeader>
+                            <TableBody>
+                              {unpaidDispatchRecords.map((record) => (
+                                <TableRow key={record.id}>
+                                  <TableCell className="font-medium text-center">
+                                    ĐH-{record.id.substring(0, 8).toUpperCase()}
+                                  </TableCell>
+                                  <TableCell className="text-center">
+                                    {record.vehiclePlateNumber || "-"}
+                                  </TableCell>
+                                  <TableCell className="text-center">
+                                    {formatDate(record.entryTime)}
+                                  </TableCell>
+                                  <TableCell className="text-center">
+                                    {record.routeName || "-"}
+                                  </TableCell>
+                                  <TableCell className="text-center">
+                                    <span className="px-2 py-1 rounded-full text-xs bg-yellow-100 text-yellow-800">
+                                      Chưa thanh toán
+                                    </span>
+                                  </TableCell>
+                                </TableRow>
+                              ))}
+                            </TableBody>
+                          </Table>
+                        </>
+                      )}
+                      
+                      {/* Legacy: Invoices chưa thanh toán */}
+                      {unpaidInvoices.length > 0 && (
+                        <>
+                          <h4 className="font-medium text-gray-700 mb-3">Hóa đơn chưa thanh toán ({unpaidInvoices.length})</h4>
+                          <Table>
+                            <TableHeader>
+                              <TableRow>
+                                <TableHead className="text-center">Số hóa đơn</TableHead>
+                                <TableHead className="text-center">Ngày phát hành</TableHead>
+                                <TableHead className="text-center">Hạn thanh toán</TableHead>
+                                <TableHead className="text-center">Tổng tiền</TableHead>
+                                <TableHead className="text-center">Trạng thái</TableHead>
+                              </TableRow>
+                            </TableHeader>
+                            <TableBody>
+                              {unpaidInvoices.map((invoice) => (
+                                <TableRow key={invoice.id}>
+                                  <TableCell className="font-medium text-center">
+                                    {invoice.invoiceNumber}
+                                  </TableCell>
+                                  <TableCell className="text-center">
+                                    {formatDate(invoice.issueDate)}
+                                  </TableCell>
+                                  <TableCell className="text-center">
+                                    {formatDate(invoice.dueDate)}
+                                  </TableCell>
+                                  <TableCell className="text-center">
+                                    {formatCurrency(invoice.totalAmount)}
+                                  </TableCell>
+                                  <TableCell className="text-center">
+                                    {invoice.paymentStatus === "overdue" ? (
+                                      <StatusBadge status="inactive" />
+                                    ) : (
+                                      <span className="px-2 py-1 rounded-full text-xs bg-yellow-100 text-yellow-800">
+                                        Chưa thanh toán
+                                      </span>
+                                    )}
+                                  </TableCell>
+                                </TableRow>
+                              ))}
+                            </TableBody>
+                          </Table>
+                        </>
+                      )}
                     </>
                   )}
                 </CardContent>
@@ -234,28 +284,22 @@ export function OperatorDetailDialog({
                 <CardContent>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     <div className="space-y-4">
-                      <h3 className="font-semibold text-lg">Tổng quan</h3>
+                      <h3 className="font-semibold text-lg">Tổng quan đơn hàng</h3>
                       <div className="space-y-2">
                         <div className="flex justify-between">
-                          <span className="text-gray-600">Tổng số hóa đơn:</span>
-                          <span className="font-medium">{invoices.length}</span>
+                          <span className="text-gray-600">Tổng số đơn hàng:</span>
+                          <span className="font-medium">{allDispatchRecords.length}</span>
                         </div>
                         <div className="flex justify-between">
                           <span className="text-gray-600">Đã thanh toán:</span>
                           <span className="font-medium text-green-600">
-                            {paidInvoices.length}
+                            {paidDispatchRecords.length}
                           </span>
                         </div>
                         <div className="flex justify-between">
                           <span className="text-gray-600">Chưa thanh toán:</span>
                           <span className="font-medium text-red-600">
-                            {unpaidInvoices.length}
-                          </span>
-                        </div>
-                        <div className="flex justify-between">
-                          <span className="text-gray-600">Quá hạn:</span>
-                          <span className="font-medium text-red-600">
-                            {invoices.filter((inv) => inv.paymentStatus === "overdue").length}
+                            {unpaidDispatchRecords.length}
                           </span>
                         </div>
                       </div>
@@ -264,23 +308,15 @@ export function OperatorDetailDialog({
                       <h3 className="font-semibold text-lg">Tổng tiền</h3>
                       <div className="space-y-2">
                         <div className="flex justify-between">
-                          <span className="text-gray-600">Tổng giá trị:</span>
-                          <span className="font-medium">
-                            {formatCurrency(
-                              invoices.reduce((sum, inv) => sum + inv.totalAmount, 0)
-                            )}
+                          <span className="text-gray-600">Tổng công nợ:</span>
+                          <span className="font-medium text-red-600">
+                            {formatCurrency(totalDebt)}
                           </span>
                         </div>
                         <div className="flex justify-between">
                           <span className="text-gray-600">Đã thanh toán:</span>
                           <span className="font-medium text-green-600">
                             {formatCurrency(totalPaid)}
-                          </span>
-                        </div>
-                        <div className="flex justify-between">
-                          <span className="text-gray-600">Công nợ:</span>
-                          <span className="font-medium text-red-600">
-                            {formatCurrency(totalDebt)}
                           </span>
                         </div>
                       </div>

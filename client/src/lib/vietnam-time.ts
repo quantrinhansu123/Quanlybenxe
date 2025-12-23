@@ -100,45 +100,57 @@ export function formatVietnamDateTime(
   if (!dateString) return "-"
 
   try {
-    // Parse the date string
-    // If it has timezone (+07:00), Date will interpret it correctly
-    // If it doesn't have timezone, treat it as UTC+7
-    let dateObj: Date
+    // Strategy: Extract time components directly from ISO string
+    // Database stores Vietnam time, we just need to display it as-is
     
-    if (dateString.includes('+07:00') || dateString.endsWith('+07:00')) {
-      // Already has +07:00, parse directly
-      dateObj = new Date(dateString)
-    } else if (dateString.endsWith('Z')) {
-      // Has Z (UTC), need to add 7 hours to get Vietnam time
+    // Try to match ISO format: YYYY-MM-DDTHH:mm:ss (with optional timezone)
+    const match = dateString.match(/(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})/)
+    
+    if (match) {
+      const [, year, month, day, hours, minutes, seconds] = match
+      // Create date with extracted values (treating them as Vietnam time)
+      const vnDate = new Date(
+        parseInt(year), 
+        parseInt(month) - 1, 
+        parseInt(day), 
+        parseInt(hours), 
+        parseInt(minutes), 
+        parseInt(seconds)
+      )
+      
+      if (!isNaN(vnDate.getTime())) {
+        return format(vnDate, formatString)
+      }
+    }
+    
+    // Fallback: If dateString ends with Z (UTC), convert to Vietnam time
+    if (dateString.endsWith('Z')) {
       const utcDate = new Date(dateString)
-      dateObj = new Date(utcDate.getTime() + VIETNAM_TIMEZONE_OFFSET_HOURS * 60 * 60 * 1000)
-    } else {
-      // No timezone info, treat as UTC+7 and add +07:00
-      const dateWithTZ = dateString.endsWith('+07:00') ? dateString : `${dateString}+07:00`
-      dateObj = new Date(dateWithTZ)
+      if (!isNaN(utcDate.getTime())) {
+        // Add 7 hours to convert UTC to Vietnam time
+        const vnTimeMs = utcDate.getTime() + VIETNAM_TIMEZONE_OFFSET_HOURS * 60 * 60 * 1000
+        const tempDate = new Date(vnTimeMs)
+        // Create new date with the Vietnam time values
+        const vnDate = new Date(
+          tempDate.getUTCFullYear(), 
+          tempDate.getUTCMonth(), 
+          tempDate.getUTCDate(),
+          tempDate.getUTCHours(), 
+          tempDate.getUTCMinutes(), 
+          tempDate.getUTCSeconds()
+        )
+        return format(vnDate, formatString)
+      }
     }
     
-    if (isNaN(dateObj.getTime())) {
-      console.warn("Invalid date string:", dateString)
-      return "-"
+    // Last fallback: try parsing directly
+    const dateObj = new Date(dateString)
+    if (!isNaN(dateObj.getTime())) {
+      return format(dateObj, formatString)
     }
-
-    // Get components - if dateString had +07:00, these are Vietnam time
-    // If it had Z, we already added 7 hours
-    const vnYear = dateObj.getFullYear()
-    const vnMonth = dateObj.getMonth() // 0-11
-    const vnDay = dateObj.getDate()
-    const vnHours = dateObj.getHours()
-    const vnMinutes = dateObj.getMinutes()
     
-    // Format using date-fns
-    // For the default format, format directly
-    if (formatString === DEFAULT_DATE_FORMAT) {
-      return `${vnHours.toString().padStart(2, '0')}:${vnMinutes.toString().padStart(2, '0')} ${vnDay.toString().padStart(2, '0')}/${(vnMonth + 1).toString().padStart(2, '0')}/${vnYear}`
-    }
-
-    // For other formats, use date-fns
-    return format(dateObj, formatString)
+    console.warn("Could not parse date string:", dateString)
+    return "-"
   } catch (error) {
     console.error("Error formatting Vietnam date time:", error, dateString)
     return "-"

@@ -29,9 +29,13 @@ import {
   DialogClose,
 } from "@/components/ui/dialog"
 import { vehicleService, VehicleForm, VehicleView } from "@/features/fleet/vehicles"
+import { vehicleBadgeService, type VehicleBadge } from "@/services/vehicle-badge.service"
 import type { Vehicle } from "@/types"
 import { useUIStore } from "@/store/ui.store"
 import { format, isValid, parseISO } from "date-fns"
+
+// Allowed badge types for filtering (same as QuanLyPhuHieuXe)
+const ALLOWED_BADGE_TYPES = ["Buýt", "Tuyến cố định"]
 
 // Helper functions
 const getVehicleTypeName = (vehicle: Vehicle): string => {
@@ -91,6 +95,7 @@ const ITEMS_PER_PAGE = 20
 
 export default function QuanLyXe() {
   const [vehicles, setVehicles] = useState<Vehicle[]>([])
+  const [badges, setBadges] = useState<VehicleBadge[]>([])
   const [searchQuery, setSearchQuery] = useState("")
   const [filterVehicleType, setFilterVehicleType] = useState("")
   const [filterOperator, setFilterOperator] = useState("")
@@ -109,42 +114,71 @@ export default function QuanLyXe() {
 
   useEffect(() => {
     setTitle("Quản lý xe")
-    loadVehicles()
+    loadData()
   }, [setTitle])
 
-  const loadVehicles = async () => {
+  const loadData = async () => {
     setIsLoading(true)
     try {
-      const data = await vehicleService.getAll()
-      setVehicles(data)
+      const [vehicleData, badgeData] = await Promise.all([
+        vehicleService.getAll(),
+        vehicleBadgeService.getAll()
+      ])
+      setVehicles(vehicleData)
+      setBadges(badgeData)
     } catch (error) {
-      console.error("Failed to load vehicles:", error)
+      console.error("Failed to load data:", error)
       toast.error("Không thể tải danh sách xe. Vui lòng thử lại sau.")
     } finally {
       setIsLoading(false)
     }
   }
 
-  // Get unique vehicle types and operators for filter options
+  // Get plate numbers from badges with allowed types (Buýt, Tuyến cố định)
+  const allowedPlateNumbers = useMemo(() => {
+    const plates = new Set<string>()
+    badges.forEach(badge => {
+      if (ALLOWED_BADGE_TYPES.includes(badge.badge_type || "")) {
+        plates.add(badge.license_plate_sheet.toUpperCase().replace(/\s+/g, ""))
+      }
+    })
+    return plates
+  }, [badges])
+
+  // Filter vehicles by: badge source OR plate matches Buýt/Tuyến cố định badges
+  const vehiclesWithAllowedTypes = useMemo(() => {
+    return vehicles.filter((vehicle: Vehicle & { source?: string }) => {
+      // Badge vehicles are already filtered by backend (Buýt/Tuyến cố định only)
+      if (vehicle.source === "badge") {
+        return true
+      }
+      
+      // For legacy/db vehicles, check if plate matches allowed badges
+      const plateNormalized = (vehicle.plateNumber || "").toUpperCase().replace(/\s+/g, "")
+      return allowedPlateNumbers.has(plateNormalized)
+    })
+  }, [vehicles, allowedPlateNumbers])
+
+  // Get unique vehicle types and operators for filter options (from filtered vehicles only)
   const vehicleTypes = useMemo(() => 
-    Array.from(new Set(vehicles.map(getVehicleTypeName).filter(Boolean))).sort(),
-    [vehicles]
+    Array.from(new Set(vehiclesWithAllowedTypes.map(getVehicleTypeName).filter(Boolean))).sort(),
+    [vehiclesWithAllowedTypes]
   )
   const operatorNames = useMemo(() => 
-    Array.from(new Set(vehicles.map(getOperatorName).filter(Boolean))).sort(),
-    [vehicles]
+    Array.from(new Set(vehiclesWithAllowedTypes.map(getOperatorName).filter(Boolean))).sort(),
+    [vehiclesWithAllowedTypes]
   )
 
-  // Stats calculations
+  // Stats calculations (from filtered vehicles only)
   const stats = useMemo(() => {
-    const active = vehicles.filter(v => v.isActive).length
-    const inactive = vehicles.length - active
-    const uniqueOperators = new Set(vehicles.map(getOperatorName).filter(Boolean)).size
-    return { total: vehicles.length, active, inactive, uniqueOperators }
-  }, [vehicles])
+    const active = vehiclesWithAllowedTypes.filter(v => v.isActive).length
+    const inactive = vehiclesWithAllowedTypes.length - active
+    const uniqueOperators = new Set(vehiclesWithAllowedTypes.map(getOperatorName).filter(Boolean)).size
+    return { total: vehiclesWithAllowedTypes.length, active, inactive, uniqueOperators }
+  }, [vehiclesWithAllowedTypes])
 
   const filteredVehicles = useMemo(() => {
-    return vehicles.filter((vehicle: any) => {
+    return vehiclesWithAllowedTypes.filter((vehicle: Vehicle) => {
       const vehicleTypeName = getVehicleTypeName(vehicle)
       const operatorName = getOperatorName(vehicle)
 
@@ -171,7 +205,7 @@ export default function QuanLyXe() {
 
       return true
     })
-  }, [vehicles, searchQuery, filterVehicleType, filterOperator, filterStatus, quickFilter])
+  }, [vehiclesWithAllowedTypes, searchQuery, filterVehicleType, filterOperator, filterStatus, quickFilter])
 
   // Pagination
   const totalPages = Math.ceil(filteredVehicles.length / ITEMS_PER_PAGE)
@@ -215,7 +249,7 @@ export default function QuanLyXe() {
       toast.success("Xóa xe thành công")
       setDeleteDialogOpen(false)
       setVehicleToDelete(null)
-      loadVehicles()
+      loadData()
     } catch (error: any) {
       console.error("Failed to delete vehicle:", error)
       toast.error(error.response?.data?.error || "Không thể xóa xe. Vui lòng thử lại.")
@@ -253,7 +287,7 @@ export default function QuanLyXe() {
           
           <div className="flex items-center gap-3">
             <Button
-              onClick={loadVehicles}
+              onClick={loadData}
               disabled={isLoading}
               className="px-4 py-2.5 rounded-xl bg-white border border-slate-200 text-slate-600 hover:bg-slate-50 hover:border-slate-300 transition-all shadow-sm"
             >
@@ -818,7 +852,7 @@ export default function QuanLyXe() {
                   mode={viewMode === "view" ? "create" : viewMode}
                   onClose={() => {
                     setDialogOpen(false)
-                    loadVehicles()
+                    loadData()
                   }}
                 />
               )}

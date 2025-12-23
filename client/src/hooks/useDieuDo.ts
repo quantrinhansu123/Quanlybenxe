@@ -69,7 +69,9 @@ export function useDieuDo() {
     setIsLoading(true);
     try {
       const data = await dispatchService.getAll();
-      setRecords(data);
+      // Filter out cancelled records
+      const activeRecords = data.filter(r => r.currentStatus !== 'cancelled');
+      setRecords(activeRecords);
     } catch (error) {
       console.error("Failed to load records:", error);
       toast.error("Không thể tải danh sách điều độ");
@@ -79,12 +81,19 @@ export function useDieuDo() {
   };
 
   const handleDelete = async (record: DispatchRecord) => {
-    if (!window.confirm(`Xóa xe ${record.vehiclePlateNumber} khỏi danh sách?`)) return;
+    console.log("[handleDelete] Called for record:", record.id, record.vehiclePlateNumber);
+    if (!window.confirm(`Xóa xe ${record.vehiclePlateNumber} khỏi danh sách?`)) {
+      console.log("[handleDelete] User cancelled");
+      return;
+    }
     try {
+      console.log("[handleDelete] Calling API delete for:", record.id);
       await dispatchService.delete(record.id);
+      console.log("[handleDelete] Delete successful");
       toast.success("Đã xóa xe khỏi danh sách");
       loadRecords();
     } catch (error: unknown) {
+      console.error("[handleDelete] Error:", error);
       const err = error as { response?: { data?: { error?: string } } };
       toast.error(err.response?.data?.error || "Không thể xóa");
     }
@@ -152,6 +161,7 @@ export function useDieuDo() {
       paid: "paid",
       departure_ordered: "departed",
       departed: "departed",
+      cancelled: "departed", // Cancelled records shown as departed (but filtered out in loadRecords)
     };
     return statusMap[currentStatus] || "in-station";
   }, []);
@@ -187,26 +197,47 @@ export function useDieuDo() {
 
   const totalActive = stats["in-station"] + stats["permit-issued"] + stats.paid + stats.departed;
 
-  const activeVehicleIds = useMemo(() => {
-    const ids = new Set<string>();
-    const seen = new Set<string>();
+  // Track active vehicles by PLATE NUMBER (not ID) to handle legacy/badge ID inconsistency
+  const activePlateNumbers = useMemo(() => {
+    const plates = new Set<string>();
     for (const record of records) {
-      if (!seen.has(record.vehicleId)) {
-        seen.add(record.vehicleId);
-        if (record.currentStatus !== "departed" && record.currentStatus !== "departure_ordered") {
-          ids.add(record.vehicleId);
+      if (record.currentStatus !== "departed" && record.currentStatus !== "departure_ordered") {
+        // Normalize plate number for comparison
+        const plate = record.vehiclePlateNumber?.replace(/[.\-\s]/g, '').toUpperCase();
+        if (plate) {
+          plates.add(plate);
         }
       }
     }
-    return ids;
+    return plates;
   }, [records]);
 
-  const vehicleOptions = vehicles
-    .filter((v) => {
-      const isEditingThisVehicle = dialogType === "edit" && selectedRecord?.vehicleId === v.id;
-      return !activeVehicleIds.has(v.id) || isEditingThisVehicle;
-    })
-    .map((v) => ({ id: v.id, plateNumber: v.plateNumber }));
+  const vehicleOptions = useMemo(() => {
+    const options = vehicles
+      .filter((v) => {
+        const normalizedPlate = v.plateNumber?.replace(/[.\-\s]/g, '').toUpperCase();
+        const isEditingThisVehicle = dialogType === "edit" && 
+          selectedRecord?.vehiclePlateNumber?.replace(/[.\-\s]/g, '').toUpperCase() === normalizedPlate;
+        return !activePlateNumbers.has(normalizedPlate) || isEditingThisVehicle;
+      })
+      .map((v) => ({ id: v.id, plateNumber: v.plateNumber }));
+    
+    // When editing, ensure the current vehicle's plateNumber is in the options
+    if (dialogType === "edit" && selectedRecord?.vehicleId && selectedRecord?.vehiclePlateNumber) {
+      const normalizedEditPlate = selectedRecord.vehiclePlateNumber.replace(/[.\-\s]/g, '').toUpperCase();
+      const existsInOptions = options.some(
+        (o) => o.plateNumber?.replace(/[.\-\s]/g, '').toUpperCase() === normalizedEditPlate
+      );
+      if (!existsInOptions) {
+        options.unshift({
+          id: selectedRecord.vehicleId,
+          plateNumber: selectedRecord.vehiclePlateNumber,
+        });
+      }
+    }
+    
+    return options;
+  }, [vehicles, activePlateNumbers, dialogType, selectedRecord]);
 
   const isMonthlyPaymentVehicle = useCallback((record: DispatchRecord): boolean => {
     if (record.metadata?.paymentType === "monthly") return true;

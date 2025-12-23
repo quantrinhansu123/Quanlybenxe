@@ -85,3 +85,5 @@ plans/
 docs/
 .claude/
 .factory/
+client/docs/archived/
+server/docs/archived/

@@ -320,10 +320,12 @@ class FirebaseQuery {
 
         // Handle DELETE
         if (this.isDelete) {
+          console.log('[FirebaseQuery DELETE] Collection:', this.collection, 'Filters:', JSON.stringify(this.filters))
           const snapshot = await this.ref.once('value')
           let allData = snapshot.val()
 
           if (!allData) {
+            console.log('[FirebaseQuery DELETE] No data found in collection')
             resolve({ data: null, error: null })
             return
           }
@@ -332,8 +334,10 @@ class FirebaseQuery {
             ...allData[key],
             id: key
           }))
+          console.log('[FirebaseQuery DELETE] Total records:', records.length)
 
           const filteredRecords = this.applyFilters(records)
+          console.log('[FirebaseQuery DELETE] Filtered records:', filteredRecords.length)
 
           for (const record of filteredRecords) {
             await database.ref(`${this.collection}/${record.id}`).remove()
@@ -379,7 +383,9 @@ class FirebaseQuery {
 
         // Apply filters in JavaScript (after fetching all data)
         if (hasFilters && Array.isArray(data)) {
+          console.log('[FirebaseQuery SELECT] Before filter:', data.length, 'Filters:', JSON.stringify(this.filters))
           data = this.applyFilters(data)
+          console.log('[FirebaseQuery SELECT] After filter:', data.length)
         }
         
         // Apply limit AFTER filtering (when filters were used)

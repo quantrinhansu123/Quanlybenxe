@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import { toast } from "react-toastify";
 import { format, startOfMonth, endOfMonth } from "date-fns";
 import { routeService } from "@/services/route.service";
@@ -201,6 +201,19 @@ export function useCapPhepDialog(record: DispatchRecord, onClose: () => void, on
           if (vehicle.operatorId) {
             setSelectedOperatorId(vehicle.operatorId);
             if (record.driver) setDrivers([record.driver]);
+          } else {
+            // For legacy vehicles, try to match operator by name
+            const opName = vehicle.operatorName || vehicle.operator?.name;
+            if (opName && operatorsData.length > 0) {
+              const normalizedOpName = opName.trim().toLowerCase();
+              const matchedOp = operatorsData.find((op: Operator) => 
+                op.name?.trim().toLowerCase() === normalizedOpName ||
+                op.id?.includes(normalizedOpName.substring(0, 10))
+              );
+              if (matchedOp) {
+                setSelectedOperatorId(matchedOp.id);
+              }
+            }
           }
           if (vehicle.operatorName) setOperatorNameFromVehicle(vehicle.operatorName);
           else if (vehicle.operator?.name) setOperatorNameFromVehicle(vehicle.operator.name);
@@ -500,6 +513,29 @@ export function useCapPhepDialog(record: DispatchRecord, onClose: () => void, on
     }
   }, [registeredPlateNumber, entryPlateNumber, vehicles, selectedVehicle, selectedOperatorId]);
 
+  // Compute busy vehicle plates from active dispatch records
+  const busyVehiclePlates = useMemo(() => {
+    if (!cachedDispatchRecords) return new Set<string>();
+    const normalizeplate = (p: string) => p.replace(/[.\-\s]/g, '').toUpperCase();
+    const busy = new Set<string>();
+    for (const dr of cachedDispatchRecords) {
+      // Xe đang bận = chưa xuất bến (departed) và chưa bị hủy (cancelled)
+      if (dr.currentStatus !== 'departed' && dr.currentStatus !== 'cancelled' && dr.vehiclePlateNumber) {
+        busy.add(normalizeplate(dr.vehiclePlateNumber));
+      }
+    }
+    return busy;
+  }, [cachedDispatchRecords]);
+
+  // Vehicles with availability status for replacement vehicle dropdown
+  const vehiclesWithStatus = useMemo(() => {
+    const normalizeplate = (p: string) => p.replace(/[.\-\s]/g, '').toUpperCase();
+    return vehicles.map(v => ({
+      ...v,
+      isBusy: v.plateNumber ? busyVehiclePlates.has(normalizeplate(v.plateNumber)) : false
+    }));
+  }, [vehicles, busyVehiclePlates]);
+
   return {
     // State
     permitType, setPermitType,
@@ -515,7 +551,7 @@ export function useCapPhepDialog(record: DispatchRecord, onClose: () => void, on
     scheduleId, setScheduleId,
     departureTime, setDepartureTime,
     departureDate, setDepartureDate,
-    routes, schedules, vehicleBadges, vehicles, drivers, serviceCharges,
+    routes, schedules, vehicleBadges, vehicles, vehiclesWithStatus, drivers, serviceCharges,
     selectedVehicle, operators, selectedOperatorId, setSelectedOperatorId,
     operatorNameFromVehicle, totalAmount, isLoading, isInitialLoading,
     serviceDetailsExpanded, setServiceDetailsExpanded,

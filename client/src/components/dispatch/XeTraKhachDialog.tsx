@@ -4,13 +4,13 @@ import { Search } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { Select } from "@/components/ui/select"
 import { Checkbox } from "@/components/ui/checkbox"
-import { routeService } from "@/services/route.service"
+import { Autocomplete } from "@/components/ui/autocomplete"
+import { routeService, type LegacyRoute } from "@/services/route.service"
 import { scheduleService } from "@/services/schedule.service"
 import { dispatchService } from "@/services/dispatch.service"
 import { vehicleService } from "@/services/vehicle.service"
-import type { DispatchRecord, Route, Schedule, Vehicle } from "@/types"
+import type { DispatchRecord, Schedule, Vehicle } from "@/types"
 import { format } from "date-fns"
 
 interface XeTraKhachDialogProps {
@@ -32,7 +32,7 @@ export function XeTraKhachDialog({
   const [signAndTransmit, setSignAndTransmit] = useState(true)
   const [printDisplay, setPrintDisplay] = useState(false)
   
-  const [routes, setRoutes] = useState<Route[]>([])
+  const [routes, setRoutes] = useState<LegacyRoute[]>([])
   const [schedules, setSchedules] = useState<Schedule[]>([])
   const [selectedVehicle, setSelectedVehicle] = useState<Vehicle | null>(null)
   const [transportOrderDisplay] = useState<string | null>(null)
@@ -56,7 +56,8 @@ export function XeTraKhachDialog({
 
   const loadRoutes = async () => {
     try {
-      const data = await routeService.getAll(undefined, undefined, true)
+      // Use legacy routes from Google Sheets sync (877 routes)
+      const data = await routeService.getLegacy()
       setRoutes(data)
       // Set initial route if record has one
       if (record.routeId) {
@@ -175,45 +176,48 @@ export function XeTraKhachDialog({
               Thông tin xe trả khách
             </h3>
 
-            <div>
-              <Label htmlFor="schedule">Chọn nhật trình</Label>
-              <div className="relative mt-1">
-                <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
-                <Input
-                  id="schedule"
-                  placeholder="Tìm kiếm"
-                  value={scheduleSearchQuery}
-                  onChange={(e) => setScheduleSearchQuery(e.target.value)}
-                  className="pl-10"
-                />
+            {/* Nhật trình - hiện tại ẩn vì chưa có data từ Google Sheets */}
+            {schedules.length > 0 && (
+              <div>
+                <Label htmlFor="schedule">Chọn nhật trình</Label>
+                <div className="relative mt-1">
+                  <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+                  <Input
+                    id="schedule"
+                    placeholder="Tìm kiếm"
+                    value={scheduleSearchQuery}
+                    onChange={(e) => setScheduleSearchQuery(e.target.value)}
+                    className="pl-10"
+                  />
+                </div>
+                {scheduleSearchQuery && (
+                  <div className="mt-1 border border-gray-200 rounded-md bg-white shadow-lg max-h-48 overflow-y-auto">
+                    {filteredSchedules.length === 0 ? (
+                      <div className="p-2 text-sm text-gray-500">Không tìm thấy nhật trình</div>
+                    ) : (
+                      filteredSchedules.map((schedule) => (
+                        <button
+                          key={schedule.id}
+                          type="button"
+                          onClick={() => {
+                            setScheduleId(schedule.id)
+                            setScheduleSearchQuery("")
+                          }}
+                          className="w-full text-left p-2 hover:bg-gray-100 text-sm"
+                        >
+                          {schedule.scheduleCode} - {schedule.route?.routeName || ''}
+                        </button>
+                      ))
+                    )}
+                  </div>
+                )}
+                {scheduleId && (
+                  <div className="mt-2 text-sm text-gray-600">
+                    Đã chọn: {schedules.find(s => s.id === scheduleId)?.scheduleCode || scheduleId}
+                  </div>
+                )}
               </div>
-              {scheduleSearchQuery && (
-                <div className="mt-1 border border-gray-200 rounded-md bg-white shadow-lg max-h-48 overflow-y-auto">
-                  {filteredSchedules.length === 0 ? (
-                    <div className="p-2 text-sm text-gray-500">Không tìm thấy nhật trình</div>
-                  ) : (
-                    filteredSchedules.map((schedule) => (
-                      <button
-                        key={schedule.id}
-                        type="button"
-                        onClick={() => {
-                          setScheduleId(schedule.id)
-                          setScheduleSearchQuery("")
-                        }}
-                        className="w-full text-left p-2 hover:bg-gray-100 text-sm"
-                      >
-                        {schedule.scheduleCode} - {schedule.route?.routeName || ''}
-                      </button>
-                    ))
-                  )}
-                </div>
-              )}
-              {scheduleId && (
-                <div className="mt-2 text-sm text-gray-600">
-                  Đã chọn: {schedules.find(s => s.id === scheduleId)?.scheduleCode || scheduleId}
-                </div>
-              )}
-            </div>
+            )}
 
             <div>
               <Label htmlFor="passengersArrived">
@@ -234,20 +238,21 @@ export function XeTraKhachDialog({
               <Label htmlFor="route">
                 Tuyến vận chuyển <span className="text-red-500">(*)</span>
               </Label>
-              <Select
-                id="route"
+              <Autocomplete
                 value={routeId}
-                onChange={(e) => setRouteId(e.target.value)}
+                onChange={(value) => setRouteId(value)}
+                options={routes.map((r) => ({
+                  value: r.id,
+                  label: `${r.routePath} (${r.routeCode})`,
+                }))}
+                placeholder="Tìm tuyến vận chuyển..."
                 className="mt-1"
-                required
-              >
-                <option value="">Chọn tuyến vận chuyển</option>
-                {routes.map((r) => (
-                  <option key={r.id} value={r.id}>
-                    {r.routeName} ({r.routeCode})
-                  </option>
-                ))}
-              </Select>
+              />
+              {routeId && (
+                <div className="mt-1 text-sm text-gray-600">
+                  Đã chọn: {routes.find(r => r.id === routeId)?.routePath || routeId}
+                </div>
+              )}
             </div>
           </div>
         </div>

@@ -10,6 +10,7 @@ export type DispatchStatus =
   | 'paid'
   | 'departure_ordered'
   | 'departed'
+  | 'cancelled'
 
 export type PermitStatus = 'approved' | 'rejected' | 'pending'
 export type PaymentMethod = 'cash' | 'bank_transfer' | 'card'

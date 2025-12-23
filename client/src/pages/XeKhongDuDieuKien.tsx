@@ -31,6 +31,7 @@ const statusLabelMap: Record<DispatchStatus, string> = {
   paid: "Đã thanh toán",
   departure_ordered: "Đã cấp lệnh",
   departed: "Đã xuất bến",
+  cancelled: "Đã hủy",
 };
 
 export default function XeKhongDuDieuKien() {

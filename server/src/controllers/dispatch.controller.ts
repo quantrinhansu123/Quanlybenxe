@@ -590,6 +590,7 @@ export const recordExit = async (req: AuthRequest, res: Response) => {
 export const deleteDispatchRecord = async (req: AuthRequest, res: Response) => {
   try {
     const { id } = req.params
+    console.log('[deleteDispatchRecord] Attempting to delete record:', id)
 
     // Check if record exists
     const { data: existingRecord, error: fetchError } = await firebase
@@ -597,6 +598,8 @@ export const deleteDispatchRecord = async (req: AuthRequest, res: Response) => {
       .select('*')
       .eq('id', id)
       .single()
+
+    console.log('[deleteDispatchRecord] Fetch result:', { found: !!existingRecord, error: fetchError?.message })
 
     if (fetchError || !existingRecord) {
       return res.status(404).json({ error: 'Dispatch record not found' })

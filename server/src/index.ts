@@ -155,6 +155,28 @@ if (!isCloudFunction && isMainModule) {
       console.warn('[Cache] Failed to preload:', error)
     }
     
+    // Start sync cron jobs
+    try {
+      // Operator sync (every 30 minutes)
+      const { startOperatorSyncCron } = await import('./services/operator-sync.service.js')
+      startOperatorSyncCron()
+      
+      // Vehicle sync (every 15 minutes)
+      const { startVehicleSyncCron } = await import('./services/vehicle-sync.service.js')
+      startVehicleSyncCron()
+      
+      // Badge sync (every 15 minutes, runs after vehicle sync)
+      const { startBadgeSyncCron } = await import('./services/badge-sync.service.js')
+      // Delay badge sync by 30 seconds to ensure vehicles are synced first
+      setTimeout(() => startBadgeSyncCron(), 30 * 1000)
+      
+      // Route sync (every 30 minutes)
+      const { startRouteSyncCron } = await import('./services/route-sync.service.js')
+      startRouteSyncCron()
+    } catch (error) {
+      console.warn('[SyncCron] Failed to start cron jobs:', error)
+    }
+    
     app.listen(PORT, () => {
       console.log(`Server is running on http://localhost:${PORT}`)
       console.log(`API available at http://localhost:${PORT}/api`)

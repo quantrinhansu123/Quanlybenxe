@@ -10,6 +10,7 @@ export interface LegacyVehicleData {
   plateNumber: string;
   vehicleType: { id: null; name: string };
   vehicleTypeName: string;
+  vehicleCategory: string;
   seatCapacity: number;
   bedCapacity: number;
   manufacturer: string;
@@ -34,11 +35,12 @@ export interface BadgeVehicleData {
   plateNumber: string;
   vehicleType: { id: null; name: string };
   vehicleTypeName: string;
+  vehicleCategory: string;
   seatCapacity: number;
   bedCapacity: number;
   manufacturer: string;
   modelCode: string;
-  manufactureYear: null;
+  manufactureYear: number | null;
   color: string;
   chassisNumber: string;
   engineNumber: string;
@@ -60,6 +62,24 @@ interface CacheEntry<T> {
 }
 
 const CACHE_TTL = 30 * 60 * 1000; // 30 minutes
+
+// Helper to check if vehicle category indicates sleeper/bed vehicle
+function isBedVehicle(vehicleCategory: string): boolean {
+  if (!vehicleCategory) return false;
+  // Normalize: lowercase, remove diacritics, extra spaces
+  const normalized = vehicleCategory
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '') // Remove diacritics
+    .replace(/đ/g, 'd')
+    .replace(/Đ/g, 'D')
+    .replace(/\s+/g, ' ')
+    .trim();
+  // Check for "giuong nam" variations
+  return normalized.includes('giuong nam') || 
+         normalized.includes('giuong') ||
+         normalized.includes('sleeper');
+}
 
 class VehicleCacheService {
   private legacyCache: CacheEntry<LegacyVehicleData[]> = { data: null, timestamp: 0 };
@@ -90,14 +110,19 @@ class VehicleCacheService {
         if (!plateNumber) continue;
 
         const operatorName = ((x.owner_name || x.TenDangKyXe || '') as string).trim().toLowerCase();
+        const vehicleCategory = (x.vehicle_category || x.LoaiPhuongTien || '') as string;
+        const seatCount = parseInt(String(x.seat_count || x.SoCho)) || 0;
+        // If vehicle category contains "giường nằm", seatCount is actually bedCount
+        const hasBeds = isBedVehicle(vehicleCategory);
 
         vehicles.push({
           id: `legacy_${key}`,
           plateNumber,
           vehicleType: { id: null, name: (x.vehicle_type || x.LoaiXe || '') as string },
           vehicleTypeName: (x.vehicle_type || x.LoaiXe || '') as string,
-          seatCapacity: parseInt(String(x.seat_count || x.SoCho)) || 0,
-          bedCapacity: 0,
+          vehicleCategory,
+          seatCapacity: hasBeds ? 0 : seatCount,
+          bedCapacity: hasBeds ? seatCount : 0,
           manufacturer: (x.manufacturer || x.NhanHieu || '') as string,
           modelCode: (x.model_code || x.SoLoai || '') as string,
           manufactureYear: (x.manufacture_year || x.NamSanXuat)
@@ -138,38 +163,101 @@ class VehicleCacheService {
     }
 
     const allowedTypes = ['Buýt', 'Tuyến cố định'];
-    const snapshot = await firebaseDb.ref('datasheet/PHUHIEUXE').once('value');
-    const data = snapshot.val();
+    
+    // Load both badges and vehicles data for joining
+    const [badgeSnapshot, vehicleSnapshot] = await Promise.all([
+      firebaseDb.ref('datasheet/PHUHIEUXE').once('value'),
+      firebaseDb.ref('datasheet/Xe').once('value')
+    ]);
+    
+    const badgeData = badgeSnapshot.val();
+    const vehicleData = vehicleSnapshot.val();
+    
+    // Build vehicle lookup map by plate number (normalized)
+    const vehicleByPlate = new Map<string, Record<string, unknown>>();
+    if (vehicleData) {
+      for (const [, v] of Object.entries(vehicleData)) {
+        const vehicle = v as Record<string, unknown>;
+        const plate = ((vehicle.plate_number || vehicle.BienSo || '') as string).replace(/[.\-\s]/g, '').toUpperCase();
+        if (plate) {
+          vehicleByPlate.set(plate, vehicle);
+        }
+      }
+    }
+    
     const vehicles: BadgeVehicleData[] = [];
 
-    if (data) {
-      for (const [key, badge] of Object.entries(data)) {
+    if (badgeData) {
+      for (const [key, badge] of Object.entries(badgeData)) {
         const b = badge as Record<string, unknown>;
-        if (!b || !b.BienSoXe) continue;
-        if (!allowedTypes.includes((b.LoaiPH || '') as string)) continue;
+        if (!b) continue;
+        
+        // Support both old field names and new field names from sync
+        const plateNumber = (b.license_plate_sheet || b.BienSoXe || '') as string;
+        if (!plateNumber) continue;
+        
+        const badgeType = (b.badge_type || b.LoaiPH || '') as string;
+        if (!allowedTypes.includes(badgeType)) continue;
+
+        const badgeNumber = (b.badge_number || b.SoPhuHieu || '') as string;
+        const status = (b.status || b.TrangThai || '') as string;
+        const expiryDate = (b.expiry_date || b.NgayHetHan || null) as string | null;
+        
+        // Try to find matching vehicle for additional info
+        const normalizedPlate = plateNumber.replace(/[.\-\s]/g, '').toUpperCase();
+        const matchingVehicle = vehicleByPlate.get(normalizedPlate);
+        
+        // Get operator and seat count from vehicle if available
+        let operatorName = (b.operator_name || '') as string;
+        let seatCount = parseInt(String(b.seat_count || 0)) || 0;
+        let vehicleCategory = '';
+        let manufacturer = '';
+        let modelCode = '';
+        let manufactureYear: number | null = null;
+        let color = '';
+        let chassisNumber = '';
+        let engineNumber = '';
+        
+        if (matchingVehicle) {
+          operatorName = operatorName || (matchingVehicle.owner_name || matchingVehicle.TenDangKyXe || '') as string;
+          seatCount = seatCount || parseInt(String(matchingVehicle.seat_count || matchingVehicle.SoCho || 0)) || 0;
+          vehicleCategory = (matchingVehicle.vehicle_category || matchingVehicle.LoaiPhuongTien || '') as string;
+          manufacturer = (matchingVehicle.manufacturer || matchingVehicle.NhanHieu || '') as string;
+          modelCode = (matchingVehicle.model_code || matchingVehicle.SoLoai || '') as string;
+          manufactureYear = (matchingVehicle.manufacture_year || matchingVehicle.NamSanXuat)
+            ? parseInt(String(matchingVehicle.manufacture_year || matchingVehicle.NamSanXuat))
+            : null;
+          color = (matchingVehicle.color || matchingVehicle.MauSon || '') as string;
+          chassisNumber = (matchingVehicle.chassis_number || matchingVehicle.SoKhung || '') as string;
+          engineNumber = (matchingVehicle.engine_number || matchingVehicle.SoMay || '') as string;
+        }
+        
+        // If vehicle category contains "giường nằm", seatCount is actually bedCount
+        const hasBeds = isBedVehicle(vehicleCategory);
 
         vehicles.push({
           id: `badge_${key}`,
-          plateNumber: b.BienSoXe as string,
-          vehicleType: { id: null, name: (b.LoaiPH || '') as string },
-          vehicleTypeName: (b.LoaiPH || '') as string,
-          seatCapacity: 0,
-          bedCapacity: 0,
-          manufacturer: '',
-          modelCode: '',
-          manufactureYear: null,
-          color: '',
-          chassisNumber: '',
-          engineNumber: '',
+          plateNumber,
+          vehicleType: { id: null, name: badgeType },
+          vehicleTypeName: badgeType,
+          vehicleCategory,
+          seatCapacity: hasBeds ? 0 : seatCount,
+          bedCapacity: hasBeds ? seatCount : 0,
+          manufacturer,
+          modelCode,
+          manufactureYear,
+          color,
+          chassisNumber,
+          engineNumber,
           operatorId: null,
-          operator: { id: null, name: '', code: '' },
-          operatorName: '',
-          isActive: b.TrangThai !== 'Thu hồi',
-          notes: `Phù hiệu: ${b.SoPhuHieu || ''}`,
+          operator: { id: null, name: operatorName, code: '' },
+          operatorName,
+          isActive: status !== 'Thu hồi',
+          notes: `Phù hiệu: ${badgeNumber}`,
           source: 'badge',
-          badgeNumber: (b.SoPhuHieu || '') as string,
-          badgeType: (b.LoaiPH || '') as string,
-          badgeExpiryDate: (b.NgayHetHan || null) as string | null,
+          badgeNumber,
+          badgeType,
+          badgeExpiryDate: expiryDate,
           documents: {},
         });
       }
@@ -184,13 +272,18 @@ class VehicleCacheService {
     const data = snapshot.val();
     if (!data) return null;
 
+    const vehicleCategory = data.vehicle_category || data.LoaiPhuongTien || '';
+    const seatCount = parseInt(data.seat_count || data.SoCho) || 0;
+    const hasBeds = isBedVehicle(vehicleCategory);
+
     return {
       id: `legacy_${key}`,
       plateNumber: data.plate_number || data.BienSo || '',
       vehicleType: { id: null, name: data.vehicle_type || data.LoaiXe || '' },
       vehicleTypeName: data.vehicle_type || data.LoaiXe || '',
-      seatCapacity: parseInt(data.seat_count || data.SoCho) || 0,
-      bedCapacity: 0,
+      vehicleCategory,
+      seatCapacity: hasBeds ? 0 : seatCount,
+      bedCapacity: hasBeds ? seatCount : 0,
       manufacturer: data.manufacturer || data.NhanHieu || '',
       modelCode: data.model_code || data.SoLoai || '',
       manufactureYear: (data.manufacture_year || data.NamSanXuat)
@@ -216,13 +309,25 @@ class VehicleCacheService {
     const data = snapshot.val();
     if (!data) return null;
 
+    // Support both old and new field names
+    const plateNumber = data.license_plate_sheet || data.BienSoXe || '';
+    const badgeType = data.badge_type || data.LoaiPH || '';
+    const badgeNumber = data.badge_number || data.SoPhuHieu || '';
+    const status = data.status || data.TrangThai || '';
+    const expiryDate = data.expiry_date || data.NgayHetHan || null;
+    const operatorName = data.operator_name || '';
+    const seatCount = parseInt(String(data.seat_count || 0)) || 0;
+    const vehicleCategory = data.vehicle_category || '';
+    const hasBeds = isBedVehicle(vehicleCategory);
+
     return {
       id: `badge_${key}`,
-      plateNumber: data.BienSoXe || '',
-      vehicleType: { id: null, name: data.LoaiPH || '' },
-      vehicleTypeName: data.LoaiPH || '',
-      seatCapacity: 0,
-      bedCapacity: 0,
+      plateNumber,
+      vehicleType: { id: null, name: badgeType },
+      vehicleTypeName: badgeType,
+      vehicleCategory,
+      seatCapacity: hasBeds ? 0 : seatCount,
+      bedCapacity: hasBeds ? seatCount : 0,
       manufacturer: '',
       modelCode: '',
       manufactureYear: null,
@@ -230,14 +335,14 @@ class VehicleCacheService {
       chassisNumber: '',
       engineNumber: '',
       operatorId: null,
-      operator: { id: null, name: '', code: '' },
-      operatorName: '',
-      isActive: data.TrangThai !== 'Thu hồi',
-      notes: `Phù hiệu: ${data.SoPhuHieu || ''}`,
+      operator: { id: null, name: operatorName, code: '' },
+      operatorName,
+      isActive: status !== 'Thu hồi',
+      notes: `Phù hiệu: ${badgeNumber}`,
       source: 'badge',
-      badgeNumber: data.SoPhuHieu || '',
-      badgeType: data.LoaiPH || '',
-      badgeExpiryDate: data.NgayHetHan || null,
+      badgeNumber,
+      badgeType,
+      badgeExpiryDate: expiryDate,
       documents: {},
     };
   }

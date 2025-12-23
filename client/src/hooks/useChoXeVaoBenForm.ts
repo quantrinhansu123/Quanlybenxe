@@ -101,6 +101,8 @@ export function useChoXeVaoBenForm({
 
   useEffect(() => {
     if (isEditMode && editRecord) {
+      // Set vehicleId - editRecord.vehicleId may not match current vehicle options
+      // Keep the original vehicleId for now, Autocomplete will show plateNumber from label
       setVehicleId(editRecord.vehicleId);
       setRouteId(editRecord.routeId || "");
       if (editRecord.entryTime) {

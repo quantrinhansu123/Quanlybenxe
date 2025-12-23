@@ -15,6 +15,8 @@ interface VehicleInfoSectionProps {
   setRegisteredPlateNumber: (value: string) => void;
   selectedVehicle: Vehicle | null;
   vehicleBadges: VehicleBadge[];
+  vehicles: Vehicle[];
+  vehiclesWithStatus: (Vehicle & { isBusy: boolean })[];
   replacementVehicleId: string;
   setReplacementVehicleId: (value: string) => void;
   entryPlateNumber: string;
@@ -39,6 +41,8 @@ export function VehicleInfoSection({
   setRegisteredPlateNumber,
   selectedVehicle,
   vehicleBadges,
+  vehicles: _vehicles,
+  vehiclesWithStatus,
   replacementVehicleId,
   setReplacementVehicleId,
   entryPlateNumber,
@@ -88,37 +92,38 @@ export function VehicleInfoSection({
             />
           </FormField>
           <FormField label="Xe đi thay">
-            <StyledSelect
+            <Autocomplete
               value={replacementVehicleId}
-              onChange={(e) => setReplacementVehicleId(e.target.value)}
+              onChange={(value) => setReplacementVehicleId(value)}
+              options={vehiclesWithStatus
+                .filter(v => v.plateNumber && v.id !== selectedVehicle?.id)
+                .map(v => ({
+                  value: v.id,
+                  label: `${v.plateNumber} ${v.isBusy ? '(Đang bận)' : '(Sẵn sàng)'}`
+                }))}
+              placeholder="Chọn hoặc nhập biển số xe thay thế"
               disabled={readOnly}
-            >
-              <option value="">-- Chọn xe --</option>
-              {vehicleBadges
-                .filter(badge => badge.license_plate_sheet)
-                .slice(0, 200)
-                .map((badge) => (
-                  <option key={badge.id} value={badge.id}>
-                    {badge.license_plate_sheet} {badge.operational_status === 'dang_chay' ? '(Đang chạy)' : '(Trong bến)'}
-                  </option>
-                ))}
-            </StyledSelect>
+              className="bg-gray-50 border-gray-200 rounded-xl"
+            />
             {replacementVehicleId && (() => {
-              const selectedBadge = vehicleBadges.find(b => b.id === replacementVehicleId);
-              if (selectedBadge?.operational_status === 'dang_chay') {
+              const selectedReplacement = vehiclesWithStatus.find(v => v.id === replacementVehicleId);
+              if (selectedReplacement?.isBusy) {
                 return (
                   <div className="flex items-center gap-1.5 mt-2 text-amber-600 text-xs">
                     <AlertTriangle className="h-3.5 w-3.5" />
-                    <span>Xe đang chạy</span>
+                    <span>Xe đang bận (có dispatch chưa hoàn thành)</span>
                   </div>
                 );
               }
-              return (
-                <div className="flex items-center gap-1.5 mt-2 text-emerald-600 text-xs">
-                  <CheckCircle className="h-3.5 w-3.5" />
-                  <span>Xe trong bến</span>
-                </div>
-              );
+              if (selectedReplacement) {
+                return (
+                  <div className="flex items-center gap-1.5 mt-2 text-emerald-600 text-xs">
+                    <CheckCircle className="h-3.5 w-3.5" />
+                    <span>Xe sẵn sàng</span>
+                  </div>
+                );
+              }
+              return null;
             })()}
           </FormField>
         </div>

@@ -2,7 +2,7 @@ import { Building2, Phone, User, Ticket, Eye, Edit, Trash2 } from "lucide-react"
 import type { Operator } from "@/types";
 
 interface OperatorWithSource extends Operator {
-  source?: "database" | "legacy";
+  source?: "database" | "legacy" | "google_sheets";
 }
 
 interface OperatorGridCardProps {
@@ -22,7 +22,7 @@ export function OperatorGridCard({
   onEdit,
   onDelete,
 }: OperatorGridCardProps) {
-  const isLegacy = operator.source === "legacy";
+  const isReadOnly = operator.source === "legacy" || operator.source === "google_sheets";
 
   return (
     <div
@@ -43,8 +43,8 @@ export function OperatorGridCard({
             <h3 className="font-bold text-slate-800 line-clamp-1">
               {operator.name}
             </h3>
-            <p className="text-sm text-slate-500">
-              {operator.code || "Không có mã"}
+            <p className="text-sm text-slate-500 font-mono">
+              {operator.code || operator.id?.substring(0, 8) || "-"}
             </p>
           </div>
         </div>
@@ -104,11 +104,11 @@ export function OperatorGridCard({
             onEdit(operator);
           }}
           className={`p-2 rounded-lg transition-all cursor-pointer ${
-            isLegacy
+            isReadOnly
               ? "text-slate-300 cursor-not-allowed pointer-events-none"
               : "text-slate-400 hover:text-amber-600 hover:bg-amber-50"
           }`}
-          disabled={isLegacy}
+          disabled={isReadOnly}
         >
           <Edit className="h-4 w-4" />
         </button>
@@ -119,11 +119,11 @@ export function OperatorGridCard({
             onDelete(operator);
           }}
           className={`p-2 rounded-lg transition-all cursor-pointer ${
-            isLegacy
+            isReadOnly
               ? "text-slate-300 cursor-not-allowed pointer-events-none"
               : "text-slate-400 hover:text-rose-600 hover:bg-rose-50"
           }`}
-          disabled={isLegacy}
+          disabled={isReadOnly}
         >
           <Trash2 className="h-4 w-4" />
         </button>

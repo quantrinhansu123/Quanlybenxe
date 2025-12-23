@@ -83,7 +83,7 @@ export function VehicleCard({ record, status, index, vehicleStatus, onClick, act
         </div>
 
         {/* Actions */}
-        <div className="flex items-center justify-end gap-2 pt-3 border-t border-slate-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
+        <div className="flex items-center justify-end gap-2 pt-3 border-t border-slate-100">
           {actionButtons}
         </div>
       </div>

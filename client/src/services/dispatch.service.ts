@@ -161,4 +161,9 @@ export const dispatchService = {
   delete: async (id: string): Promise<void> => {
     await api.delete(`/dispatch/${id}`)
   },
+
+  cancel: async (id: string, reason?: string): Promise<DispatchRecord> => {
+    const response = await api.post<{ dispatch: DispatchRecord }>(`/dispatch/${id}/cancel`, { reason })
+    return response.data.dispatch
+  },
 }

@@ -239,9 +239,27 @@ export default function ThanhToan() {
     await processPayment();
   };
 
-  const handleCancel = () => {
-    if (window.confirm("Bạn có chắc chắn muốn hủy thanh toán?")) {
-      navigate("/dieu-do");
+  const handleCancel = async () => {
+    if (!record) return;
+    
+    const reason = window.prompt(
+      "Bạn có chắc chắn muốn hủy bỏ record này?\n\nNhập lý do hủy (bắt buộc):",
+      ""
+    );
+    
+    if (reason === null) return; // User clicked Cancel
+    if (!reason.trim()) {
+      toast.warning("Vui lòng nhập lý do hủy");
+      return;
+    }
+
+    try {
+      await dispatchService.cancel(record.id, reason.trim());
+      toast.success("Đã hủy bỏ record thành công");
+      navigate("/thanh-toan");
+    } catch (error: unknown) {
+      const err = error as { response?: { data?: { error?: string } } };
+      toast.error(err.response?.data?.error || "Không thể hủy bỏ record");
     }
   };
 
@@ -416,7 +434,7 @@ export default function ThanhToan() {
             {/* Quick Actions */}
             <div className="flex flex-wrap gap-3">
               <Button variant="outline" onClick={handleCancel} className="gap-2 text-red-600 border-red-200 hover:bg-red-50">
-                <X className="w-4 h-4" /> Hủy thanh toán
+                <X className="w-4 h-4" /> Hủy bỏ record
               </Button>
               <Button variant="outline" onClick={() => navigate(`/bao-cao/xe-tra-khach?vehiclePlateNumber=${encodeURIComponent(record.vehiclePlateNumber)}&returnTo=/thanh-toan/${id}`)} className="gap-2">
                 <FileText className="w-4 h-4" /> Lịch sử trả khách

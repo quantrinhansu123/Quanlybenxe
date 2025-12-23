@@ -3,7 +3,7 @@ import { Building2, Phone, User, CheckCircle, Eye, Edit, Trash2 } from "lucide-r
 import type { Operator } from "@/types";
 
 interface OperatorWithSource extends Operator {
-  source?: "database" | "legacy";
+  source?: "database" | "legacy" | "google_sheets";
 }
 
 interface OperatorTableRowProps {
@@ -23,7 +23,8 @@ export const OperatorTableRow = memo(function OperatorTableRow({
   onEdit,
   onDelete,
 }: OperatorTableRowProps) {
-  const isLegacy = operator.source === "legacy";
+  // Google Sheets data is read-only (managed externally)
+  const isReadOnly = operator.source === "legacy" || operator.source === "google_sheets";
 
   return (
     <tr
@@ -37,7 +38,7 @@ export const OperatorTableRow = memo(function OperatorTableRow({
     >
       <td className="px-6 py-4">
         <span className="font-mono text-sm font-medium bg-slate-100 text-slate-700 px-3 py-1.5 rounded-lg">
-          {operator.code || "-"}
+          {operator.code || operator.id?.substring(0, 8) || "-"}
         </span>
       </td>
       <td className="px-6 py-4">
@@ -113,12 +114,12 @@ export const OperatorTableRow = memo(function OperatorTableRow({
               onEdit(operator);
             }}
             className={`p-2 rounded-lg transition-all cursor-pointer ${
-              isLegacy
+              isReadOnly
                 ? "text-slate-300 cursor-not-allowed pointer-events-none"
                 : "text-slate-500 hover:text-amber-600 hover:bg-amber-50"
             }`}
-            title={isLegacy ? "Không thể sửa dữ liệu legacy" : "Chỉnh sửa"}
-            disabled={isLegacy}
+            title={isReadOnly ? "Dữ liệu được quản lý từ Google Sheets" : "Chỉnh sửa"}
+            disabled={isReadOnly}
           >
             <Edit className="h-4 w-4" />
           </button>
@@ -129,12 +130,12 @@ export const OperatorTableRow = memo(function OperatorTableRow({
               onDelete(operator);
             }}
             className={`p-2 rounded-lg transition-all cursor-pointer ${
-              isLegacy
+              isReadOnly
                 ? "text-slate-300 cursor-not-allowed pointer-events-none"
                 : "text-slate-500 hover:text-rose-600 hover:bg-rose-50"
             }`}
-            title={isLegacy ? "Không thể xóa dữ liệu legacy" : "Xóa"}
-            disabled={isLegacy}
+            title={isReadOnly ? "Dữ liệu được quản lý từ Google Sheets" : "Xóa"}
+            disabled={isReadOnly}
           >
             <Trash2 className="h-4 w-4" />
           </button>

@@ -38,46 +38,77 @@ const normalizePlate = (plate: string): string => {
 }
 
 // Helper function to map Firebase data to VehicleBadge format
+// Supports both old format (Vietnamese field names) and new format (from Google Sheets sync)
 const mapFirebaseDataToBadge = (firebaseData: any, activePlates?: Set<string>) => {
-  // Keep original status from Firebase data (TrangThai field)
-  const status = firebaseData.TrangThai || ''
+  // Support both old (TrangThai) and new (status) field names
+  const status = firebaseData.TrangThai || firebaseData.status || ''
+  const vehicleRef = firebaseData.BienSoXe || firebaseData.vehicle_id || ''
 
   return {
-    id: firebaseData.ID_PhuHieu || '',
-    badge_number: firebaseData.SoPhuHieu || '',
-    license_plate_sheet: firebaseData.BienSoXe || '',
-    badge_type: firebaseData.LoaiPH || '',
-    badge_color: firebaseData.MauPhuHieu || '',
-    issue_date: firebaseData.NgayCap || '',
-    expiry_date: firebaseData.NgayHetHan || '',
+    id: firebaseData.ID_PhuHieu || firebaseData.id || '',
+    badge_number: firebaseData.SoPhuHieu || firebaseData.badge_number || '',
+    license_plate_sheet: vehicleRef,
+    badge_type: firebaseData.LoaiPH || firebaseData.badge_type || '',
+    badge_color: firebaseData.MauPhuHieu || firebaseData.badge_color || '',
+    issue_date: firebaseData.NgayCap || firebaseData.issue_date || '',
+    expiry_date: firebaseData.NgayHetHan || firebaseData.expiry_date || '',
     status: status,
-    file_code: firebaseData.MaHoSo || '',
-    issue_type: firebaseData.LoaiCap || '',
-    business_license_ref: firebaseData.Ref_GPKD || '',
-    issuing_authority_ref: firebaseData.Ref_DonViCapPhuHieu || '',
-    vehicle_id: '',
-    route_id: '',
-    bus_route_ref: firebaseData.TuyenDuong || '',
-    vehicle_type: firebaseData.LoaiXe || '',
-    notes: '',
-    created_at: firebaseData.created_at || new Date().toISOString(),
-    created_by: '',
-    email_notification_sent: false,
-    notification_ref: '',
-    previous_badge_number: '',
-    renewal_due_date: '',
-    renewal_reason: '',
-    renewal_reminder_shown: false,
-    replacement_vehicle_id: '',
-    revocation_date: '',
-    revocation_decision: '',
-    revocation_reason: '',
-    warn_duplicate_plate: false,
+    file_code: firebaseData.MaHoSo || firebaseData.file_number || '',
+    issue_type: firebaseData.LoaiCap || firebaseData.issue_type || '',
+    business_license_ref: firebaseData.Ref_GPKD || firebaseData.business_license_ref || '',
+    issuing_authority_ref: firebaseData.Ref_DonViCapPhuHieu || firebaseData.issuing_authority_ref || '',
+    vehicle_id: vehicleRef,
+    route_id: firebaseData.Ref_Tuyen || firebaseData.route_ref || '',
+    bus_route_ref: firebaseData.TuyenDuong || firebaseData.Ref_TuyenBuyt || firebaseData.bus_route_ref || '',
+    vehicle_type: firebaseData.LoaiXe || firebaseData.vehicle_type || '',
+    notes: firebaseData.GhiChu || firebaseData.notes || '',
+    created_at: firebaseData.created_at || firebaseData.synced_at || new Date().toISOString(),
+    created_by: firebaseData.User || firebaseData.user || '',
+    email_notification_sent: firebaseData.GuiEmailbao || firebaseData.email_sent || false,
+    notification_ref: firebaseData.Ref_ThongBao || firebaseData.notification_ref || '',
+    previous_badge_number: firebaseData.SoPhuHieuCu || firebaseData.old_badge_number || '',
+    renewal_due_date: firebaseData.Hancap || firebaseData.issue_deadline || '',
+    renewal_reason: firebaseData.LyDoCapLai || firebaseData.reissue_reason || '',
+    renewal_reminder_shown: firebaseData.CanCapLaiPopup || firebaseData.need_reissue_popup || false,
+    replacement_vehicle_id: firebaseData.XeThayThe || firebaseData.replacement_vehicle || '',
+    revocation_date: firebaseData.NgayThuHoi || firebaseData.revoke_date || '',
+    revocation_decision: firebaseData.QDThuHoi || firebaseData.revoke_decision || '',
+    revocation_reason: firebaseData.LyDoThuHoi || firebaseData.revoke_reason || '',
+    warn_duplicate_plate: firebaseData.CanhBaoTrungBienSoKhiCapPH || firebaseData.warning_duplicate_plate || false,
     // Compute operational_status based on active dispatch records
-    operational_status: activePlates && firebaseData.BienSoXe
-      ? (activePlates.has(normalizePlate(firebaseData.BienSoXe)) ? 'dang_chay' : 'trong_ben')
+    operational_status: activePlates && vehicleRef
+      ? (activePlates.has(normalizePlate(vehicleRef)) ? 'dang_chay' : 'trong_ben')
       : 'trong_ben',
   }
+}
+
+// Cache for vehicle ID to plate number mapping
+let vehiclePlateCache: Map<string, string> | null = null
+let vehiclePlateCacheTime: number = 0
+
+// Helper to load vehicle plate numbers for resolving badge vehicle_id
+const loadVehiclePlates = async (): Promise<Map<string, string>> => {
+  const now = Date.now()
+  if (vehiclePlateCache && (now - vehiclePlateCacheTime) < CACHE_TTL) {
+    return vehiclePlateCache
+  }
+  
+  const snapshot = await db!.ref('datasheet/Xe').once('value')
+  const data = snapshot.val()
+  vehiclePlateCache = new Map()
+  
+  if (data) {
+    for (const [key, vehicle] of Object.entries(data)) {
+      const v = vehicle as any
+      const plate = v.plate_number || v.BienSo || ''
+      if (plate) {
+        vehiclePlateCache.set(key, plate)
+      }
+    }
+  }
+  
+  vehiclePlateCacheTime = Date.now()
+  return vehiclePlateCache
 }
 
 // Helper to load and cache badges with deduplication
@@ -98,8 +129,11 @@ const loadBadgesFromDB = async (): Promise<any[]> => {
   cacheLoading = (async () => {
     try {
       // Load from Firebase
-      const snapshot = await db!.ref('datasheet/PHUHIEUXE').once('value')
-      const firebaseData = snapshot.val()
+      const [badgeSnapshot, vehiclePlates] = await Promise.all([
+        db!.ref('datasheet/PHUHIEUXE').once('value'),
+        loadVehiclePlates()
+      ])
+      const firebaseData = badgeSnapshot.val()
       
       if (!firebaseData) {
         badgesCache = []
@@ -112,7 +146,12 @@ const loadBadgesFromDB = async (): Promise<any[]> => {
       badgesCache = new Array(keys.length)
       
       for (let i = 0; i < keys.length; i++) {
-        badgesCache[i] = mapFirebaseDataToBadge(firebaseData[keys[i]])
+        const badge = mapFirebaseDataToBadge(firebaseData[keys[i]])
+        // Resolve vehicle_id to actual plate number
+        if (badge.vehicle_id && vehiclePlates.has(badge.vehicle_id)) {
+          badge.license_plate_sheet = vehiclePlates.get(badge.vehicle_id)!
+        }
+        badgesCache[i] = badge
       }
       
       // Sort once during caching
@@ -133,6 +172,8 @@ export const invalidateBadgesCache = () => {
   badgesCache = null
   badgesCacheTime = 0
   cacheLoading = null
+  vehiclePlateCache = null
+  vehiclePlateCacheTime = 0
 }
 
 export const getAllVehicleBadges = async (req: Request, res: Response): Promise<void> => {

@@ -317,6 +317,80 @@ export const updateEntryImage = async (req: AuthRequest, res: Response) => {
   }
 }
 
+/**
+ * Delete dispatch record (only for records that haven't departed)
+ */
+export const deleteDispatchRecord = async (req: AuthRequest, res: Response) => {
+  try {
+    const { id } = req.params
+    
+    const existingRecord = await dispatchRepository.findById(id)
+    if (!existingRecord) {
+      return res.status(404).json({ error: 'Dispatch record not found' })
+    }
+
+    // Only allow deletion of records that haven't departed yet
+    if (existingRecord.current_status === 'departed') {
+      return res.status(400).json({ error: 'Không thể xóa record đã xuất bến. Hãy sử dụng chức năng Hủy bỏ.' })
+    }
+
+    await dispatchRepository.delete(id)
+    return res.json({ message: 'Dispatch record deleted successfully' })
+  } catch (error: unknown) {
+    console.error('Error deleting dispatch record:', error)
+    return res.status(500).json({ error: getErrorMessage(error, 'Failed to delete dispatch record') })
+  }
+}
+
+/**
+ * Cancel dispatch record (soft delete - mark as cancelled)
+ * Used for records that have already departed but need to be voided
+ */
+export const cancelDispatchRecord = async (req: AuthRequest, res: Response) => {
+  try {
+    const { id } = req.params
+    const { reason } = req.body
+    const userId = req.user?.id
+
+    const existingRecord = await dispatchRepository.findById(id)
+    if (!existingRecord) {
+      return res.status(404).json({ error: 'Dispatch record not found' })
+    }
+
+    // Already cancelled
+    if (existingRecord.current_status === 'cancelled') {
+      return res.status(400).json({ error: 'Record đã được hủy bỏ trước đó' })
+    }
+
+    const userName = await fetchUserName(userId)
+
+    // Update status to cancelled and store cancellation info in metadata
+    const updatedRecord = await dispatchRepository.update(id, {
+      current_status: 'cancelled',
+      metadata: {
+        ...existingRecord.metadata,
+        cancelled_at: new Date().toISOString(),
+        cancelled_by: userId,
+        cancelled_by_name: userName,
+        cancellation_reason: reason || 'Hủy bỏ bởi người dùng',
+        previous_status: existingRecord.current_status,
+      }
+    })
+
+    if (!updatedRecord) {
+      return res.status(500).json({ error: 'Failed to update record' })
+    }
+
+    return res.json({ 
+      message: 'Record đã được hủy bỏ thành công',
+      dispatch: mapDispatchToAPI(updatedRecord)
+    })
+  } catch (error: unknown) {
+    console.error('Error cancelling dispatch record:', error)
+    return res.status(500).json({ error: getErrorMessage(error, 'Failed to cancel dispatch record') })
+  }
+}
+
 // Legacy endpoints
 export const updateDispatchStatus = async (_req: Request, res: Response) => {
   return res.status(400).json({ error: 'This endpoint is deprecated. Use specific workflow endpoints instead.' })

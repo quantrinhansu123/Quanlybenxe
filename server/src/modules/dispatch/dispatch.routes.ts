@@ -17,6 +17,8 @@ import {
   updateEntryImage,
   updateDispatchStatus,
   depart,
+  deleteDispatchRecord,
+  cancelDispatchRecord,
 } from './controllers/dispatch.controller.js'
 
 const router = Router()
@@ -30,6 +32,8 @@ router.get('/:id', getDispatchRecordById)
 
 // Workflow endpoints
 router.post('/', createDispatchRecord)
+router.delete('/:id', deleteDispatchRecord)
+router.post('/:id/cancel', cancelDispatchRecord)
 router.post('/:id/passenger-drop', recordPassengerDrop)
 router.post('/:id/permit', issuePermit)
 router.post('/:id/payment', processPayment)

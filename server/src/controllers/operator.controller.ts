@@ -6,6 +6,11 @@ import { z } from 'zod'
 let legacyOperatorsCache: { data: any[]; timestamp: number } | null = null
 const LEGACY_CACHE_TTL = 30 * 60 * 1000 // 30 minutes
 
+// Export function to invalidate cache (called by sync service)
+export const invalidateOperatorCache = () => {
+  legacyOperatorsCache = null
+}
+
 const operatorSchema = z.object({
   name: z.string().min(1, 'Name is required'),
   code: z.string().min(1, 'Code is required'),
@@ -68,8 +73,8 @@ export const getAllOperators = async (req: Request, res: Response) => {
 }
 
 /**
- * Get legacy operators from datasheet/Xe (unique owner_name values)
- * Combined with regular operators for complete list
+ * Get all operators from Google Sheets (datasheet/DONVIVANTAI)
+ * This is the single source of truth for operators data
  */
 export const getLegacyOperators = async (req: Request, res: Response) => {
   try {
@@ -80,58 +85,51 @@ export const getLegacyOperators = async (req: Request, res: Response) => {
       return res.json(legacyOperatorsCache.data)
     }
     
-    // Load regular operators first
-    const { data: regularOps } = await firebase
-      .from('operators')
-      .select('*')
-      .eq('is_active', true)
+    // Load operators from Google Sheets sync (datasheet/DONVIVANTAI)
+    const snapshot = await firebaseDb.ref('datasheet/DONVIVANTAI').once('value')
+    const sheetData = snapshot.val()
     
-    const regularOperators = (regularOps || []).map((op: any) => ({
-      id: op.id,
-      name: op.name,
-      code: op.code,
-      isActive: true,
-      source: 'database',
-    }))
-    
-    // Load unique owner_name from datasheet/Xe
-    const snapshot = await firebaseDb.ref('datasheet/Xe').once('value')
-    const xeData = snapshot.val()
-    
-    const ownerSet = new Map<string, string>() // name -> generated id
-    if (xeData) {
-      Object.entries(xeData).forEach(([key, v]: [string, any]) => {
-        const name = (v.owner_name || v.TenDangKyXe || '').trim()
-        if (name && !ownerSet.has(name)) {
-          ownerSet.set(name, `legacy_op_${key}`)
-        }
+    // Convert sheet operators to standard format
+    const operators: any[] = []
+    if (sheetData) {
+      Object.entries(sheetData).forEach(([key, v]: [string, any]) => {
+        // Normalize province name
+        let province = (v.province || '').trim()
+        // Clean up province variations
+        province = province.replace(/^\s*→\s*"?/g, '').replace(/"$/g, '').trim()
+        if (province.includes('Tỉnh Tỉnh')) province = province.replace('Tỉnh Tỉnh', 'Tỉnh')
+        
+        operators.push({
+          id: v.id || key,
+          name: v.name || '',
+          code: '',
+          province: province,
+          district: v.district || '',
+          ward: v.ward || '',
+          address: v.address || '',
+          fullAddress: v.full_address || '',
+          phone: v.phone || '',
+          email: v.email || '',
+          taxCode: v.tax_code || '',
+          businessLicense: v.business_license || '',
+          representativeName: v.representative_name || '',
+          businessType: v.business_type || '',
+          registrationProvince: v.registration_province || '',
+          isActive: true,
+          source: 'google_sheets',
+        })
       })
     }
     
-    // Convert to operator format
-    const legacyOperators = Array.from(ownerSet.entries()).map(([name, id]) => ({
-      id,
-      name,
-      code: '', // No code for legacy
-      isActive: true,
-      source: 'legacy',
-    }))
-    
-    // Merge: regular operators first, then legacy (avoid duplicates by name)
-    const regularNames = new Set(regularOperators.map((o: any) => o.name.toLowerCase()))
-    const uniqueLegacy = legacyOperators.filter(o => !regularNames.has(o.name.toLowerCase()))
-    
-    const allOperators = [...regularOperators, ...uniqueLegacy]
-    
     // Sort by name
-    allOperators.sort((a, b) => a.name.localeCompare(b.name, 'vi'))
+    operators.sort((a, b) => a.name.localeCompare(b.name, 'vi'))
     
     // Update cache
-    legacyOperatorsCache = { data: allOperators, timestamp: Date.now() }
+    legacyOperatorsCache = { data: operators, timestamp: Date.now() }
     
-    return res.json(allOperators)
+    return res.json(operators)
   } catch (error) {
-    console.error('Error fetching legacy operators:', error)
+    console.error('Error fetching operators:', error)
     // Return stale cache if available
     if (legacyOperatorsCache) {
       return res.json(legacyOperatorsCache.data)

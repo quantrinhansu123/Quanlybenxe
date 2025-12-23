@@ -182,6 +182,8 @@ export function CapPhepDialog({
                   setRegisteredPlateNumber={hook.setRegisteredPlateNumber}
                   selectedVehicle={hook.selectedVehicle}
                   vehicleBadges={hook.vehicleBadges}
+                  vehicles={hook.vehicles}
+                  vehiclesWithStatus={hook.vehiclesWithStatus}
                   replacementVehicleId={hook.replacementVehicleId}
                   setReplacementVehicleId={hook.setReplacementVehicleId}
                   entryPlateNumber={hook.entryPlateNumber}

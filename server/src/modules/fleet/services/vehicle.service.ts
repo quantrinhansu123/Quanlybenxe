@@ -53,28 +53,43 @@ export class VehicleService {
       dbVehicles = await this.getDbVehicles(operatorId, isActive);
     }
 
-    // Build plate set for deduplication
-    const existingPlates = new Set(dbVehicles.map((v) => v.plateNumber.toUpperCase()));
+    // Build plate set for deduplication (normalize: remove dots, dashes, spaces, uppercase)
+    const normalizeplate = (plate: string) => plate.replace(/[.\-\s]/g, '').toUpperCase();
+    const existingPlates = new Set(dbVehicles.map((v) => normalizeplate(v.plateNumber)));
 
     // Merge with legacy/badge if needed
     let result: CombinedVehicle[] = [...dbVehicles];
 
     if (includeLegacy && (!operatorId || isLegacyOperator)) {
-      const legacyVehicles = await this.getLegacyVehicles(operatorId, isLegacyOperator ?? false, existingPlates);
-      result = [...result, ...legacyVehicles];
-
-      // Add badge vehicles only when not filtering by legacy operator
+      // Add badge vehicles FIRST (they have phù hiệu - more authoritative)
       if (!isLegacyOperator) {
         const badgeVehicles = await this.getBadgeVehicles(existingPlates);
         result = [...result, ...badgeVehicles];
       }
+
+      // Then add legacy vehicles (dedup against badge plates too)
+      const legacyVehicles = await this.getLegacyVehicles(operatorId, isLegacyOperator ?? false, existingPlates);
+      result = [...result, ...legacyVehicles];
     }
+
+    // Sort by plate number for consistent display
+    result.sort((a, b) => a.plateNumber.localeCompare(b.plateNumber));
 
     return result;
   }
 
   private async getDbVehicles(operatorId?: string, isActive?: boolean | 'all'): Promise<VehicleAPI[]> {
     let vehicles = await this.repository.findAllWithRelations();
+
+    // Filter out test/invalid vehicles (plate number should be 7-10 chars with proper format)
+    vehicles = vehicles.filter((v) => {
+      const plate = v.plateNumber?.trim();
+      if (!plate) return false;
+      // Valid Vietnamese plate: 2 digits + letter(s) + dash/hyphen + 4-5 digits (e.g., 98H-02514, 29A-12345)
+      // or old format without dash
+      const isValidFormat = /^\d{2}[A-Z]{1,2}[-.]?\d{4,5}$/.test(plate.toUpperCase());
+      return isValidFormat;
+    });
 
     if (operatorId) {
       vehicles = vehicles.filter((v) => v.operatorId === operatorId);
@@ -97,13 +112,14 @@ export class VehicleService {
   ): Promise<LegacyVehicleData[]> {
     const legacyVehicles = await vehicleCacheService.getLegacyVehicles();
     const result: LegacyVehicleData[] = [];
+    const normalizePlate = (plate: string) => plate.replace(/[.\-\s]/g, '').toUpperCase();
 
     if (isLegacyOperator && operatorId) {
       const operatorName = await vehicleCacheService.getLegacyOperatorName(operatorId);
       if (operatorName) {
         const filtered = vehicleCacheService.filterLegacyByOperator(legacyVehicles, operatorName);
         for (const v of filtered) {
-          const plate = v.plateNumber.toUpperCase();
+          const plate = normalizePlate(v.plateNumber);
           if (!existingPlates.has(plate)) {
             result.push(v);
             existingPlates.add(plate);
@@ -112,7 +128,7 @@ export class VehicleService {
       }
     } else {
       for (const v of legacyVehicles) {
-        const plate = v.plateNumber.toUpperCase();
+        const plate = normalizePlate(v.plateNumber);
         if (!existingPlates.has(plate)) {
           result.push(v);
           existingPlates.add(plate);
@@ -126,9 +142,10 @@ export class VehicleService {
   private async getBadgeVehicles(existingPlates: Set<string>): Promise<BadgeVehicleData[]> {
     const badgeVehicles = await vehicleCacheService.getBadgeVehicles();
     const result: BadgeVehicleData[] = [];
+    const normalizePlate = (plate: string) => plate.replace(/[.\-\s]/g, '').toUpperCase();
 
     for (const v of badgeVehicles) {
-      const plate = v.plateNumber.toUpperCase();
+      const plate = normalizePlate(v.plateNumber);
       if (!existingPlates.has(plate)) {
         result.push(v);
         existingPlates.add(plate);

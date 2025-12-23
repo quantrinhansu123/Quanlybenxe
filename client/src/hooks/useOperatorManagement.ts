@@ -5,7 +5,8 @@ import { useUIStore } from "@/store/ui.store";
 import type { Operator } from "@/types";
 
 export interface OperatorWithSource extends Operator {
-  source?: "database" | "legacy";
+  source?: "database" | "legacy" | "google_sheets";
+  vehicleCount?: number;
 }
 
 const ITEMS_PER_PAGE = 20;
@@ -15,6 +16,7 @@ export function useOperatorManagement() {
   const [searchQuery, setSearchQuery] = useState("");
   const [filterStatus, setFilterStatus] = useState("");
   const [filterTicketDelegated, setFilterTicketDelegated] = useState("");
+  const [filterProvince, setFilterProvince] = useState<"all" | "bac_ninh" | "ngoai_bac_ninh">("all");
   const [quickFilter, setQuickFilter] = useState<"all" | "active" | "inactive">("all");
   const [isLoading, setIsLoading] = useState(false);
   const [selectedOperator, setSelectedOperator] = useState<Operator | null>(null);
@@ -51,7 +53,14 @@ export function useOperatorManagement() {
     const active = operators.filter((o) => o.isActive).length;
     const inactive = operators.length - active;
     const delegated = operators.filter((o) => o.isTicketDelegated).length;
-    return { total: operators.length, active, inactive, delegated };
+    
+    // Check if province contains "Bắc Ninh" (handles variations like "Tỉnh Bắc Ninh", "Bắc Ninh", etc.)
+    const isBacNinh = (province: string | undefined) => 
+      province && province.toLowerCase().includes("bắc ninh");
+    
+    const bacNinh = operators.filter((o) => isBacNinh(o.province)).length;
+    const ngoaiBacNinh = operators.filter((o) => o.province && !isBacNinh(o.province)).length;
+    return { total: operators.length, active, inactive, delegated, bacNinh, ngoaiBacNinh };
   }, [operators]);
 
   const filteredOperators = useMemo(() => {
@@ -59,12 +68,21 @@ export function useOperatorManagement() {
       if (quickFilter === "active" && !operator.isActive) return false;
       if (quickFilter === "inactive" && operator.isActive) return false;
 
+      // Province filter - check if province contains "Bắc Ninh"
+      const isBacNinh = operator.province && operator.province.toLowerCase().includes("bắc ninh");
+      if (filterProvince === "bac_ninh" && !isBacNinh) return false;
+      if (filterProvince === "ngoai_bac_ninh") {
+        if (!operator.province || isBacNinh) return false;
+      }
+
       if (searchQuery) {
         const query = searchQuery.toLowerCase();
         const matchesSearch =
           operator.name.toLowerCase().includes(query) ||
           (operator.code || "").toLowerCase().includes(query) ||
-          (operator.phone || "").toLowerCase().includes(query);
+          (operator.phone || "").toLowerCase().includes(query) ||
+          (operator.address || "").toLowerCase().includes(query) ||
+          (operator.province || "").toLowerCase().includes(query);
         if (!matchesSearch) return false;
       }
       if (filterStatus) {
@@ -77,7 +95,7 @@ export function useOperatorManagement() {
       }
       return true;
     });
-  }, [operators, searchQuery, filterStatus, filterTicketDelegated, quickFilter]);
+  }, [operators, searchQuery, filterStatus, filterTicketDelegated, filterProvince, quickFilter]);
 
   const totalPages = Math.ceil(filteredOperators.length / ITEMS_PER_PAGE);
 
@@ -88,7 +106,7 @@ export function useOperatorManagement() {
 
   useEffect(() => {
     setCurrentPage(1);
-  }, [searchQuery, filterStatus, filterTicketDelegated, quickFilter]);
+  }, [searchQuery, filterStatus, filterTicketDelegated, filterProvince, quickFilter]);
 
   const handleCreate = () => {
     setSelectedOperator(null);
@@ -103,8 +121,8 @@ export function useOperatorManagement() {
   };
 
   const handleEdit = (operator: OperatorWithSource) => {
-    if (operator.source === "legacy") {
-      toast.warning("Không thể chỉnh sửa đơn vị từ dữ liệu legacy");
+    if (operator.source === "legacy" || operator.source === "google_sheets") {
+      toast.warning("Dữ liệu được quản lý từ Google Sheets, không thể chỉnh sửa trực tiếp");
       return;
     }
     setSelectedOperator(operator);
@@ -113,8 +131,8 @@ export function useOperatorManagement() {
   };
 
   const handleDelete = (operator: OperatorWithSource) => {
-    if (operator.source === "legacy") {
-      toast.warning("Không thể xóa đơn vị từ dữ liệu legacy");
+    if (operator.source === "legacy" || operator.source === "google_sheets") {
+      toast.warning("Dữ liệu được quản lý từ Google Sheets, không thể xóa trực tiếp");
       return;
     }
     setOperatorToDelete(operator);
@@ -146,10 +164,11 @@ export function useOperatorManagement() {
     setSearchQuery("");
     setFilterStatus("");
     setFilterTicketDelegated("");
+    setFilterProvince("all");
     setQuickFilter("all");
   };
 
-  const hasActiveFilters = searchQuery || filterStatus || filterTicketDelegated;
+  const hasActiveFilters = searchQuery || filterStatus || filterTicketDelegated || filterProvince !== "all";
 
   return {
     // Data
@@ -164,6 +183,8 @@ export function useOperatorManagement() {
     setFilterStatus,
     filterTicketDelegated,
     setFilterTicketDelegated,
+    filterProvince,
+    setFilterProvince,
     quickFilter,
     setQuickFilter,
     hasActiveFilters,
