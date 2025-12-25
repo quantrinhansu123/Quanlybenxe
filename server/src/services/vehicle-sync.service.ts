@@ -8,7 +8,7 @@ import https from 'https'
 import { firebaseDb } from '../config/database.js'
 
 const SHEET_URL = 'https://docs.google.com/spreadsheets/d/1DCH1-efRqLMSXoIr_jm-5v_C1XpPrnWKultMp7FXn3g/gviz/tq?tqx=out:csv&gid=40001005'
-const SYNC_INTERVAL = 15 * 60 * 1000 // 15 minutes
+const SYNC_INTERVAL = 2 * 60 * 60 * 1000 // 2 hours - vehicle data rarely changes
 
 let syncTimer: NodeJS.Timeout | null = null
 let lastSyncTime: Date | null = null

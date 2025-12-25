@@ -7,6 +7,7 @@ import {
 } from "lucide-react";
 import { format } from "date-fns";
 import { toast } from "react-toastify";
+import { formatVietnamTime } from "@/utils/timezone";
 import { useCapPhepDialog } from "@/hooks/useCapPhepDialog";
 import { Button } from "@/components/ui/button";
 import { Autocomplete } from "@/components/ui/autocomplete";
@@ -150,7 +151,7 @@ export function CapPhepDialogRedesign({
                 <p className="text-sm text-slate-500">
                   <span className="font-semibold text-slate-700">{record.vehiclePlateNumber}</span>
                   {record.entryTime && (
-                    <span className="ml-2">• Vào bến {format(new Date(record.entryTime), "HH:mm dd/MM")}</span>
+                    <span className="ml-2">• Vào bến {formatVietnamTime(record.entryTime, "HH:mm dd/MM")}</span>
                   )}
                 </p>
               </div>
@@ -240,7 +241,7 @@ export function CapPhepDialogRedesign({
                       <div>
                         <label className="text-sm font-medium text-slate-500 mb-1.5 block">Giờ vào bến</label>
                         <div className="h-11 px-4 flex items-center bg-white rounded-lg border border-slate-200 text-base text-slate-700">
-                          {format(new Date(record.entryTime), "HH:mm dd/MM")}
+                          {formatVietnamTime(record.entryTime, "HH:mm dd/MM")}
                         </div>
                       </div>
                     </div>

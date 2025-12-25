@@ -1,8 +1,6 @@
 import { Request, Response } from 'express'
-import { intentClassifier } from './services/intent-classifier.service.js'
-import { dataQueryService } from './services/data-query.service.js'
-import { responseFormatter } from './services/response-formatter.service.js'
 import { aiService } from './services/ai.service.js'
+import { chatCacheService } from './services/chat-cache.service.js'
 import type { ChatRequest, ChatResponse } from './types/chat.types.js'
 
 const generateSessionId = (): string => {
@@ -33,96 +31,47 @@ export const processMessage = async (req: Request, res: Response): Promise<void>
   }
 
   try {
-    // 1. Classify intent
-    const intent = intentClassifier.classify(message.trim())
-
-    // 2. If data query type with high confidence, query database
-    if (intent.type !== 'GENERAL_QUESTION' && intent.confidence >= 0.65) {
-      const result = await dataQueryService.execute(intent)
-
-      if (result.success && result.data) {
-        const response = responseFormatter.format(intent.type, result)
-        const processingTime = Date.now() - startTime
-
-        res.json({
-          response,
-          type: 'data',
-          sessionId,
-          metadata: {
-            queryType: intent.type,
-            processingTime,
-            resultCount: Array.isArray(result.data) ? result.data.length : 1
-          }
-        } as ChatResponse)
-        return
-      }
-
-      // Data query failed, but we have a specific intent
-      // Return the error message
-      if (result.error) {
-        res.json({
-          response: result.error,
-          type: 'data',
-          sessionId,
-          metadata: {
-            queryType: intent.type,
-            processingTime: Date.now() - startTime,
-            resultCount: 0
-          }
-        } as ChatResponse)
-        return
-      }
+    // Ensure cache is ready (non-blocking if already warm)
+    if (!chatCacheService.isReady()) {
+      chatCacheService.preWarm().catch(err => console.error('[Chat] Cache pre-warm error:', err))
     }
 
-    // 3. AI processing for general questions
-    // Get context from database to help AI
-    const dataContext = await dataQueryService.getContextForAI(message)
-    
-    // Check if AI is available
-    if (!aiService.hasApiKey()) {
-      res.json({
-        response: 'Xin lỗi, hệ thống AI chưa được cấu hình. Vui lòng thử các câu hỏi tra cứu như:\n\n' +
-          '• "xe 98H07480" - Tra cứu thông tin xe\n' +
-          '• "tài xế Nguyễn Văn A" - Tìm tài xế\n' +
-          '• "tuyến TP.HCM - Đà Lạt" - Thông tin tuyến\n' +
-          '• "đơn vị Phương Trang" - Thông tin đơn vị vận tải\n' +
-          '• "thống kê điều độ" - Thống kê xe vào/ra bến',
-        type: 'ai',
-        sessionId,
-        metadata: {
-          queryType: 'GENERAL_QUESTION',
-          processingTime: Date.now() - startTime,
-          hasContext: false
-        }
-      } as ChatResponse)
-      return
-    }
+    // Use AI with function calling - handles everything
+    const response = await aiService.generateResponse(message.trim(), sessionId)
+    const processingTime = Date.now() - startTime
 
-    // Generate AI response
-    const aiResponse = await aiService.generateResponse(
-      message.trim(),
-      sessionId,
-      dataContext
-    )
+    console.log(`[Chat] Processed in ${processingTime}ms: "${message.substring(0, 50)}..."`)
 
     res.json({
-      response: aiResponse,
+      response,
       type: 'ai',
       sessionId,
       metadata: {
-        queryType: 'GENERAL_QUESTION',
-        processingTime: Date.now() - startTime,
-        hasContext: Object.keys(dataContext).length > 0
+        queryType: 'AI_FUNCTION_CALLING',
+        processingTime
       }
     } as ChatResponse)
   } catch (error: any) {
     console.error('Chat error:', error)
-    res.status(500).json({
-      response: 'Xin lỗi, đã có lỗi xảy ra. Vui lòng thử lại sau.',
-      type: 'error',
+
+    // Never return "busy" - always provide helpful response
+    const stats = chatCacheService.isReady() ? chatCacheService.getSystemStats() : null
+    const fallbackResponse = `Xin lỗi, tôi gặp sự cố khi xử lý yêu cầu của bạn.
+
+**Bạn có thể thử:**
+• Tìm xe: "xe 98H07480"
+• Tìm tài xế: "tài xế Nguyễn Văn A"
+• Tìm đơn vị: "đơn vị Phương Trang"
+• Tìm tuyến: "tuyến TP.HCM - Đà Lạt"
+• Thống kê: "thống kê điều độ"${stats ? `\n\nHệ thống có ${stats.vehicles} xe, ${stats.drivers} tài xế.` : ''}`
+
+    res.json({
+      response: fallbackResponse,
+      type: 'ai',
       sessionId,
       metadata: {
-        processingTime: Date.now() - startTime
+        processingTime: Date.now() - startTime,
+        error: true
       }
     } as ChatResponse)
   }

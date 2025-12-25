@@ -14,12 +14,23 @@ interface RouteDBRecord {
   route_name: string;
 }
 
-// Helper function to get Vietnam timezone date
-function getVietnamDate(): Date {
+// Helper function to get today's date string in Vietnam timezone (YYYY-MM-DD)
+function getVietnamTodayStr(): string {
   const now = new Date();
-  const vietnamOffset = 7 * 60; // minutes
-  const utcTime = now.getTime() + now.getTimezoneOffset() * 60000;
-  return new Date(utcTime + vietnamOffset * 60000);
+  // Convert to Vietnam time (UTC+7)
+  const vietnamTime = new Date(now.getTime() + (7 * 60 + now.getTimezoneOffset()) * 60000);
+  const year = vietnamTime.getFullYear();
+  const month = String(vietnamTime.getMonth() + 1).padStart(2, '0');
+  const day = String(vietnamTime.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
+// Helper to check if a datetime string is from today (Vietnam time)
+// Since data is stored as Vietnam time with "Z" suffix, we compare date strings directly
+function isToday(dateTimeStr: string | undefined, todayStr: string): boolean {
+  if (!dateTimeStr) return false;
+  const dateStr = dateTimeStr.split('T')[0]; // Extract YYYY-MM-DD
+  return dateStr === todayStr;
 }
 
 interface DashboardStats {
@@ -53,81 +64,84 @@ interface Warning {
 
 export class DashboardService {
   async getStats(): Promise<DashboardStats> {
-    const vietnamNow = getVietnamDate();
-    const todayStart = new Date(vietnamNow.getFullYear(), vietnamNow.getMonth(), vietnamNow.getDate(), 0, 0, 0, 0);
-    const todayEnd = new Date(vietnamNow.getFullYear(), vietnamNow.getMonth(), vietnamNow.getDate(), 23, 59, 59, 999);
-    const vietnamOffset = 7 * 60 * 60 * 1000;
-    const todayStartUTC = new Date(todayStart.getTime() - vietnamOffset);
-    const todayEndUTC = new Date(todayEnd.getTime() - vietnamOffset);
+    const todayStr = getVietnamTodayStr(); // e.g., "2025-12-26"
 
     const { data: dispatchArray } = (await firebase.from('dispatch_records').select('*')) as FirebaseQueryResult<DispatchDBRecord>;
     const records = dispatchArray || [];
 
-    const vehiclesInStation = records.filter(
+    // Filter to only TODAY's records (by entry_time date string comparison)
+    // This is simple and accurate since data is stored as Vietnam time with "Z" suffix
+    const todayRecords = records.filter((record) => isToday(record.entry_time, todayStr));
+
+    // Debug log
+    console.log(`[Dashboard] Today: ${todayStr}, Total records: ${records.length}, Today records: ${todayRecords.length}`);
+
+    // Vehicles currently in station (entered today and haven't exited)
+    const vehiclesInStation = todayRecords.filter(
       (record) =>
         ['entered', 'passengers_dropped', 'permit_issued', 'paid', 'departure_ordered'].includes(record.current_status) &&
         !record.exit_time
     ).length;
 
-    const vehiclesDepartedToday = records.filter((record) => {
-      if (record.current_status !== 'departed' || !record.exit_time) return false;
-      const exitTime = new Date(record.exit_time);
-      return exitTime >= todayStartUTC && exitTime <= todayEndUTC;
+    // Vehicles that departed today
+    const vehiclesDepartedToday = todayRecords.filter((record) => {
+      return record.current_status === 'departed' && record.exit_time;
     }).length;
 
     const totalVehiclesToday = vehiclesInStation + vehiclesDepartedToday;
 
-    const todayStr = `${vietnamNow.getFullYear()}-${String(vietnamNow.getMonth() + 1).padStart(2, '0')}-${String(vietnamNow.getDate()).padStart(2, '0')}`;
-
-    const paidRecords = records.filter((record) => {
-      if (record.current_status !== 'paid' && record.current_status !== 'departed') return false;
-      if (!record.payment_amount) return false;
-      const paymentTime = record.payment_time || record.updated_at;
-      if (!paymentTime) return false;
-      const paidDate = new Date(paymentTime);
-      return paidDate >= todayStartUTC && paidDate <= todayEndUTC;
+    // Revenue from today's paid records
+    const paidRecords = todayRecords.filter((record) => {
+      return (record.current_status === 'paid' || record.current_status === 'departed') && record.payment_amount;
     });
 
     const revenueToday = paidRecords.reduce((sum, record) => sum + (parseFloat(String(record.payment_amount)) || 0), 0);
 
+    // Documents expired before today
     const { data: documentsArray } = (await firebase.from('vehicle_documents').select('*')) as FirebaseQueryResult<VehicleDocumentDB>;
     const invalidVehicles = (documentsArray || []).filter((doc) => {
       const expiryDate = doc.expiry_date?.split('T')[0] || doc.expiry_date;
       return expiryDate && expiryDate < todayStr;
     }).length;
 
+    console.log(`[Dashboard] Stats: inStation=${vehiclesInStation}, departed=${vehiclesDepartedToday}, total=${totalVehiclesToday}`);
+
     return { totalVehiclesToday, vehiclesInStation, vehiclesDepartedToday, revenueToday, invalidVehicles };
   }
 
   async getChartData(): Promise<ChartDataPoint[]> {
-    const chartDate = new Date();
-    const hours = Array.from({ length: 12 }, (_, i) => i + 6);
+    const todayStr = getVietnamTodayStr();
+    const hours = Array.from({ length: 12 }, (_, i) => i + 6); // 06:00 - 17:00
 
     const { data: dispatchArray } = (await firebase.from('dispatch_records').select('*')) as FirebaseQueryResult<DispatchDBRecord>;
     const records = dispatchArray || [];
 
-    return hours.map((hour) => {
-      const hourStart = new Date(chartDate);
-      hourStart.setHours(hour, 0, 0, 0);
-      const hourEnd = new Date(chartDate);
-      hourEnd.setHours(hour, 59, 59, 999);
+    // Filter to today's records first
+    const todayRecords = records.filter((record) => isToday(record.entry_time, todayStr));
 
-      const count = records.filter((record) => {
+    return hours.map((hour) => {
+      const hourStr = hour.toString().padStart(2, '0');
+      
+      // Count records where entry_time hour matches
+      // entry_time format: "2025-12-26T14:30:00Z"
+      const count = todayRecords.filter((record) => {
         if (!record.entry_time) return false;
-        const entryTime = new Date(record.entry_time);
-        return entryTime >= hourStart && entryTime <= hourEnd;
+        const timeStr = record.entry_time.split('T')[1]; // "14:30:00Z"
+        const recordHour = timeStr ? timeStr.substring(0, 2) : ''; // "14"
+        return recordHour === hourStr;
       }).length;
 
-      return { hour: `${hour.toString().padStart(2, '0')}:00`, count };
+      return { hour: `${hourStr}:00`, count };
     });
   }
 
   async getRecentActivity(): Promise<RecentActivity[]> {
+    const todayStr = getVietnamTodayStr();
+
     const { data: dispatchArray } = (await firebase
       .from('dispatch_records')
       .select('*')
-      .order('entry_time', { ascending: false })
-      .limit(10)) as FirebaseQueryResult<DispatchDBRecord>;
+      .order('entry_time', { ascending: false })) as FirebaseQueryResult<DispatchDBRecord>;
 
     const { data: vehiclesArray } = (await firebase.from('vehicles').select('*')) as FirebaseQueryResult<VehicleDBRecord>;
     const { data: routesArray } = (await firebase.from('routes').select('*')) as FirebaseQueryResult<RouteDBRecord>;
@@ -137,8 +151,10 @@ export class DashboardService {
     (vehiclesArray || []).forEach((v) => { vehicles[v.id] = v; });
     (routesArray || []).forEach((r) => { routes[r.id] = r; });
 
+    // Filter to TODAY's records only, then take top 10
     return (dispatchArray || [])
-      .filter((r) => r.entry_time)
+      .filter((r) => isToday(r.entry_time, todayStr))
+      .slice(0, 10)
       .map((record) => {
         const vehicle = vehicles[record.vehicle_id];
         const route = record.route_id ? routes[record.route_id] : undefined;
@@ -153,10 +169,15 @@ export class DashboardService {
   }
 
   async getWarnings(): Promise<Warning[]> {
-    const thirtyDaysFromNow = new Date();
-    thirtyDaysFromNow.setDate(thirtyDaysFromNow.getDate() + 30);
-    const thirtyDaysFromNowStr = thirtyDaysFromNow.toISOString().split('T')[0];
-    const todayStr = new Date().toISOString().split('T')[0];
+    const todayStr = getVietnamTodayStr();
+    // Calculate 30 days from today in Vietnam timezone
+    const now = new Date();
+    const vietnamTime = new Date(now.getTime() + (7 * 60 + now.getTimezoneOffset()) * 60000);
+    vietnamTime.setDate(vietnamTime.getDate() + 30);
+    const year = vietnamTime.getFullYear();
+    const month = String(vietnamTime.getMonth() + 1).padStart(2, '0');
+    const day = String(vietnamTime.getDate()).padStart(2, '0');
+    const thirtyDaysFromNowStr = `${year}-${month}-${day}`;
 
     const warnings: Warning[] = [];
 

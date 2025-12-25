@@ -232,6 +232,23 @@ export function useCapPhepDialog(record: DispatchRecord, onClose: () => void, on
         }
       }
 
+      // Fallback: Try to get seatCapacity from RTDB lookup if not found from Supabase
+      const plateToCheck = record.vehiclePlateNumber;
+      const foundVehicleSeatCapacity = vehiclesData.find((v: Vehicle) => v.id === record.vehicleId)?.seatCapacity;
+      const needSeatCapacity = !vehicleFound || !foundVehicleSeatCapacity;
+      
+      if (plateToCheck && needSeatCapacity && (!record.seatCount || record.seatCount === 0)) {
+        try {
+          // Use direct RTDB lookup - works for ALL vehicles, not just those with badges
+          const lookupResult = await vehicleService.lookupByPlate(plateToCheck);
+          if (lookupResult?.seatCapacity && lookupResult.seatCapacity > 0) {
+            setSeatCount(lookupResult.seatCapacity.toString());
+          }
+        } catch (lookupError) {
+          console.warn("Could not lookup vehicle seat capacity:", lookupError);
+        }
+      }
+
       if (record.seatCount && record.seatCount > 0) setSeatCount(record.seatCount.toString());
     } catch (error) {
       console.error("Failed to load initial data:", error);

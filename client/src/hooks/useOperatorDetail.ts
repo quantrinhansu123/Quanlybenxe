@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo } from "react";
 import { toast } from "react-toastify";
 import { vehicleService } from "@/services/vehicle.service";
+import { vehicleBadgeService, type VehicleBadge } from "@/services/vehicle-badge.service";
 import { invoiceService } from "@/services/invoice.service";
 import { dispatchService } from "@/services/dispatch.service";
 import type { Vehicle, Invoice, DispatchRecord, Operator } from "@/types";
@@ -22,34 +23,36 @@ export interface PaymentHistoryItem {
   routeName?: string;
 }
 
-// Normalize operator name for matching
-const normalizeOperatorName = (name: string): string => {
-  return name
-    .trim()
-    .toLowerCase()
-    // Remove common prefixes/suffixes
-    .replace(/^(ông|bà|anh|chị|mr\.|mrs\.|ms\.)\s*/i, '')
-    .replace(/^(công ty tnhh|công ty cổ phần|cty tnhh|cty cp|dntn|hộ kinh doanh|hkd)\s*/i, '')
-    .replace(/\s+/g, ' ')
-    .trim();
-};
-
-// Check if two names match - use exact match only (normalized)
-// Note: Google Sheets XE and DONVIVANTAI have no direct reference field,
-// only ~12% of operators have vehicles with matching owner_name
-const namesMatch = (vehicleOwner: string, operatorName: string): boolean => {
-  const n1 = normalizeOperatorName(vehicleOwner);
-  const n2 = normalizeOperatorName(operatorName);
-  
-  if (!n1 || !n2) return false;
-  
-  // Exact match only (after normalization)
-  return n1 === n2;
-};
+// Extended Vehicle type for badge vehicles
+interface BadgeVehicle {
+  id: string;
+  plateNumber: string;
+  vehicleType: { id: string | null; name: string };
+  vehicleTypeName: string;
+  seatCapacity: number;
+  bedCapacity: number;
+  manufacturer: string;
+  modelCode: string;
+  manufactureYear: number | null;
+  color: string;
+  chassisNumber: string;
+  engineNumber: string;
+  operatorId: string | null;
+  operator: { id: string | null; name: string; code: string };
+  operatorName: string;
+  isActive: boolean;
+  notes: string;
+  source: string;
+  badgeNumber: string;
+  badgeType: string;
+  badgeExpiryDate: string;
+  documents: Record<string, never>;
+}
 
 export function useOperatorDetail(operator: OperatorWithSource | null, open: boolean) {
   const [activeTab, setActiveTab] = useState("vehicles");
   const [vehicles, setVehicles] = useState<Vehicle[]>([]);
+  const [badges, setBadges] = useState<VehicleBadge[]>([]);
   const [allDispatchRecords, setAllDispatchRecords] = useState<DispatchRecord[]>([]);
   const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [paidDispatchRecords, setPaidDispatchRecords] = useState<DispatchRecord[]>([]);
@@ -71,21 +74,45 @@ export function useOperatorDetail(operator: OperatorWithSource | null, open: boo
       // Check if operator is from Google Sheets or legacy source (not from database)
       const isExternalOperator = operator.source === "google_sheets" || operator.source === "legacy" || operator.id.startsWith("legacy_");
       
-      // Load all vehicles and filter by operator name for external operators
+      // Load badge vehicles by issuing_authority_ref (Ref_DonViCapPhuHieu)
       let vehiclesData: Vehicle[] = [];
+      let badgesData: VehicleBadge[] = [];
+      
       if (isExternalOperator) {
-        // For external operators, load all legacy vehicles and filter by operator name
-        const allVehicles = await vehicleService.getAll(undefined, undefined, true);
-        console.log('[OperatorDetail] External operator:', operator.name, '-> searching in', allVehicles.length, 'vehicles');
+        // Load all badges and filter by issuing_authority_ref matching operator.id
+        const allBadges = await vehicleBadgeService.getAll();
+        badgesData = allBadges.filter(badge => 
+          badge.issuing_authority_ref === operator.id
+        );
+        console.log('[OperatorDetail] Badges for operator', operator.id, '(', operator.name, '):', badgesData.length);
         
-        vehiclesData = allVehicles.filter((v: Vehicle) => {
-          const vehicleOwnerName = 
-            (v as Vehicle & { operatorName?: string }).operatorName || 
-            v.operator?.name || 
-            '';
-          return namesMatch(vehicleOwnerName, operator.name || '');
-        });
-        console.log('[OperatorDetail] Matched vehicles:', vehiclesData.length);
+        // Convert badges to vehicle format for display
+        vehiclesData = badgesData.map(badge => ({
+          id: badge.id,
+          plateNumber: badge.license_plate_sheet,
+          vehicleType: { id: null, name: badge.badge_type || '' },
+          vehicleTypeName: badge.badge_type || '',
+          seatCapacity: 0,
+          bedCapacity: 0,
+          manufacturer: '',
+          modelCode: '',
+          manufactureYear: null,
+          color: '',
+          chassisNumber: '',
+          engineNumber: '',
+          operatorId: operator.id,
+          operator: { id: operator.id, name: operator.name || '', code: '' },
+          operatorName: operator.name || '',
+          isActive: badge.status !== 'Thu hồi',
+          notes: `Phù hiệu: ${badge.badge_number}`,
+          source: 'badge',
+          badgeNumber: badge.badge_number,
+          badgeType: badge.badge_type,
+          badgeExpiryDate: badge.expiry_date,
+          documents: {},
+        } as BadgeVehicle)) as unknown as Vehicle[];
+        
+        setBadges(badgesData);
       } else {
         vehiclesData = await vehicleService.getAll(operator.id, undefined, false);
       }
@@ -236,6 +263,7 @@ export function useOperatorDetail(operator: OperatorWithSource | null, open: boo
     activeTab,
     setActiveTab,
     vehicles,
+    badges,
     invoices,
     allDispatchRecords,
     paidDispatchRecords,

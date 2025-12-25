@@ -207,7 +207,6 @@ export default function Dashboard() {
             icon={Bus}
             variant="blue"
             subtitle="Đang chờ xuất bến"
-            trend={{ value: 12, isPositive: true }}
             isLoading={isLoading}
           />
           <MetricCard
@@ -216,7 +215,6 @@ export default function Dashboard() {
             icon={CheckCircle}
             variant="emerald"
             subtitle="Trong ngày hôm nay"
-            trend={{ value: 8, isPositive: true }}
             isLoading={isLoading}
           />
           <MetricCard
@@ -225,7 +223,6 @@ export default function Dashboard() {
             icon={Banknote}
             variant="amber"
             subtitle="VNĐ trong ngày"
-            trend={{ value: 15, isPositive: true }}
             isLoading={isLoading}
           />
           <MetricCard
@@ -234,7 +231,6 @@ export default function Dashboard() {
             icon={AlertTriangle}
             variant="rose"
             subtitle="Giấy tờ hết hạn"
-            trend={{ value: 0, isPositive: false }}
             isLoading={isLoading}
             isPulsing={stats.invalidVehicles > 0}
           />

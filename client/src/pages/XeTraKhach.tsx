@@ -53,8 +53,21 @@ export default function XeTraKhach() {
     setIsLoading(true);
     try {
       const data = await dispatchService.getAll();
+      
+      // Filter to only show TODAY's records
+      // This allows multiple trips per vehicle in a single day
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      const tomorrow = new Date(today);
+      tomorrow.setDate(tomorrow.getDate() + 1);
+      
+      const todayRecords = data.filter(record => {
+        const entryTime = new Date(record.entryTime);
+        return entryTime >= today && entryTime < tomorrow;
+      });
+      
       // Chỉ lấy các xe đã trả khách
-      const filtered = data.filter((item) =>
+      const filtered = todayRecords.filter((item) =>
         item.currentStatus === "passengers_dropped"
       );
       setRecords(filtered);

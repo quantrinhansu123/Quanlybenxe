@@ -11,7 +11,7 @@ import { scheduleService } from "@/services/schedule.service"
 import { dispatchService } from "@/services/dispatch.service"
 import { vehicleService } from "@/services/vehicle.service"
 import type { DispatchRecord, Schedule, Vehicle } from "@/types"
-import { format } from "date-fns"
+import { formatVietnamTime } from "@/utils/timezone"
 
 interface XeTraKhachDialogProps {
   record: DispatchRecord
@@ -163,7 +163,7 @@ export function XeTraKhachDialog({
               <Label htmlFor="entryTime">Thời gian vào</Label>
               <Input
                 id="entryTime"
-                value={format(new Date(record.entryTime), "HH:mm dd/MM/yyyy")}
+                value={formatVietnamTime(record.entryTime, "HH:mm dd/MM/yyyy")}
                 className="mt-1 bg-gray-50"
                 readOnly
               />

@@ -84,14 +84,14 @@ export default function QuanLyDonViVanTai() {
                 Quản lý Đơn vị vận tải
               </h1>
               <p className="text-slate-500 text-sm mt-1">
-                Quản lý thông tin các đơn vị vận tải hành khách
+                Đơn vị có phù hiệu Buýt hoặc Tuyến cố định
               </p>
             </div>
           </div>
 
           <div className="flex items-center gap-3">
             <Button
-              onClick={loadOperators}
+              onClick={() => loadOperators(true)}
               disabled={isLoading}
               className="px-4 py-2.5 rounded-xl bg-white border border-slate-200 text-slate-600 hover:bg-slate-50 hover:border-slate-300 transition-all shadow-sm"
             >

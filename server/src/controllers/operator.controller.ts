@@ -74,7 +74,8 @@ export const getAllOperators = async (req: Request, res: Response) => {
 
 /**
  * Get all operators from Google Sheets (datasheet/DONVIVANTAI)
- * This is the single source of truth for operators data
+ * Filtered to only include operators that have badges of type "Buýt" or "Tuyến cố định"
+ * Uses Ref_DonViCapPhuHieu from badges to match operators
  */
 export const getLegacyOperators = async (req: Request, res: Response) => {
   try {
@@ -85,22 +86,59 @@ export const getLegacyOperators = async (req: Request, res: Response) => {
       return res.json(legacyOperatorsCache.data)
     }
     
-    // Load operators from Google Sheets sync (datasheet/DONVIVANTAI)
-    const snapshot = await firebaseDb.ref('datasheet/DONVIVANTAI').once('value')
-    const sheetData = snapshot.val()
+    // Allowed badge types
+    const allowedBadgeTypes = ['Buýt', 'Tuyến cố định']
     
-    // Convert sheet operators to standard format
+    // Load badges and operators data in parallel
+    const [badgeSnapshot, operatorSnapshot] = await Promise.all([
+      firebaseDb.ref('datasheet/PHUHIEUXE').once('value'),
+      firebaseDb.ref('datasheet/DONVIVANTAI').once('value')
+    ])
+    
+    const badgeData = badgeSnapshot.val()
+    const sheetData = operatorSnapshot.val()
+    
+    // Find unique operator IDs from badges with allowed types (via Ref_DonViCapPhuHieu)
+    const operatorIdsWithBadges = new Set<string>()
+    if (badgeData) {
+      for (const [, badge] of Object.entries(badgeData)) {
+        const b = badge as Record<string, unknown>
+        if (!b) continue
+        
+        const badgeType = (b.badge_type || b.LoaiPH || '') as string
+        if (!allowedBadgeTypes.includes(badgeType)) continue
+        
+        // Get the operator ref from badge
+        const operatorRef = (b.issuing_authority_ref || b.Ref_DonViCapPhuHieu || '') as string
+        if (operatorRef) {
+          operatorIdsWithBadges.add(operatorRef)
+        }
+      }
+    }
+    
+    console.log(`[getLegacyOperators] Found ${operatorIdsWithBadges.size} unique operators with Buýt/Tuyến cố định badges`)
+    
+    // Convert sheet operators to standard format, filtering by operator IDs from badges
     const operators: any[] = []
+    let totalCount = 0
+    
     if (sheetData) {
       Object.entries(sheetData).forEach(([key, v]: [string, any]) => {
+        totalCount++
+        const operatorId = v.id || key
+        
+        // Only include operators that have badges with allowed types
+        if (!operatorIdsWithBadges.has(operatorId)) {
+          return
+        }
+        
         // Normalize province name
         let province = (v.province || '').trim()
-        // Clean up province variations
         province = province.replace(/^\s*→\s*"?/g, '').replace(/"$/g, '').trim()
         if (province.includes('Tỉnh Tỉnh')) province = province.replace('Tỉnh Tỉnh', 'Tỉnh')
         
         operators.push({
-          id: v.id || key,
+          id: operatorId,
           name: v.name || '',
           code: '',
           province: province,
@@ -120,6 +158,8 @@ export const getLegacyOperators = async (req: Request, res: Response) => {
         })
       })
     }
+    
+    console.log(`[getLegacyOperators] Filtered to ${operators.length} operators (out of ${totalCount} total)`)
     
     // Sort by name
     operators.sort((a, b) => a.name.localeCompare(b.name, 'vi'))
@@ -314,6 +354,89 @@ export const deleteOperator = async (req: Request, res: Response) => {
     return res.status(204).send()
   } catch (error) {
     console.error('Error deleting operator:', error)
+    return res.status(500).json({ error: 'Failed to delete operator' })
+  }
+}
+
+/**
+ * Update operator in RTDB (Google Sheets data)
+ */
+export const updateLegacyOperator = async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params
+    const updates = req.body
+
+    // Get existing operator
+    const snapshot = await firebaseDb.ref(`datasheet/DONVIVANTAI/${id}`).once('value')
+    if (!snapshot.exists()) {
+      return res.status(404).json({ error: 'Operator not found' })
+    }
+
+    // Update operator in RTDB
+    const updateData: any = {}
+    if (updates.name !== undefined) updateData.name = updates.name
+    if (updates.phone !== undefined) updateData.phone = updates.phone
+    if (updates.email !== undefined) updateData.email = updates.email
+    if (updates.address !== undefined) updateData.address = updates.address
+    if (updates.province !== undefined) updateData.province = updates.province
+    if (updates.district !== undefined) updateData.district = updates.district
+    if (updates.representativeName !== undefined) updateData.representative_name = updates.representativeName
+    if (updates.taxCode !== undefined) updateData.tax_code = updates.taxCode
+    if (updates.businessLicense !== undefined) updateData.business_license = updates.businessLicense
+    updateData.updated_at = new Date().toISOString()
+
+    await firebaseDb.ref(`datasheet/DONVIVANTAI/${id}`).update(updateData)
+
+    // Invalidate cache
+    invalidateOperatorCache()
+
+    // Return updated operator
+    const updatedSnapshot = await firebaseDb.ref(`datasheet/DONVIVANTAI/${id}`).once('value')
+    const data = updatedSnapshot.val()
+
+    return res.json({
+      id: id,
+      name: data.name || '',
+      phone: data.phone || '',
+      email: data.email || '',
+      address: data.address || '',
+      province: data.province || '',
+      district: data.district || '',
+      representativeName: data.representative_name || '',
+      taxCode: data.tax_code || '',
+      businessLicense: data.business_license || '',
+      businessType: data.business_type || '',
+      isActive: true,
+      source: 'google_sheets',
+    })
+  } catch (error: any) {
+    console.error('Error updating legacy operator:', error)
+    return res.status(500).json({ error: error.message || 'Failed to update operator' })
+  }
+}
+
+/**
+ * Delete operator from RTDB (Google Sheets data)
+ */
+export const deleteLegacyOperator = async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params
+
+    // Check if operator exists
+    const snapshot = await firebaseDb.ref(`datasheet/DONVIVANTAI/${id}`).once('value')
+    if (!snapshot.exists()) {
+      return res.status(404).json({ error: 'Operator not found' })
+    }
+
+    // Delete from RTDB
+    await firebaseDb.ref(`datasheet/DONVIVANTAI/${id}`).remove()
+
+    // Invalidate cache
+    invalidateOperatorCache()
+
+    return res.status(204).send()
+  } catch (error) {
+    console.error('Error deleting legacy operator:', error)
     return res.status(500).json({ error: 'Failed to delete operator' })
   }
 }

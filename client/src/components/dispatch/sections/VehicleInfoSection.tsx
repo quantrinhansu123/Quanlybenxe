@@ -1,5 +1,6 @@
 import { Truck, AlertTriangle, CheckCircle } from "lucide-react";
 import { format } from "date-fns";
+import { formatVietnamTime } from "@/utils/timezone";
 import { Select } from "@/components/ui/select";
 import { Autocomplete } from "@/components/ui/autocomplete";
 import { GlassCard, SectionHeader, FormField, StyledInput, StyledSelect } from "@/components/shared/styled-components";
@@ -171,7 +172,7 @@ export function VehicleInfoSection({
         <div className="grid grid-cols-2 gap-4">
           <FormField label="Giờ vào bến">
             <StyledInput
-              value={format(new Date(record.entryTime), "HH:mm dd/MM/yyyy")}
+              value={formatVietnamTime(record.entryTime, "HH:mm dd/MM/yyyy")}
               readOnly
               className="bg-gray-100"
             />

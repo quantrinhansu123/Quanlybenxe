@@ -25,6 +25,7 @@ import uploadRoutes from './routes/upload.routes.js'
 import vehicleBadgeRoutes from './routes/vehicle-badge.routes.js'
 import provinceRoutes from './routes/province.routes.js'
 import chatRoutes from './modules/chat/chat.routes.js'
+import quanlyDataRoutes from './routes/quanly-data.routes.js'
 
 dotenv.config()
 
@@ -109,6 +110,7 @@ app.use('/api/upload', uploadRoutes)
 app.use('/api/vehicle-badges', vehicleBadgeRoutes)
 app.use('/api/provinces', provinceRoutes)
 app.use('/api/chat', chatRoutes)
+app.use('/api/quanly-data', quanlyDataRoutes)
 
 // Error handling
 app.use(errorHandler)
@@ -147,41 +149,58 @@ if (!isCloudFunction && isMainModule) {
       console.error('========================================')
     }
 
-    // Preload cache for faster first requests
-    try {
-      const { cachedData } = await import('./services/cached-data.service.js')
-      await cachedData.preloadCommonData()
-    } catch (error) {
-      console.warn('[Cache] Failed to preload:', error)
-    }
-    
-    // Start sync cron jobs
-    try {
-      // Operator sync (every 30 minutes)
-      const { startOperatorSyncCron } = await import('./services/operator-sync.service.js')
-      startOperatorSyncCron()
-      
-      // Vehicle sync (every 15 minutes)
-      const { startVehicleSyncCron } = await import('./services/vehicle-sync.service.js')
-      startVehicleSyncCron()
-      
-      // Badge sync (every 15 minutes, runs after vehicle sync)
-      const { startBadgeSyncCron } = await import('./services/badge-sync.service.js')
-      // Delay badge sync by 30 seconds to ensure vehicles are synced first
-      setTimeout(() => startBadgeSyncCron(), 30 * 1000)
-      
-      // Route sync (every 30 minutes)
-      const { startRouteSyncCron } = await import('./services/route-sync.service.js')
-      startRouteSyncCron()
-    } catch (error) {
-      console.warn('[SyncCron] Failed to start cron jobs:', error)
-    }
-    
+    // Start server first, then preload cache in background
     app.listen(PORT, () => {
       console.log(`Server is running on http://localhost:${PORT}`)
       console.log(`API available at http://localhost:${PORT}/api`)
       console.log(`Health check: http://localhost:${PORT}/health`)
+      
+      // Preload cache in background (non-blocking)
+      Promise.resolve().then(async () => {
+        try {
+          // Pre-warm vehicle cache FIRST (used by /api/vehicles - DieuDo page)
+          const { vehicleCacheService } = await import('./modules/fleet/services/vehicle-cache.service.js')
+          await vehicleCacheService.preWarm()
+          
+          const { cachedData } = await import('./services/cached-data.service.js')
+          await cachedData.preloadCommonData()
+          
+          // Pre-warm quanly-data cache (runs in background)
+          const { preWarmQuanLyCache } = await import('./controllers/quanly-data.controller.js')
+          await preWarmQuanLyCache()
+          
+          // Pre-warm chat cache for AI chatbot (all collections)
+          const { chatCacheService } = await import('./modules/chat/services/chat-cache.service.js')
+          await chatCacheService.preWarm()
+        } catch (error) {
+          console.warn('[Cache] Failed to preload:', error)
+        }
+      })
     })
+    
+    // Start sync cron jobs in background
+    setTimeout(async () => {
+      try {
+        // Operator sync (every 30 minutes)
+        const { startOperatorSyncCron } = await import('./services/operator-sync.service.js')
+        startOperatorSyncCron()
+        
+        // Vehicle sync (every 15 minutes)
+        const { startVehicleSyncCron } = await import('./services/vehicle-sync.service.js')
+        startVehicleSyncCron()
+        
+        // Badge sync (every 15 minutes, runs after vehicle sync)
+        const { startBadgeSyncCron } = await import('./services/badge-sync.service.js')
+        // Delay badge sync by 30 seconds to ensure vehicles are synced first
+        setTimeout(() => startBadgeSyncCron(), 30 * 1000)
+        
+        // Route sync (every 30 minutes)
+        const { startRouteSyncCron } = await import('./services/route-sync.service.js')
+        startRouteSyncCron()
+      } catch (error) {
+        console.warn('[SyncCron] Failed to start cron jobs:', error)
+      }
+    }, 1000)
   }).catch((error) => {
     console.error('Failed to import database config:', error)
     process.exit(1)

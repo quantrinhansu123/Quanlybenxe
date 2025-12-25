@@ -265,7 +265,9 @@ export function DriverForm({ driver, mode, onClose }: DriverFormProps) {
 
   const loadOperators = async (): Promise<Operator[]> => {
     try {
-      const data = await operatorService.getAll(true) // Only active operators
+      // Use legacy endpoint to get operators from RTDB (2943 records)
+      // instead of Supabase (only 3 records)
+      const data = await operatorService.getLegacy()
       setOperators(data)
       return data
     } catch (error) {

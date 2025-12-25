@@ -24,6 +24,7 @@ import {
 import { Label } from "@/components/ui/label"
 import { Select } from "@/components/ui/select"
 import { vehicleBadgeService, type VehicleBadge, type CreateVehicleBadgeInput } from "@/services/vehicle-badge.service"
+import { quanlyDataService } from "@/services/quanly-data.service"
 import { useUIStore } from "@/store/ui.store"
 
 // Helper function to format date
@@ -106,8 +107,32 @@ export default function QuanLyPhuHieuXe() {
   const loadBadges = async (forceRefresh = false) => {
     setIsLoading(true)
     try {
-      const data = await vehicleBadgeService.getAll(forceRefresh)
-      setBadges(data)
+      // Use optimized unified endpoint for faster loading
+      const data = await quanlyDataService.getBadges(forceRefresh)
+      // Convert to VehicleBadge format
+      const badgeData: VehicleBadge[] = data.map(b => ({
+        ...b,
+        vehicle_id: b.license_plate_sheet,
+        operational_status: 'trong_ben' as const,
+        // Add missing optional fields with defaults
+        bus_route_ref: '',
+        business_license_ref: '',
+        created_at: '',
+        created_by: '',
+        email_notification_sent: false,
+        notes: '',
+        notification_ref: '',
+        previous_badge_number: '',
+        renewal_due_date: '',
+        renewal_reason: '',
+        renewal_reminder_shown: false,
+        replacement_vehicle_id: '',
+        revocation_date: '',
+        revocation_decision: '',
+        revocation_reason: '',
+        warn_duplicate_plate: false,
+      } as VehicleBadge))
+      setBadges(badgeData)
     } catch (error) {
       console.error("Failed to load vehicle badges:", error)
       toast.error("Không thể tải danh sách phù hiệu xe. Vui lòng thử lại sau.")

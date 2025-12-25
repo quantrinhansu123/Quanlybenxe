@@ -389,6 +389,25 @@ class VehicleCacheService {
     this.operatorIndex = null;
     this.badgeCache = { data: null, timestamp: 0 };
   }
+
+  // Pre-warm cache on server startup
+  async preWarm(): Promise<void> {
+    const startTime = Date.now();
+    console.log('[VehicleCache] Pre-warming cache...');
+    
+    try {
+      // Load both caches in parallel
+      const [legacy, badge] = await Promise.all([
+        this.getLegacyVehicles(),
+        this.getBadgeVehicles(),
+      ]);
+      
+      const elapsed = Date.now() - startTime;
+      console.log(`[VehicleCache] Pre-warmed: ${legacy.length} legacy + ${badge.length} badge vehicles in ${elapsed}ms`);
+    } catch (error) {
+      console.error('[VehicleCache] Pre-warm failed:', error);
+    }
+  }
 }
 
 export const vehicleCacheService = new VehicleCacheService();

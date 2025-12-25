@@ -134,7 +134,21 @@ export default function ThanhToan() {
     setIsLoading(true);
     try {
       const data = await dispatchService.getAll();
-      setAllData(data);
+      
+      // Filter to only show TODAY's records
+      // This allows multiple trips per vehicle in a single day
+      // Old records from previous days won't pollute operational views
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      const tomorrow = new Date(today);
+      tomorrow.setDate(tomorrow.getDate() + 1);
+      
+      const todayRecords = data.filter(record => {
+        const entryTime = new Date(record.entryTime);
+        return entryTime >= today && entryTime < tomorrow;
+      });
+      
+      setAllData(todayRecords);
     } catch (error) {
       console.error("Failed to load list data:", error);
       toast.error("Không thể tải danh sách đơn hàng");

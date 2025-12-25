@@ -1,8 +1,8 @@
-import { format } from "date-fns";
 import { Bus, CheckCircle, Banknote, ArrowRight, Target, Radio, MapPin } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { RecentActivity } from "@/services/dashboard.service";
 import { LiveBeacon } from "./LiveBeacon";
+import { formatVietnamTime } from "@/utils/timezone";
 
 interface LiveActivityFeedProps {
   activities: RecentActivity[];
@@ -176,7 +176,7 @@ export function LiveActivityFeed({ activities, isLoading }: LiveActivityFeedProp
                 {config.label}
               </span>
               <p className="text-xs text-slate-400 mt-1 font-mono">
-                {format(new Date(activity.entryTime), "HH:mm")}
+                {formatVietnamTime(activity.entryTime)}
               </p>
             </div>
           </div>

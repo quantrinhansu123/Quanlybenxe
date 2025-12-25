@@ -29,7 +29,8 @@ import {
   DialogClose,
 } from "@/components/ui/dialog"
 import { vehicleService, VehicleForm, VehicleView } from "@/features/fleet/vehicles"
-import { vehicleBadgeService, type VehicleBadge } from "@/services/vehicle-badge.service"
+import { type VehicleBadge } from "@/services/vehicle-badge.service"
+import { quanlyDataService } from "@/services/quanly-data.service"
 import type { Vehicle } from "@/types"
 import { useUIStore } from "@/store/ui.store"
 import { format, isValid, parseISO } from "date-fns"
@@ -96,6 +97,7 @@ const ITEMS_PER_PAGE = 20
 export default function QuanLyXe() {
   const [vehicles, setVehicles] = useState<Vehicle[]>([])
   const [badges, setBadges] = useState<VehicleBadge[]>([])
+  const [operatorCount, setOperatorCount] = useState(0)
   const [searchQuery, setSearchQuery] = useState("")
   const [filterVehicleType, setFilterVehicleType] = useState("")
   const [filterOperator, setFilterOperator] = useState("")
@@ -117,15 +119,38 @@ export default function QuanLyXe() {
     loadData()
   }, [setTitle])
 
-  const loadData = async () => {
+  const loadData = async (forceRefresh = false) => {
     setIsLoading(true)
     try {
-      const [vehicleData, badgeData] = await Promise.all([
-        vehicleService.getAll(),
-        vehicleBadgeService.getAll()
-      ])
+      // Use optimized unified endpoint - single request for all data (include operators for stats)
+      const data = await quanlyDataService.getAll(['badges', 'vehicles', 'operators'], forceRefresh)
+      
+      // Debug: log sample vehicle from API response
+      if (data.vehicles && data.vehicles.length > 0) {
+        console.log('[QuanLyXe] Sample vehicle from API:', data.vehicles[0])
+      }
+      
+      // Convert to expected formats
+      const vehicleData: Vehicle[] = (data.vehicles || []).map(v => ({
+        id: v.id,
+        plateNumber: v.plateNumber,
+        seatCapacity: v.seatCapacity,
+        operatorName: v.operatorName || '',
+        vehicleTypeName: v.vehicleType || '',  // Use vehicleTypeName for helper compatibility
+        inspectionExpiryDate: v.inspectionExpiryDate,
+        isActive: v.isActive,
+        source: 'badge',  // Mark as badge so frontend filter passes them through
+      } as any))
+      
+      const badgeData: VehicleBadge[] = (data.badges || []).map(b => ({
+        ...b,
+        vehicle_id: b.license_plate_sheet,
+        operational_status: 'trong_ben' as const,
+      } as any))
+      
       setVehicles(vehicleData)
       setBadges(badgeData)
+      setOperatorCount((data.operators || []).length)  // Use operators count from same data source
     } catch (error) {
       console.error("Failed to load data:", error)
       toast.error("Không thể tải danh sách xe. Vui lòng thử lại sau.")
@@ -173,9 +198,9 @@ export default function QuanLyXe() {
   const stats = useMemo(() => {
     const active = vehiclesWithAllowedTypes.filter(v => v.isActive).length
     const inactive = vehiclesWithAllowedTypes.length - active
-    const uniqueOperators = new Set(vehiclesWithAllowedTypes.map(getOperatorName).filter(Boolean)).size
-    return { total: vehiclesWithAllowedTypes.length, active, inactive, uniqueOperators }
-  }, [vehiclesWithAllowedTypes])
+    // Use operatorCount from same data source as Đơn vị vận tải page for consistency
+    return { total: vehiclesWithAllowedTypes.length, active, inactive, uniqueOperators: operatorCount }
+  }, [vehiclesWithAllowedTypes, operatorCount])
 
   const filteredVehicles = useMemo(() => {
     return vehiclesWithAllowedTypes.filter((vehicle: Vehicle) => {
@@ -287,7 +312,7 @@ export default function QuanLyXe() {
           
           <div className="flex items-center gap-3">
             <Button
-              onClick={loadData}
+              onClick={() => loadData(true)}
               disabled={isLoading}
               className="px-4 py-2.5 rounded-xl bg-white border border-slate-200 text-slate-600 hover:bg-slate-50 hover:border-slate-300 transition-all shadow-sm"
             >

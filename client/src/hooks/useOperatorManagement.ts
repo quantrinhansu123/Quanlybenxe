@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo } from "react";
 import { toast } from "react-toastify";
 import { operatorService } from "@/services/operator.service";
+import { quanlyDataService } from "@/services/quanly-data.service";
 import { useUIStore } from "@/store/ui.store";
 import type { Operator } from "@/types";
 
@@ -36,10 +37,11 @@ export function useOperatorManagement() {
     loadOperators();
   }, [setTitle]);
 
-  const loadOperators = async () => {
+  const loadOperators = async (forceRefresh = false) => {
     setIsLoading(true);
     try {
-      const data = await operatorService.getLegacy();
+      // Use optimized unified endpoint for faster loading
+      const data = await quanlyDataService.getOperators(forceRefresh);
       setOperators(data as OperatorWithSource[]);
     } catch (error) {
       console.error("Failed to load operators:", error);
@@ -121,20 +123,12 @@ export function useOperatorManagement() {
   };
 
   const handleEdit = (operator: OperatorWithSource) => {
-    if (operator.source === "legacy" || operator.source === "google_sheets") {
-      toast.warning("Dữ liệu được quản lý từ Google Sheets, không thể chỉnh sửa trực tiếp");
-      return;
-    }
     setSelectedOperator(operator);
     setViewMode("edit");
     setDialogOpen(true);
   };
 
   const handleDelete = (operator: OperatorWithSource) => {
-    if (operator.source === "legacy" || operator.source === "google_sheets") {
-      toast.warning("Dữ liệu được quản lý từ Google Sheets, không thể xóa trực tiếp");
-      return;
-    }
     setOperatorToDelete(operator);
     setDeleteDialogOpen(true);
   };
@@ -142,7 +136,12 @@ export function useOperatorManagement() {
   const confirmDelete = async () => {
     if (!operatorToDelete) return;
     try {
-      await operatorService.delete(operatorToDelete.id);
+      // Use legacy endpoint for Google Sheets data
+      if (operatorToDelete.source === "legacy" || operatorToDelete.source === "google_sheets") {
+        await operatorService.deleteLegacy(operatorToDelete.id);
+      } else {
+        await operatorService.delete(operatorToDelete.id);
+      }
       toast.success("Xóa đơn vị vận tải thành công");
       setDeleteDialogOpen(false);
       setOperatorToDelete(null);

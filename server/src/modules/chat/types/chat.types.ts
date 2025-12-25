@@ -7,6 +7,7 @@ export type QueryType =
   | 'BADGE_LOOKUP'
   | 'OPERATOR_INFO'
   | 'GENERAL_QUESTION'
+  | 'AI_FUNCTION_CALLING'
 
 export interface ChatMessage {
   id: string

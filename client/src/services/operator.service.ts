@@ -50,4 +50,14 @@ export const operatorService = {
   delete: async (id: string): Promise<void> => {
     await api.delete(`/operators/${id}`)
   },
+
+  // Legacy (RTDB/Google Sheets) operators
+  updateLegacy: async (id: string, input: Partial<OperatorInput>): Promise<Operator> => {
+    const response = await api.put<Operator>(`/operators/legacy/${id}`, input)
+    return response.data
+  },
+
+  deleteLegacy: async (id: string): Promise<void> => {
+    await api.delete(`/operators/legacy/${id}`)
+  },
 }

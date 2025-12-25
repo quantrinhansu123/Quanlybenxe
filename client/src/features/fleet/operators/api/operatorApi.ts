@@ -6,13 +6,9 @@ import type { Operator, OperatorInput } from '../types'
 export const operatorApi = {
   getAll: async (isActive?: boolean): Promise<Operator[]> => {
     try {
-      const params = new URLSearchParams()
-      if (isActive !== undefined) params.append('isActive', String(isActive))
-
-      const queryString = params.toString()
-      const url = queryString ? `/operators?${queryString}` : '/operators'
-
-      const response = await api.get<Operator[]>(url)
+      // Use legacy endpoint to get operators from RTDB (Google Sheets data)
+      // This returns 2943+ operators vs only 3 from Supabase
+      const response = await api.get<Operator[]>('/operators/legacy')
       return response.data
     } catch (error) {
       console.error('Error fetching operators:', error)

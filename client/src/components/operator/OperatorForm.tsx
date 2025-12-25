@@ -29,8 +29,12 @@ const operatorSchema = z.object({
 
 type OperatorFormData = z.infer<typeof operatorSchema>
 
+interface OperatorWithSource extends Operator {
+  source?: "database" | "legacy" | "google_sheets"
+}
+
 interface OperatorFormProps {
-  operator: Operator | null
+  operator: OperatorWithSource | null
   mode: "create" | "edit"
   onClose: () => void
 }
@@ -288,7 +292,12 @@ export function OperatorForm({ operator, mode, onClose }: OperatorFormProps) {
         await operatorService.create(operatorData)
         toast.success("Thêm đơn vị vận tải thành công")
       } else if (operator && mode === "edit") {
-        await operatorService.update(operator.id, operatorData)
+        // Use legacy endpoint for Google Sheets data
+        if (operator.source === "legacy" || operator.source === "google_sheets") {
+          await operatorService.updateLegacy(operator.id, operatorData)
+        } else {
+          await operatorService.update(operator.id, operatorData)
+        }
         toast.success("Cập nhật đơn vị vận tải thành công")
       }
       onClose()

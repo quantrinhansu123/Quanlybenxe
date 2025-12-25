@@ -59,4 +59,25 @@ export const vehicleService = {
       return []
     }
   },
+
+  /**
+   * Lookup vehicle by plate from RTDB datasheet/Xe
+   * Returns seat capacity for ANY vehicle (not filtered by badge)
+   */
+  lookupByPlate: async (plate: string): Promise<{
+    id: string
+    plateNumber: string
+    seatCapacity: number
+    operatorName: string
+    vehicleType: string
+    source: string
+  } | null> => {
+    try {
+      const response = await api.get(`/vehicles/lookup/${encodeURIComponent(plate)}`)
+      return response.data
+    } catch (error) {
+      console.error('Error looking up vehicle by plate:', error)
+      return null
+    }
+  },
 }

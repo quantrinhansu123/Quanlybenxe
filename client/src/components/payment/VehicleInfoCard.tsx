@@ -1,6 +1,6 @@
 import { Bus } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
-import { format } from "date-fns";
+import { formatVietnamTime } from "@/utils/timezone";
 import type { DispatchRecord } from "@/types";
 
 interface VehicleInfoCardProps {
@@ -30,14 +30,14 @@ export function VehicleInfoCard({ record }: VehicleInfoCardProps) {
           <div>
             <p className="text-sm text-gray-500 mb-1">Giờ vào bến</p>
             <p className="font-semibold text-gray-900">
-              {format(new Date(record.entryTime), "HH:mm dd/MM/yyyy")}
+              {formatVietnamTime(record.entryTime, "HH:mm dd/MM/yyyy")}
             </p>
           </div>
           <div>
             <p className="text-sm text-gray-500 mb-1">Giờ xuất bến KH</p>
             <p className="font-semibold text-gray-900">
               {record.plannedDepartureTime
-                ? format(new Date(record.plannedDepartureTime), "HH:mm dd/MM/yyyy")
+                ? formatVietnamTime(record.plannedDepartureTime, "HH:mm dd/MM/yyyy")
                 : 'Chưa có'}
             </p>
           </div>
