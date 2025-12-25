@@ -4,7 +4,7 @@ import api from '@/lib/api'
 import type { Operator, OperatorInput } from '../types'
 
 export const operatorApi = {
-  getAll: async (isActive?: boolean): Promise<Operator[]> => {
+  getAll: async (_isActive?: boolean): Promise<Operator[]> => {
     try {
       // Use legacy endpoint to get operators from RTDB (Google Sheets data)
       // This returns 2943+ operators vs only 3 from Supabase
