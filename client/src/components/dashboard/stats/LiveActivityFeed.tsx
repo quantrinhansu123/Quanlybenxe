@@ -17,45 +17,45 @@ export function LiveActivityFeed({ activities, isLoading }: LiveActivityFeedProp
     > = {
       entered: {
         color: "text-blue-600",
-        bg: "bg-blue-100",
+        bg: "bg-blue-50",
         icon: ArrowRight,
         label: "Vào bến",
       },
       passengers_dropped: {
         color: "text-purple-600",
-        bg: "bg-purple-100",
+        bg: "bg-purple-50",
         icon: Target,
         label: "Trả khách",
       },
       permit_issued: {
         color: "text-amber-600",
-        bg: "bg-amber-100",
+        bg: "bg-amber-50",
         icon: CheckCircle,
         label: "Cấp nốt",
       },
       paid: {
         color: "text-emerald-600",
-        bg: "bg-emerald-100",
+        bg: "bg-emerald-50",
         icon: Banknote,
         label: "Thanh toán",
       },
       departure_ordered: {
         color: "text-cyan-600",
-        bg: "bg-cyan-100",
+        bg: "bg-cyan-50",
         icon: Radio,
         label: "Lệnh xuất",
       },
       departed: {
-        color: "text-slate-600",
-        bg: "bg-slate-100",
+        color: "text-stone-600",
+        bg: "bg-stone-100",
         icon: Bus,
         label: "Xuất bến",
       },
     };
     return (
       configs[status] || {
-        color: "text-slate-600",
-        bg: "bg-slate-100",
+        color: "text-stone-600",
+        bg: "bg-stone-100",
         icon: Bus,
         label: status,
       }
@@ -68,12 +68,12 @@ export function LiveActivityFeed({ activities, isLoading }: LiveActivityFeedProp
         {[1, 2, 3, 4].map((i) => (
           <div
             key={i}
-            className="animate-pulse flex items-center gap-4 p-4 rounded-xl bg-slate-50"
+            className="animate-pulse flex items-center gap-4 p-4 rounded-xl bg-stone-50"
           >
-            <div className="w-12 h-12 rounded-xl bg-slate-200" />
+            <div className="w-12 h-12 rounded-xl bg-stone-200" />
             <div className="flex-1 space-y-2">
-              <div className="h-4 bg-slate-200 rounded w-1/3" />
-              <div className="h-3 bg-slate-200 rounded w-1/2" />
+              <div className="h-4 bg-stone-200 rounded w-1/3" />
+              <div className="h-3 bg-stone-200 rounded w-1/2" />
             </div>
           </div>
         ))}
@@ -85,25 +85,25 @@ export function LiveActivityFeed({ activities, isLoading }: LiveActivityFeedProp
     return (
       <div className="flex flex-col items-center justify-center py-12">
         <div className="relative">
-          <div className="w-20 h-20 rounded-full bg-slate-100 flex items-center justify-center">
-            <Bus className="w-10 h-10 text-slate-300" />
+          <div className="w-20 h-20 rounded-2xl bg-stone-100 flex items-center justify-center">
+            <Bus className="w-10 h-10 text-stone-300" />
           </div>
           {/* Floating dots animation */}
           <div
-            className="absolute -top-2 -right-2 w-4 h-4 rounded-full bg-blue-200 animate-bounce"
+            className="absolute -top-2 -right-2 w-4 h-4 rounded-full bg-emerald-200 animate-bounce"
             style={{ animationDelay: "0ms" }}
           />
           <div
-            className="absolute -bottom-1 -left-3 w-3 h-3 rounded-full bg-emerald-200 animate-bounce"
+            className="absolute -bottom-1 -left-3 w-3 h-3 rounded-full bg-amber-200 animate-bounce"
             style={{ animationDelay: "150ms" }}
           />
           <div
-            className="absolute top-1/2 -right-4 w-2 h-2 rounded-full bg-amber-200 animate-bounce"
+            className="absolute top-1/2 -right-4 w-2 h-2 rounded-full bg-blue-200 animate-bounce"
             style={{ animationDelay: "300ms" }}
           />
         </div>
-        <p className="text-slate-500 font-medium mt-4">Chưa có hoạt động nào</p>
-        <p className="text-slate-400 text-sm">Các xe mới sẽ hiển thị tại đây</p>
+        <p className="text-stone-600 font-medium mt-4">Chưa có hoạt động nào</p>
+        <p className="text-stone-400 text-sm">Các xe mới sẽ hiển thị tại đây</p>
       </div>
     );
   }
@@ -119,10 +119,10 @@ export function LiveActivityFeed({ activities, isLoading }: LiveActivityFeedProp
             key={activity.id}
             className={cn(
               "group flex items-center gap-4 p-4 rounded-xl transition-all duration-300",
-              "hover:bg-slate-50 border border-transparent hover:border-slate-200",
+              "hover:bg-stone-50 border border-transparent hover:border-stone-200",
               "cursor-pointer",
               index === 0 &&
-                "bg-gradient-to-r from-blue-50 to-indigo-50 border-blue-100"
+                "bg-emerald-50/50 border-emerald-100"
             )}
             style={{
               animation: `slideInRight 0.4s ease-out ${index * 0.1}s backwards`,
@@ -146,18 +146,18 @@ export function LiveActivityFeed({ activities, isLoading }: LiveActivityFeedProp
             {/* Content */}
             <div className="flex-1 min-w-0">
               <div className="flex items-center gap-2">
-                <p className="font-bold text-slate-900">
+                <p className="font-bold text-stone-800">
                   {activity.vehiclePlateNumber}
                 </p>
                 {index === 0 && (
-                  <span className="px-2 py-0.5 rounded-full bg-blue-500 text-white text-[10px] font-bold uppercase">
+                  <span className="px-2 py-0.5 rounded-full bg-emerald-500 text-white text-[10px] font-bold uppercase">
                     Mới
                   </span>
                 )}
               </div>
               <div className="flex items-center gap-2 mt-0.5">
-                <MapPin className="w-3 h-3 text-slate-400" />
-                <p className="text-sm text-slate-500 truncate">
+                <MapPin className="w-3 h-3 text-stone-400" />
+                <p className="text-sm text-stone-500 truncate">
                   {activity.route || "Không có tuyến"}
                 </p>
               </div>
@@ -175,7 +175,7 @@ export function LiveActivityFeed({ activities, isLoading }: LiveActivityFeedProp
                 <StatusIcon className="w-3 h-3" />
                 {config.label}
               </span>
-              <p className="text-xs text-slate-400 mt-1 font-mono">
+              <p className="text-xs text-stone-400 mt-1 font-mono">
                 {formatVietnamTime(activity.entryTime)}
               </p>
             </div>

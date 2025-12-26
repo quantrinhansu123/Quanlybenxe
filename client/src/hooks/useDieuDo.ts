@@ -3,7 +3,7 @@ import { useSearchParams } from "react-router-dom";
 import { toast } from "react-toastify";
 import { useDispatchStore } from "@/store/dispatch.store";
 import { dispatchService } from "@/services/dispatch.service";
-import { vehicleService } from "@/services/vehicle.service";
+import { quanlyDataService } from "@/services/quanly-data.service";
 import { useUIStore } from "@/store/ui.store";
 import type { DispatchRecord, DispatchStatus, Vehicle } from "@/types";
 import type { DisplayStatus } from "@/components/dispatch/common";
@@ -58,8 +58,18 @@ export function useDieuDo() {
 
   const loadVehicles = async () => {
     try {
-      const data = await vehicleService.getAll();
-      setVehicles(data);
+      // Use cached quanlyDataService (5 min FE cache + 30 min BE cache)
+      const data = await quanlyDataService.getVehicles();
+      // Map to Vehicle type (only need id + plateNumber for vehicleOptions)
+      const vehicles: Vehicle[] = data.map((v) => ({
+        id: v.id,
+        plateNumber: v.plateNumber,
+        seatCapacity: v.seatCapacity,
+        operatorId: '',
+        operatorName: v.operatorName,
+        isActive: v.isActive,
+      }));
+      setVehicles(vehicles);
     } catch (error) {
       console.error("Failed to load vehicles:", error);
     }

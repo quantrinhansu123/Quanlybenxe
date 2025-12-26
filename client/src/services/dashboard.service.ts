@@ -29,11 +29,37 @@ export interface Warning {
   expiryDate: string
 }
 
+export interface WeeklyStat {
+  day: string
+  dayName: string
+  departed: number
+  inStation: number
+  total: number
+}
+
+export interface MonthlyStat {
+  month: string
+  monthName: string
+  departed: number
+  waiting: number
+  other: number
+}
+
+export interface RouteBreakdown {
+  routeId: string
+  routeName: string
+  count: number
+  percentage: number
+}
+
 export interface DashboardData {
   stats: DashboardStats
   chartData: ChartDataPoint[]
   recentActivity: RecentActivity[]
   warnings: Warning[]
+  weeklyStats: WeeklyStat[]
+  monthlyStats: MonthlyStat[]
+  routeBreakdown: RouteBreakdown[]
 }
 
 export const dashboardService = {
@@ -102,6 +128,9 @@ export const dashboardService = {
         chartData,
         recentActivity,
         warnings,
+        weeklyStats: [],
+        monthlyStats: [],
+        routeBreakdown: [],
       }
     }
   },

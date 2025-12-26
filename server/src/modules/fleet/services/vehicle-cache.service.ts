@@ -390,6 +390,58 @@ class VehicleCacheService {
     this.badgeCache = { data: null, timestamp: 0 };
   }
 
+  /**
+   * Lookup vehicle by plate number using cached data
+   * Returns vehicle info for permit dialog (much faster than RTDB query)
+   */
+  async lookupByPlate(plate: string): Promise<{
+    id: string;
+    plateNumber: string;
+    seatCapacity: number;
+    bedCapacity: number;
+    operatorName: string;
+    vehicleType: string;
+    source: 'legacy' | 'badge';
+  } | null> {
+    const normalizedSearch = plate.replace(/[.\-\s]/g, '').toUpperCase();
+
+    // Search in cached legacy vehicles first (most common)
+    const legacyVehicles = await this.getLegacyVehicles();
+    for (const v of legacyVehicles) {
+      const normalizedPlate = v.plateNumber.replace(/[.\-\s]/g, '').toUpperCase();
+      if (normalizedPlate === normalizedSearch) {
+        return {
+          id: v.id,
+          plateNumber: v.plateNumber,
+          seatCapacity: v.seatCapacity,
+          bedCapacity: v.bedCapacity,
+          operatorName: v.operatorName,
+          vehicleType: v.vehicleCategory || v.vehicleTypeName,
+          source: 'legacy',
+        };
+      }
+    }
+
+    // Search in badge vehicles as fallback
+    const badgeVehicles = await this.getBadgeVehicles();
+    for (const v of badgeVehicles) {
+      const normalizedPlate = v.plateNumber.replace(/[.\-\s]/g, '').toUpperCase();
+      if (normalizedPlate === normalizedSearch) {
+        return {
+          id: v.id,
+          plateNumber: v.plateNumber,
+          seatCapacity: v.seatCapacity,
+          bedCapacity: v.bedCapacity,
+          operatorName: v.operatorName,
+          vehicleType: v.vehicleCategory || v.vehicleTypeName,
+          source: 'badge',
+        };
+      }
+    }
+
+    return null;
+  }
+
   // Pre-warm cache on server startup
   async preWarm(): Promise<void> {
     const startTime = Date.now();

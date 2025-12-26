@@ -69,25 +69,31 @@ export function DocumentWarningsTable({
   }
 
   return (
-    <Card>
-      <CardHeader>
+    <Card className="border border-stone-200 shadow-sm bg-white rounded-2xl overflow-hidden">
+      <CardHeader className="border-b border-stone-100">
         <div className="flex items-center justify-between">
-          <CardTitle className="flex items-center gap-2">
-            <AlertTriangle className={iconStyles.warningIcon} />
-            Cảnh báo giấy tờ sắp hết hạn
-          </CardTitle>
-          <div className="text-sm text-gray-600">
+          <div className="flex items-center gap-3">
+            <div className="p-2.5 rounded-xl bg-rose-500">
+              <AlertTriangle className="w-5 h-5 text-white" />
+            </div>
+            <CardTitle className="text-lg font-bold text-stone-800">
+              Cảnh báo giấy tờ sắp hết hạn
+            </CardTitle>
+          </div>
+          <div className="text-sm text-stone-500 font-medium">
             {warnings.length > 0 && `${warnings.length} cảnh báo`}
           </div>
         </div>
       </CardHeader>
-      <CardContent>
+      <CardContent className="pt-4">
         {isLoading ? (
-          <div className="text-center text-gray-500 py-8">Đang tải...</div>
+          <div className="text-center text-stone-500 py-8">Đang tải...</div>
         ) : warnings.length === 0 ? (
-          <div className="text-center text-gray-500 py-8">
-            <AlertTriangle className="h-12 w-12 mx-auto mb-4 text-gray-300" />
-            <p>Không có cảnh báo giấy tờ sắp hết hạn</p>
+          <div className="text-center text-stone-500 py-8">
+            <div className="w-16 h-16 rounded-2xl bg-stone-100 flex items-center justify-center mx-auto mb-4">
+              <AlertTriangle className="h-8 w-8 text-stone-300" />
+            </div>
+            <p className="font-medium">Không có cảnh báo giấy tờ sắp hết hạn</p>
           </div>
         ) : (
           <>
@@ -109,7 +115,7 @@ export function DocumentWarningsTable({
                     return (
                       <TableRow
                         key={`${warning.type}-${warning.plateNumber || warning.name}-${index}`}
-                        className={`hover:bg-gray-50 ${getRowClassName(daysRemaining)}`}
+                        className={`hover:bg-stone-50 ${getRowClassName(daysRemaining)}`}
                       >
                         <TableCell>
                           <Badge variant={warning.type === "vehicle" ? "default" : "secondary"}>
@@ -167,8 +173,8 @@ export function DocumentWarningsTable({
 
             {/* Pagination */}
             {totalPages > 1 && (
-              <div className="flex items-center justify-between mt-4">
-                <div className="text-sm text-gray-600">
+              <div className="flex items-center justify-between mt-4 pt-4 border-t border-stone-100">
+                <div className="text-sm text-stone-500">
                   Hiển thị {startIndex + 1}-{Math.min(endIndex, warnings.length)} của {warnings.length} cảnh báo
                 </div>
                 <div className="flex items-center gap-2">
@@ -177,7 +183,7 @@ export function DocumentWarningsTable({
                     variant="outline"
                     onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
                     disabled={currentPage === 1}
-                    className="gap-1"
+                    className="gap-1 rounded-lg border-stone-200 hover:bg-stone-50"
                   >
                     <ChevronLeft className={iconStyles.navigationIcon} />
                     Trước
@@ -190,7 +196,7 @@ export function DocumentWarningsTable({
                         size="sm"
                         variant={currentPage === page ? "default" : "outline"}
                         onClick={() => setCurrentPage(page)}
-                        className="w-8 h-8 p-0"
+                        className="w-8 h-8 p-0 rounded-lg"
                       >
                         {page}
                       </Button>
@@ -202,7 +208,7 @@ export function DocumentWarningsTable({
                     variant="outline"
                     onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
                     disabled={currentPage === totalPages}
-                    className="gap-1"
+                    className="gap-1 rounded-lg border-stone-200 hover:bg-stone-50"
                   >
                     Sau
                     <ChevronRight className={iconStyles.navigationIcon} />

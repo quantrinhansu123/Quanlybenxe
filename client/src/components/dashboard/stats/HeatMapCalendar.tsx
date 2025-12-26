@@ -25,7 +25,7 @@ export function HeatMapCalendar({ data, selectedDate, onSelectDate }: HeatMapCal
   }, [data]);
 
   const getHeatLevel = (count: number): string => {
-    if (count === 0) return "bg-slate-100";
+    if (count === 0) return "bg-stone-100";
     if (count <= 5) return "bg-emerald-200";
     if (count <= 15) return "bg-emerald-400";
     if (count <= 30) return "bg-emerald-500";
@@ -42,7 +42,7 @@ export function HeatMapCalendar({ data, selectedDate, onSelectDate }: HeatMapCal
         {weekDays.map((day) => (
           <div
             key={day}
-            className="text-center text-xs font-medium text-slate-400 py-1"
+            className="text-center text-xs font-medium text-stone-400 py-1"
           >
             {day}
           </div>
@@ -70,23 +70,23 @@ export function HeatMapCalendar({ data, selectedDate, onSelectDate }: HeatMapCal
               onClick={() => onSelectDate(day)}
               className={cn(
                 "aspect-square rounded-lg flex flex-col items-center justify-center text-xs transition-all relative",
-                "hover:ring-2 hover:ring-blue-400 hover:ring-offset-1",
-                hasActivity ? getHeatLevel(count) : "bg-slate-50",
+                "hover:ring-2 hover:ring-emerald-400 hover:ring-offset-1",
+                hasActivity ? getHeatLevel(count) : "bg-stone-50",
                 isSelected && "ring-2 ring-amber-400 ring-offset-2",
-                isTodayDate && "ring-2 ring-blue-500 ring-offset-1"
+                isTodayDate && "ring-2 ring-emerald-500 ring-offset-1"
               )}
               title={`${format(day, "dd/MM")}: ${count} chuyến`}
             >
               <span
                 className={cn(
                   "font-medium",
-                  hasActivity && count > 2 ? "text-white" : "text-slate-600"
+                  hasActivity && count > 2 ? "text-white" : "text-stone-600"
                 )}
               >
                 {format(day, "d")}
               </span>
               {hasActivity && (
-                <span className="text-[10px] font-bold text-red-500 drop-shadow-sm">
+                <span className="text-[10px] font-bold text-white drop-shadow-sm">
                   {count}
                 </span>
               )}
@@ -96,11 +96,11 @@ export function HeatMapCalendar({ data, selectedDate, onSelectDate }: HeatMapCal
       </div>
 
       {/* Legend */}
-      <div className="flex items-center justify-between pt-2 border-t border-slate-100">
-        <span className="text-xs text-slate-400">Ít</span>
+      <div className="flex items-center justify-between pt-2 border-t border-stone-100">
+        <span className="text-xs text-stone-400">Ít</span>
         <div className="flex items-center gap-1">
           {[
-            "bg-slate-100",
+            "bg-stone-100",
             "bg-emerald-200",
             "bg-emerald-400",
             "bg-emerald-500",
@@ -109,7 +109,7 @@ export function HeatMapCalendar({ data, selectedDate, onSelectDate }: HeatMapCal
             <div key={i} className={cn("w-4 h-4 rounded", bg)} />
           ))}
         </div>
-        <span className="text-xs text-slate-400">Nhiều</span>
+        <span className="text-xs text-stone-400">Nhiều</span>
       </div>
     </div>
   );

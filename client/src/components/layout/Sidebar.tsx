@@ -3,42 +3,46 @@ import { useState } from "react";
 import {
   Home,
   LayoutDashboard,
-  CalendarClock,
   Bus,
   Users,
   Route,
   BarChart3,
   CreditCard,
   Building2,
-  // Settings,
   LogOut,
   ChevronDown,
-  ChevronUp,
-  FastForward,
-  OctagonX,
-  Link2,
-  DollarSign,
-  ShieldCheck,
-  Database,
+  ChevronRight,
   MapPin,
-  FileText,
   Plus,
   CarFront,
   Package,
   Calculator,
+  Clock,
+  Wallet,
+  Database,
+  Send,
+  CircleOff,
+  ArrowRightFromLine,
+  ArrowLeftFromLine,
+  FileSpreadsheet,
+  ClipboardList,
+  Receipt,
+  ShieldCheck,
+  CalendarCheck,
+  History,
   Award,
+  TrendingUp,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAuthStore } from "@/store/auth.store";
-import { Button } from "@/components/ui/button";
 import logo from "@/assets/logo.png";
 
+// Main navigation items
 const navigation = [
   { name: "Trang chủ", href: "/", icon: Home },
   { name: "Tổng quan", href: "/dashboard", icon: LayoutDashboard },
-  { name: "Điều độ xe", href: "/dieu-do", icon: CalendarClock },
-  { name: "Thanh toán", href: "/thanh-toan", icon: CreditCard },
-  // { name: "Cài đặt", href: "/settings", icon: Settings },
+  { name: "Điều độ xe", href: "/dieu-do", icon: ClipboardList },
+  { name: "Thanh toán", href: "/thanh-toan", icon: Wallet },
 ];
 
 interface SidebarProps {
@@ -59,41 +63,46 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
   };
 
   const truyenTaiSubmenu = [
-    { name: "Xe xuất bến", href: "/truyen-tai/xe-xuat-ben", icon: FastForward, flip: false },
-    { name: "Xe không đủ điều kiện", href: "/truyen-tai/xe-khong-du-dieu-kien", icon: OctagonX, flip: false },
-    { name: "Xe trả khách", href: "/truyen-tai/xe-tra-khach", icon: FastForward, flip: true },
+    { name: "Xe xuất bến", href: "/truyen-tai/xe-xuat-ben", icon: ArrowRightFromLine },
+    { name: "Xe không đủ điều kiện", href: "/truyen-tai/xe-khong-du-dieu-kien", icon: CircleOff },
+    { name: "Xe trả khách", href: "/truyen-tai/xe-tra-khach", icon: ArrowLeftFromLine },
   ];
 
   const baoCaoSubmenu = [
-    { name: "Lập báo cáo", href: "/bao-cao/lap-bao-cao", icon: FileText, flip: false },
-    { name: "Bảng kê hóa đơn", href: "/bao-cao/bang-ke-hoa-don", icon: FileText, flip: false },
-    { name: "Xe trả khách", href: "/bao-cao/xe-tra-khach", icon: FastForward, flip: true },
-    { name: "Theo dõi lệnh xuất bến", href: "/bao-cao/theo-doi-lenh-xuat-ben", icon: FileText, flip: false },
-    { name: "Theo dõi lệnh trả khách", href: "/bao-cao/theo-doi-lenh-tra-khach", icon: FileText, flip: false },
-    { name: "Nhật trình xe", href: "/bao-cao/nhat-trinh-xe", icon: FileText, flip: false },
-    { name: "Xe đi thay", href: "/bao-cao/xe-di-thay", icon: Bus, flip: false },
-    { name: "Xe không đủ điều kiện", href: "/bao-cao/xe-khong-du-dieu-kien", icon: OctagonX, flip: false },
-    { name: "Xe ra vào bến", href: "/bao-cao/xe-ra-vao-ben", icon: Bus, flip: false },
-    { name: "Xe tăng cường", href: "/bao-cao/xe-tang-cuong", icon: BusPlusIcon, flip: false },
-    { name: "Báo cáo tổng hợp tuyến", href: "/bao-cao/tong-hop-tuyen", icon: Route, flip: false },
-    { name: "Báo cáo tổng hợp", href: "/bao-cao/tong-hop", icon: BarChart3, flip: false },
-    { name: "Doanh thu bến bán vé", href: "/bao-cao/doanh-thu-ben-ban-ve", icon: DollarSign, flip: false },
-    { name: "Cấp phép ra bến", href: "/bao-cao/cap-phep-ra-ben", icon: ShieldCheck, flip: false },
-    { name: "Chấm công đăng tài", href: "/bao-cao/cham-cong-dang-tai", icon: CalendarClock, flip: false },
-    { name: "Lịch sử giấy tờ", href: "/bao-cao/lich-su-giay-to", icon: FileText, flip: false },
+    { name: "Lập báo cáo", href: "/bao-cao/lap-bao-cao", icon: FileSpreadsheet },
+    { name: "Bảng kê hóa đơn", href: "/bao-cao/bang-ke-hoa-don", icon: Receipt },
+    { name: "Xe trả khách", href: "/bao-cao/xe-tra-khach", icon: ArrowLeftFromLine },
+    { name: "Theo dõi lệnh xuất bến", href: "/bao-cao/theo-doi-lenh-xuat-ben", icon: ClipboardList },
+    { name: "Theo dõi lệnh trả khách", href: "/bao-cao/theo-doi-lenh-tra-khach", icon: ClipboardList },
+    { name: "Nhật trình xe", href: "/bao-cao/nhat-trinh-xe", icon: Clock },
+    { name: "Xe đi thay", href: "/bao-cao/xe-di-thay", icon: Bus },
+    { name: "Xe không đủ điều kiện", href: "/bao-cao/xe-khong-du-dieu-kien", icon: CircleOff },
+    { name: "Xe ra vào bến", href: "/bao-cao/xe-ra-vao-ben", icon: Bus },
+    { name: "Xe tăng cường", href: "/bao-cao/xe-tang-cuong", icon: BusPlusIcon },
+    { name: "Báo cáo tổng hợp tuyến", href: "/bao-cao/tong-hop-tuyen", icon: Route },
+    { name: "Báo cáo tổng hợp", href: "/bao-cao/tong-hop", icon: TrendingUp },
+    { name: "Doanh thu bến bán vé", href: "/bao-cao/doanh-thu-ben-ban-ve", icon: CreditCard },
+    { name: "Cấp phép ra bến", href: "/bao-cao/cap-phep-ra-ben", icon: ShieldCheck },
+    { name: "Chấm công đăng tài", href: "/bao-cao/cham-cong-dang-tai", icon: CalendarCheck },
+    { name: "Lịch sử giấy tờ", href: "/bao-cao/lich-su-giay-to", icon: History },
   ];
 
   const quanLySubmenu = [
-    { name: "Quản lý xe", href: "/quan-ly-xe", icon: Bus, flip: false },
-    { name: "Quản lý lái xe", href: "/quan-ly-lai-xe", icon: Users, flip: false },
-    { name: "Đơn vị vận tải", href: "/quan-ly-don-vi-van-tai", icon: Building2, flip: false },
-    { name: "Quản lý tuyến", href: "/quan-ly-tuyen", icon: Route, flip: false },
-    { name: "Bến đến", href: "/quan-ly-ben-den", icon: MapPin, flip: false },
-    { name: "Quản lý dịch vụ", href: "/quan-ly-dich-vu", icon: Package, flip: false },
-    { name: "Biểu thức", href: "/quan-ly-bieu-thuc", icon: Calculator, flip: false },
-    { name: "Phù hiệu xe", href: "/quan-ly-phu-hieu-xe", icon: Award, flip: false },
-    { name: "Danh sách ca trực", href: "/danh-sach-ca-truc", icon: CalendarClock, flip: false },
+    { name: "Quản lý xe", href: "/quan-ly-xe", icon: Bus },
+    { name: "Quản lý lái xe", href: "/quan-ly-lai-xe", icon: Users },
+    { name: "Đơn vị vận tải", href: "/quan-ly-don-vi-van-tai", icon: Building2 },
+    { name: "Quản lý tuyến", href: "/quan-ly-tuyen", icon: Route },
+    { name: "Bến đến", href: "/quan-ly-ben-den", icon: MapPin },
+    { name: "Quản lý dịch vụ", href: "/quan-ly-dich-vu", icon: Package },
+    { name: "Biểu thức", href: "/quan-ly-bieu-thuc", icon: Calculator },
+    { name: "Phù hiệu xe", href: "/quan-ly-phu-hieu-xe", icon: Award },
+    { name: "Danh sách ca trực", href: "/danh-sach-ca-truc", icon: Clock },
   ];
+
+  // Check if any submenu item is active
+  const isQuanLyActive = quanLySubmenu.some((item) => location.pathname === item.href);
+  const isTruyenTaiActive = truyenTaiSubmenu.some((item) => location.pathname === item.href);
+  const isBaoCaoActive = baoCaoSubmenu.some((item) => location.pathname === item.href);
 
   return (
     <>
@@ -108,70 +117,70 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
       {/* Sidebar */}
       <aside
         className={cn(
-          "fixed top-0 left-0 z-50 h-full w-64 bg-gradient-to-b from-blue-50 via-indigo-50 to-purple-50 border-r border-indigo-200/50 shadow-lg transform transition-transform duration-300 ease-in-out lg:translate-x-0",
+          "fixed top-0 left-0 z-50 h-full w-64 bg-white border-r border-stone-200 transform transition-transform duration-300 ease-in-out lg:translate-x-0",
           isOpen ? "translate-x-0" : "-translate-x-full"
         )}
       >
         <div className="flex h-full flex-col">
           {/* Logo */}
-          <div className="flex items-center justify-center border-b border-indigo-200/50 px-6 py-4">
+          <div className="flex items-center justify-center border-b border-stone-100 px-6 py-4">
             <img
               src={logo}
               alt="Quản Lý Bến Xe"
-              className="h-28 w-auto object-fit drop-shadow-lg"
+              className="h-24 w-auto object-contain"
             />
           </div>
 
           {/* Navigation */}
-          <nav className="flex-1 space-y-2 px-3 py-4 overflow-y-auto">
-            {navigation.map((item) => {
-              const isActive = location.pathname === item.href;
-              return (
-                <Link
-                  key={item.name}
-                  to={item.href}
-                  onClick={onClose}
-                  className={cn(
-                    "flex items-center gap-3 rounded-lg px-3 py-2.5 text-base font-medium transition-all duration-200",
-                    isActive
-                      ? "bg-gradient-to-r from-blue-500 to-indigo-600 text-white shadow-md shadow-blue-500/30 scale-[1.02]"
-                      : "text-gray-700 hover:bg-gradient-to-r hover:from-blue-100 hover:to-indigo-100 hover:text-indigo-700 hover:shadow-sm"
-                  )}
-                >
-                  <item.icon
+          <nav className="flex-1 px-3 py-4 overflow-y-auto">
+            {/* Main Navigation */}
+            <div className="space-y-1">
+              {navigation.map((item) => {
+                const isActive = location.pathname === item.href;
+                return (
+                  <Link
+                    key={item.name}
+                    to={item.href}
+                    onClick={onClose}
                     className={cn(
-                      "h-6 w-6 transition-colors",
-                      isActive ? "text-white" : "text-indigo-600"
+                      "flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors",
+                      isActive
+                        ? "bg-stone-100 text-stone-900 border-l-2 border-orange-500 -ml-[2px] pl-[14px]"
+                        : "text-stone-600 hover:bg-stone-50 hover:text-stone-900"
                     )}
-                  />
-                  {item.name}
-                </Link>
-              );
-            })}
+                  >
+                    <item.icon className={cn("h-5 w-5", isActive ? "text-orange-500" : "text-stone-400")} />
+                    {item.name}
+                  </Link>
+                );
+              })}
+            </div>
 
-            {/* Quản lý thông tin Menu */}
-            <div className="mt-2">
+            {/* Quản lý thông tin Section */}
+            <div className="mt-6">
               <button
                 onClick={() => setIsQuanLyOpen(!isQuanLyOpen)}
                 className={cn(
-                  "w-full flex items-center justify-between gap-3 rounded-lg px-3 py-2.5 text-base font-medium transition-all duration-200",
-                  "text-gray-700 hover:bg-gradient-to-r hover:from-blue-100 hover:to-indigo-100 hover:text-indigo-700 hover:shadow-sm"
+                  "w-full flex items-center justify-between gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors",
+                  isQuanLyActive
+                    ? "bg-stone-100 text-stone-900"
+                    : "text-stone-600 hover:bg-stone-50 hover:text-stone-900"
                 )}
               >
                 <div className="flex items-center gap-3">
-                  <Database className="h-6 w-6 text-indigo-600" />
+                  <Database className={cn("h-5 w-5", isQuanLyActive ? "text-orange-500" : "text-stone-400")} />
                   <span>Quản lý thông tin</span>
                 </div>
                 {isQuanLyOpen ? (
-                  <ChevronUp className="h-5 w-5 text-gray-500" />
+                  <ChevronDown className="h-4 w-4 text-stone-400" />
                 ) : (
-                  <ChevronDown className="h-5 w-5 text-gray-500" />
+                  <ChevronRight className="h-4 w-4 text-stone-400" />
                 )}
               </button>
 
               {/* Submenu */}
               {isQuanLyOpen && (
-                <div className="ml-4 mt-2 space-y-1 border-l-2 border-indigo-200 pl-4">
+                <div className="mt-1 ml-4 space-y-0.5 border-l border-stone-200 pl-3">
                   {quanLySubmenu.map((subItem) => {
                     const isSubActive = location.pathname === subItem.href;
                     return (
@@ -180,19 +189,13 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
                         to={subItem.href}
                         onClick={onClose}
                         className={cn(
-                          "flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-all duration-200",
+                          "flex items-center gap-2.5 rounded-md px-2.5 py-2 text-sm transition-colors",
                           isSubActive
-                            ? "bg-gradient-to-r from-blue-500 to-indigo-600 text-white shadow-md shadow-blue-500/30"
-                            : "text-gray-600 hover:bg-gradient-to-r hover:from-blue-50 hover:to-indigo-50 hover:text-indigo-700"
+                            ? "bg-orange-50 text-orange-600 font-medium"
+                            : "text-stone-500 hover:bg-stone-50 hover:text-stone-700"
                         )}
                       >
-                        <subItem.icon
-                          className={cn(
-                            "h-5 w-5 transition-colors",
-                            isSubActive ? "text-white" : "text-indigo-500",
-                            subItem.flip && "scale-x-[-1]"
-                          )}
-                        />
+                        <subItem.icon className={cn("h-4 w-4", isSubActive ? "text-orange-500" : "text-stone-400")} />
                         {subItem.name}
                       </Link>
                     );
@@ -201,29 +204,31 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
               )}
             </div>
 
-            {/* Truyền tải Menu */}
+            {/* Truyền tải Section */}
             <div className="mt-2">
               <button
                 onClick={() => setIsTruyenTaiOpen(!isTruyenTaiOpen)}
                 className={cn(
-                  "w-full flex items-center justify-between gap-3 rounded-lg px-3 py-2.5 text-base font-medium transition-all duration-200",
-                  "text-gray-700 hover:bg-gradient-to-r hover:from-blue-100 hover:to-indigo-100 hover:text-indigo-700 hover:shadow-sm"
+                  "w-full flex items-center justify-between gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors",
+                  isTruyenTaiActive
+                    ? "bg-stone-100 text-stone-900"
+                    : "text-stone-600 hover:bg-stone-50 hover:text-stone-900"
                 )}
               >
                 <div className="flex items-center gap-3">
-                  <Link2 className="h-6 w-6 text-indigo-600" />
+                  <Send className={cn("h-5 w-5", isTruyenTaiActive ? "text-orange-500" : "text-stone-400")} />
                   <span>Truyền tải</span>
                 </div>
                 {isTruyenTaiOpen ? (
-                  <ChevronUp className="h-5 w-5 text-gray-500" />
+                  <ChevronDown className="h-4 w-4 text-stone-400" />
                 ) : (
-                  <ChevronDown className="h-5 w-5 text-gray-500" />
+                  <ChevronRight className="h-4 w-4 text-stone-400" />
                 )}
               </button>
 
               {/* Submenu */}
               {isTruyenTaiOpen && (
-                <div className="ml-4 mt-2 space-y-1 border-l-2 border-indigo-200 pl-4">
+                <div className="mt-1 ml-4 space-y-0.5 border-l border-stone-200 pl-3">
                   {truyenTaiSubmenu.map((subItem) => {
                     const isSubActive = location.pathname === subItem.href;
                     return (
@@ -232,19 +237,13 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
                         to={subItem.href}
                         onClick={onClose}
                         className={cn(
-                          "flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-all duration-200",
+                          "flex items-center gap-2.5 rounded-md px-2.5 py-2 text-sm transition-colors",
                           isSubActive
-                            ? "bg-gradient-to-r from-blue-500 to-indigo-600 text-white shadow-md shadow-blue-500/30"
-                            : "text-gray-600 hover:bg-gradient-to-r hover:from-blue-50 hover:to-indigo-50 hover:text-indigo-700"
+                            ? "bg-orange-50 text-orange-600 font-medium"
+                            : "text-stone-500 hover:bg-stone-50 hover:text-stone-700"
                         )}
                       >
-                        <subItem.icon
-                          className={cn(
-                            "h-5 w-5 transition-colors",
-                            isSubActive ? "text-white" : "text-indigo-500",
-                            subItem.flip && "scale-x-[-1]"
-                          )}
-                        />
+                        <subItem.icon className={cn("h-4 w-4", isSubActive ? "text-orange-500" : "text-stone-400")} />
                         {subItem.name}
                       </Link>
                     );
@@ -253,50 +252,47 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
               )}
             </div>
 
-            {/* Báo cáo Menu */}
+            {/* Báo cáo Section */}
             <div className="mt-2">
               <button
                 onClick={() => setIsBaoCaoOpen(!isBaoCaoOpen)}
                 className={cn(
-                  "w-full flex items-center justify-between gap-3 rounded-lg px-3 py-2.5 text-base font-medium transition-all duration-200",
-                  "text-gray-700 hover:bg-gradient-to-r hover:from-blue-100 hover:to-indigo-100 hover:text-indigo-700 hover:shadow-sm"
+                  "w-full flex items-center justify-between gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors",
+                  isBaoCaoActive
+                    ? "bg-stone-100 text-stone-900"
+                    : "text-stone-600 hover:bg-stone-50 hover:text-stone-900"
                 )}
               >
                 <div className="flex items-center gap-3">
-                  <BarChart3 className="h-6 w-6 text-indigo-600" />
+                  <BarChart3 className={cn("h-5 w-5", isBaoCaoActive ? "text-orange-500" : "text-stone-400")} />
                   <span>Báo cáo</span>
                 </div>
                 {isBaoCaoOpen ? (
-                  <ChevronUp className="h-5 w-5 text-gray-500" />
+                  <ChevronDown className="h-4 w-4 text-stone-400" />
                 ) : (
-                  <ChevronDown className="h-5 w-5 text-gray-500" />
+                  <ChevronRight className="h-4 w-4 text-stone-400" />
                 )}
               </button>
 
               {/* Submenu */}
               {isBaoCaoOpen && (
-                <div className="ml-4 mt-2 space-y-1 border-l-2 border-indigo-200 pl-4">
+                <div className="mt-1 ml-4 space-y-0.5 border-l border-stone-200 pl-3">
                   {baoCaoSubmenu.map((subItem) => {
                     const isSubActive = location.pathname === subItem.href;
+                    const IconComponent = subItem.icon;
                     return (
                       <Link
                         key={subItem.name}
                         to={subItem.href}
                         onClick={onClose}
                         className={cn(
-                          "flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-all duration-200",
+                          "flex items-center gap-2.5 rounded-md px-2.5 py-2 text-sm transition-colors",
                           isSubActive
-                            ? "bg-gradient-to-r from-blue-500 to-indigo-600 text-white shadow-md shadow-blue-500/30"
-                            : "text-gray-600 hover:bg-gradient-to-r hover:from-blue-50 hover:to-indigo-50 hover:text-indigo-700"
+                            ? "bg-orange-50 text-orange-600 font-medium"
+                            : "text-stone-500 hover:bg-stone-50 hover:text-stone-700"
                         )}
                       >
-                        <subItem.icon
-                          className={cn(
-                            "h-5 w-5 transition-colors",
-                            isSubActive ? "text-white" : "text-indigo-500",
-                            subItem.flip && "scale-x-[-1]"
-                          )}
-                        />
+                        <IconComponent className={cn("h-4 w-4", isSubActive ? "text-orange-500" : "text-stone-400")} />
                         {subItem.name}
                       </Link>
                     );
@@ -307,15 +303,14 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
           </nav>
 
           {/* Logout button */}
-          <div className="border-t border-indigo-200/50 p-4 bg-gradient-to-t from-red-50 to-transparent">
-            <Button
-              variant="ghost"
-              className="w-full justify-start hover:bg-gradient-to-r hover:from-red-100 hover:to-rose-100 hover:text-red-600 transition-all duration-200"
+          <div className="border-t border-stone-100 p-3">
+            <button
               onClick={handleLogout}
+              className="w-full flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium text-stone-600 hover:bg-red-50 hover:text-red-600 transition-colors"
             >
-              <LogOut className="mr-3 h-6 w-6 text-red-500" />
-              <span className="font-medium">Đăng xuất</span>
-            </Button>
+              <LogOut className="h-5 w-5" />
+              <span>Đăng xuất</span>
+            </button>
           </div>
         </div>
       </aside>
@@ -325,10 +320,10 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
 
 function BusPlusIcon({ className = "" }: { className?: string }) {
   return (
-    <div className={`relative inline-flex h-5 w-5 ${className}`}>
-      <CarFront className="h-5 w-5" />
-      <div className="absolute -bottom-0.5 -right-0.5 bg-white rounded-full p-0.5">
-        <Plus className="h-2.5 w-2.5" strokeWidth={3} />
+    <div className={`relative inline-flex ${className}`}>
+      <CarFront className="h-4 w-4" />
+      <div className="absolute -bottom-0.5 -right-0.5 bg-white rounded-full">
+        <Plus className="h-2 w-2" strokeWidth={3} />
       </div>
     </div>
   );

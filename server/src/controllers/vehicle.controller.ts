@@ -1,9 +1,10 @@
 import { Request, Response } from 'express'
 import { AuthRequest } from '../middleware/auth.js'
-import { firebase, firebaseDb } from '../config/database.js'
+import { firebase } from '../config/database.js'
 import { z } from 'zod'
 import { syncVehicleChanges } from '../utils/denormalization-sync.js'
 import { cachedData } from '../services/cached-data.service.js'
+import { vehicleCacheService } from '../modules/fleet/services/vehicle-cache.service.js'
 
 const vehicleSchema = z.object({
   plateNumber: z.string().min(1, 'Plate number is required'),
@@ -864,8 +865,9 @@ export const deleteVehicle = async (req: Request, res: Response) => {
 }
 
 /**
- * Lookup vehicle by plate number from RTDB datasheet/Xe
- * Returns seat capacity and other info for ANY vehicle, not just those with badges
+ * Lookup vehicle by plate number using cached data
+ * Uses VehicleCacheService for fast lookup (30min cache TTL)
+ * Returns seat capacity and other info for ANY vehicle
  */
 export const lookupVehicleByPlate = async (req: Request, res: Response) => {
   try {
@@ -874,70 +876,20 @@ export const lookupVehicleByPlate = async (req: Request, res: Response) => {
       return res.status(400).json({ error: 'Plate number is required' })
     }
 
-    const normalizedSearchPlate = plate.replace(/[.\-\s]/g, '').toUpperCase()
+    // Use cached lookup - much faster than RTDB query
+    const vehicle = await vehicleCacheService.lookupByPlate(plate)
 
-    // Search in RTDB datasheet/Xe
-    const snapshot = await firebaseDb.ref('datasheet/Xe').once('value')
-    const vehicleData = snapshot.val() || {}
-
-    let foundVehicle: any = null
-    let foundKey: string | null = null
-
-    for (const [key, vehicle] of Object.entries(vehicleData)) {
-      const v = vehicle as any
-      const vehiclePlate = v.plate_number || v.BienSo || ''
-      const normalizedPlate = vehiclePlate.replace(/[.\-\s]/g, '').toUpperCase()
-      
-      if (normalizedPlate === normalizedSearchPlate) {
-        foundVehicle = v
-        foundKey = key
-        break
-      }
-    }
-
-    if (!foundVehicle) {
+    if (!vehicle) {
       return res.status(404).json({ error: 'Vehicle not found' })
     }
 
-    // Parse seat capacity from various fields
-    let seatCapacity = 0
-    if (typeof foundVehicle.seat_count === 'number') {
-      seatCapacity = foundVehicle.seat_count
-    } else if (foundVehicle.seat_count) {
-      seatCapacity = parseInt(foundVehicle.seat_count) || 0
-    }
-    
-    // Try SoCho field (Vietnamese)
-    if (!seatCapacity && foundVehicle.SoCho) {
-      const soCho = String(foundVehicle.SoCho)
-      const match = soCho.match(/(\d+)/)
-      if (match) seatCapacity = parseInt(match[1]) || 0
-    }
-
-    // Try parsing from registration_info
-    if (!seatCapacity && foundVehicle.registration_info) {
-      const patterns = [
-        /Số người cho phép chở[^:]*:\s*(\d+)/i,
-        /số chỗ ngồi[^:]*:\s*(\d+)/i,
-        /\(ngồi\):\s*(\d+)/i,
-        /chở được\s*(\d+)\s*người/i,
-      ]
-      for (const pattern of patterns) {
-        const match = foundVehicle.registration_info.match(pattern)
-        if (match) {
-          seatCapacity = parseInt(match[1]) || 0
-          break
-        }
-      }
-    }
-
     return res.json({
-      id: foundKey,
-      plateNumber: foundVehicle.plate_number || foundVehicle.BienSo || '',
-      seatCapacity,
-      operatorName: foundVehicle.owner_name || '',
-      vehicleType: foundVehicle.vehicle_category || foundVehicle.vehicle_type || '',
-      source: 'rtdb_datasheet',
+      id: vehicle.id,
+      plateNumber: vehicle.plateNumber,
+      seatCapacity: vehicle.seatCapacity || vehicle.bedCapacity || 0,
+      operatorName: vehicle.operatorName,
+      vehicleType: vehicle.vehicleType,
+      source: vehicle.source,
     })
   } catch (error: any) {
     console.error('Error looking up vehicle:', error)

@@ -3,7 +3,7 @@ import { useNavigate, Link } from "react-router-dom"
 import { useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { z } from "zod"
-import { User, Lock, Bus, MapPin, Clock, Shield } from "lucide-react"
+import { User, Lock, ArrowRight } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -12,21 +12,15 @@ import { useAuthStore } from "@/store/auth.store"
 import logo from "@/assets/logo.png"
 
 const loginSchema = z.object({
-  usernameOrEmail: z.string().min(1, "Tên đăng nhập hoặc email là bắt buộc"),
-  password: z.string().min(1, "Mật khẩu là bắt buộc"),
+  usernameOrEmail: z.string().min(1, "Vui lòng nhập tên đăng nhập"),
+  password: z.string().min(1, "Vui lòng nhập mật khẩu"),
   rememberMe: z.boolean().optional(),
 })
 
 type LoginFormData = z.infer<typeof loginSchema>
 
-const BACKGROUND_IMAGE = "https://images.unsplash.com/photo-1570125909232-eb263c188f7e?w=1920&q=80"
-
-const features = [
-  { icon: Bus, text: "Quản lý xe hiệu quả" },
-  { icon: MapPin, text: "Theo dõi tuyến đường" },
-  { icon: Clock, text: "Lịch trình chính xác" },
-  { icon: Shield, text: "Bảo mật an toàn" },
-]
+// Modern transportation - highway with vehicles
+const BACKGROUND_IMAGE = "https://images.unsplash.com/photo-1494515843206-f3117d3f51b7?w=1920&q=80"
 
 export default function Login() {
   const navigate = useNavigate()
@@ -52,7 +46,7 @@ export default function Login() {
       await login(data.usernameOrEmail, data.password, data.rememberMe)
       navigate("/dashboard")
     } catch {
-      setError("Tên đăng nhập/email hoặc mật khẩu không đúng")
+      setError("Thông tin đăng nhập không chính xác")
     } finally {
       setIsLoading(false)
     }
@@ -60,214 +54,192 @@ export default function Login() {
 
   return (
     <div className="min-h-screen flex">
-      {/* Left Side - Hero Section */}
-      <div
-        className="hidden lg:flex lg:w-1/2 xl:w-3/5 relative overflow-hidden"
-        style={{
-          backgroundImage: `url(${BACKGROUND_IMAGE})`,
-          backgroundSize: 'cover',
-          backgroundPosition: 'center',
-        }}
-      >
+      {/* Left Side - Cinematic Hero */}
+      <div className="hidden lg:flex lg:w-[55%] xl:w-[60%] relative overflow-hidden">
+        {/* Background Image */}
+        <img
+          src={BACKGROUND_IMAGE}
+          alt="Modern architecture"
+          className="absolute inset-0 w-full h-full object-cover"
+        />
+
         {/* Gradient Overlay */}
-        <div className="absolute inset-0 bg-gradient-to-br from-blue-900/90 via-blue-800/80 to-indigo-900/90" />
+        <div className="absolute inset-0 bg-gradient-to-br from-stone-900/95 via-stone-900/85 to-stone-800/80" />
+        <div className="absolute inset-0 bg-gradient-to-t from-stone-900/60 via-transparent to-stone-900/40" />
 
         {/* Content */}
-        <div className="relative z-10 flex flex-col justify-between p-12 text-white w-full">
-          {/* Logo & Brand */}
-          <div className="flex items-center gap-3">
-            <div className="w-12 h-12 bg-white/20 backdrop-blur-sm rounded-xl flex items-center justify-center">
-              <Bus className="w-7 h-7 text-white" />
-            </div>
-            <div>
-              <h1 className="text-xl font-bold">Quản Lý Bến Xe</h1>
-              <p className="text-blue-200 text-sm">Hệ thống quản lý thông minh</p>
-            </div>
-          </div>
+        <div className="relative z-10 flex flex-col justify-between p-12 xl:p-16 w-full">
+          {/* Logo */}
+          <Link to="/" className="inline-flex items-center gap-3 group">
+            <img src={logo} alt="ABC C&T" className="h-12 w-auto" />
+            <span className="font-display text-2xl text-white">ABC C&T</span>
+          </Link>
 
-          {/* Main Hero Content */}
-          <div className="space-y-8 max-w-lg">
-            <div className="space-y-4">
-              <h2 className="text-4xl xl:text-5xl font-bold leading-tight">
-                Giải pháp quản lý
-                <span className="text-amber-400"> bến xe </span>
-                hiện đại
-              </h2>
-              <p className="text-blue-100 text-lg leading-relaxed">
-                Tối ưu hóa quy trình vận hành, theo dõi phương tiện theo thời gian thực và nâng cao hiệu quả kinh doanh.
+          {/* Main Content */}
+          <div className="max-w-lg space-y-8">
+            <div className="space-y-6">
+              <h1 className="font-display text-4xl xl:text-5xl text-white leading-tight">
+                <span className="block">Hệ thống</span>
+                <span className="block italic text-emerald-400">Quản lý Bến xe</span>
+                <span className="block">thông minh.</span>
+              </h1>
+              <p className="text-lg text-stone-400 leading-relaxed">
+                Nền tảng số hóa toàn diện cho vận hành bến xe và doanh nghiệp vận tải hành khách.
               </p>
             </div>
 
-            {/* Features Grid */}
-            <div className="grid grid-cols-2 gap-4">
-              {features.map((feature, index) => (
-                <div
-                  key={index}
-                  className="flex items-center gap-3 p-3 bg-white/10 backdrop-blur-sm rounded-lg border border-white/10 hover:bg-white/15 transition-colors"
-                >
-                  <div className="w-10 h-10 bg-amber-500/20 rounded-lg flex items-center justify-center">
-                    <feature.icon className="w-5 h-5 text-amber-400" />
-                  </div>
-                  <span className="text-sm font-medium">{feature.text}</span>
-                </div>
-              ))}
+            {/* Stats */}
+            <div className="flex items-center gap-12 pt-8 border-t border-stone-700/50">
+              <div>
+                <div className="text-3xl font-semibold text-white">600<span className="text-emerald-400">+</span></div>
+                <div className="text-sm text-stone-500 mt-1">Doanh nghiệp</div>
+              </div>
+              <div>
+                <div className="text-3xl font-semibold text-white">500<span className="text-emerald-400">+</span></div>
+                <div className="text-sm text-stone-500 mt-1">Bến xe</div>
+              </div>
+              <div>
+                <div className="text-3xl font-semibold text-white">99.9<span className="text-emerald-400">%</span></div>
+                <div className="text-sm text-stone-500 mt-1">Uptime</div>
+              </div>
             </div>
           </div>
 
-          {/* Footer Stats */}
-          <div className="flex items-center gap-8 pt-8 border-t border-white/10">
-            <div>
-              <div className="text-3xl font-bold text-amber-400">500+</div>
-              <div className="text-blue-200 text-sm">Phương tiện</div>
-            </div>
-            <div>
-              <div className="text-3xl font-bold text-amber-400">50+</div>
-              <div className="text-blue-200 text-sm">Tuyến đường</div>
-            </div>
-            <div>
-              <div className="text-3xl font-bold text-amber-400">99.9%</div>
-              <div className="text-blue-200 text-sm">Độ tin cậy</div>
-            </div>
+          {/* Footer */}
+          <div className="text-sm text-stone-600">
+            © 2025 ABC C&T. Đồng hành cùng ngành vận tải Việt Nam.
           </div>
         </div>
       </div>
 
       {/* Right Side - Login Form */}
-      <div className="w-full lg:w-1/2 xl:w-2/5 flex items-center justify-center p-6 sm:p-12 bg-gray-50">
-        <div className="w-full max-w-md space-y-8">
+      <div className="w-full lg:w-[45%] xl:w-[40%] flex items-center justify-center p-6 sm:p-12 bg-stone-50">
+        <div className="w-full max-w-[400px]">
           {/* Mobile Logo */}
-          <div className="lg:hidden text-center mb-8">
-            <div className="inline-flex items-center gap-2 mb-4">
-              <div className="w-10 h-10 bg-blue-600 rounded-xl flex items-center justify-center">
-                <Bus className="w-6 h-6 text-white" />
-              </div>
-              <span className="text-xl font-bold text-gray-900">Quản Lý Bến Xe</span>
-            </div>
+          <div className="lg:hidden flex justify-center mb-10">
+            <Link to="/" className="inline-flex items-center gap-2.5">
+              <img src={logo} alt="ABC C&T" className="h-10 w-auto" />
+              <span className="font-display text-xl text-stone-800">ABC C&T</span>
+            </Link>
           </div>
 
           {/* Form Header */}
-          <div className="text-center lg:text-left">
-            <div className="mb-6 flex justify-center lg:justify-start">
-              <img
-                src={logo}
-                alt="Logo"
-                className="h-16 w-auto object-contain"
-              />
-            </div>
-            <h2 className="text-2xl sm:text-3xl font-bold text-gray-900">
-              Chào mừng trở lại
+          <div className="mb-10">
+            <h2 className="font-display text-3xl text-stone-800 mb-2">
+              Đăng nhập
             </h2>
-            <p className="mt-2 text-gray-600">
-              Đăng nhập để tiếp tục quản lý hệ thống
+            <p className="text-stone-500">
+              Chào mừng trở lại. Vui lòng nhập thông tin.
             </p>
           </div>
 
           {/* Login Form */}
           <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
             {error && (
-              <div className="p-4 bg-red-50 border border-red-100 rounded-xl text-sm text-red-700 flex items-center gap-2">
-                <div className="w-2 h-2 bg-red-500 rounded-full" />
+              <div className="p-4 bg-red-50 border border-red-100 rounded-xl text-sm text-red-600">
                 {error}
               </div>
             )}
 
-            <div className="space-y-4">
+            <div className="space-y-5">
+              {/* Username/Email */}
               <div className="space-y-2">
-                <Label htmlFor="usernameOrEmail" className="text-gray-700 font-medium">
-                  Tên đăng nhập hoặc Email
+                <Label htmlFor="usernameOrEmail" className="text-stone-700 text-sm font-medium">
+                  Tên đăng nhập
                 </Label>
-                <div className="relative group">
-                  <User className="absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-gray-400 group-focus-within:text-blue-500 transition-colors" />
+                <div className="relative">
+                  <User className="absolute left-4 top-1/2 h-[18px] w-[18px] -translate-y-1/2 text-stone-400" />
                   <Input
                     id="usernameOrEmail"
                     type="text"
                     placeholder="Nhập tên đăng nhập hoặc email"
-                    className="pl-12 h-12 bg-white border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
+                    className="pl-11 h-12 bg-white border-stone-200 rounded-xl text-stone-800 placeholder:text-stone-400 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 transition-colors"
                     {...register("usernameOrEmail")}
                   />
                 </div>
                 {errors.usernameOrEmail && (
-                  <p className="text-sm text-red-600 flex items-center gap-1">
-                    <span className="w-1 h-1 bg-red-500 rounded-full" />
-                    {errors.usernameOrEmail.message}
-                  </p>
+                  <p className="text-sm text-red-500">{errors.usernameOrEmail.message}</p>
                 )}
               </div>
 
+              {/* Password */}
               <div className="space-y-2">
-                <Label htmlFor="password" className="text-gray-700 font-medium">
+                <Label htmlFor="password" className="text-stone-700 text-sm font-medium">
                   Mật khẩu
                 </Label>
-                <div className="relative group">
-                  <Lock className="absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-gray-400 group-focus-within:text-blue-500 transition-colors" />
+                <div className="relative">
+                  <Lock className="absolute left-4 top-1/2 h-[18px] w-[18px] -translate-y-1/2 text-stone-400" />
                   <Input
                     id="password"
                     type="password"
                     placeholder="Nhập mật khẩu"
-                    className="pl-12 h-12 bg-white border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
+                    className="pl-11 h-12 bg-white border-stone-200 rounded-xl text-stone-800 placeholder:text-stone-400 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 transition-colors"
                     {...register("password")}
                   />
                 </div>
                 {errors.password && (
-                  <p className="text-sm text-red-600 flex items-center gap-1">
-                    <span className="w-1 h-1 bg-red-500 rounded-full" />
-                    {errors.password.message}
-                  </p>
+                  <p className="text-sm text-red-500">{errors.password.message}</p>
                 )}
               </div>
             </div>
 
+            {/* Remember & Forgot */}
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <Checkbox
                   id="rememberMe"
-                  className="border-gray-300 data-[state=checked]:bg-blue-600 data-[state=checked]:border-blue-600"
+                  className="border-stone-300 data-[state=checked]:bg-emerald-500 data-[state=checked]:border-emerald-500"
                   {...register("rememberMe")}
                 />
                 <Label
                   htmlFor="rememberMe"
-                  className="text-sm text-gray-600 cursor-pointer hover:text-gray-900 transition-colors"
+                  className="text-sm text-stone-600 cursor-pointer"
                 >
                   Ghi nhớ đăng nhập
                 </Label>
               </div>
               <Link
                 to="/forgot-password"
-                className="text-sm text-blue-600 hover:text-blue-700 font-medium transition-colors"
+                className="text-sm text-emerald-600 hover:text-emerald-700 font-medium transition-colors"
               >
                 Quên mật khẩu?
               </Link>
             </div>
 
+            {/* Submit Button */}
             <Button
               type="submit"
-              className="w-full h-12 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-xl shadow-lg shadow-blue-600/25 hover:shadow-blue-600/40 transition-all duration-300"
+              className="w-full h-12 bg-stone-800 hover:bg-stone-900 text-white font-medium rounded-xl transition-colors group"
               disabled={isLoading}
             >
               {isLoading ? (
                 <div className="flex items-center gap-2">
-                  <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                  <span>Đang đăng nhập...</span>
+                  <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                  <span>Đang xử lý...</span>
                 </div>
               ) : (
-                "Đăng nhập"
+                <span className="flex items-center justify-center gap-2">
+                  Đăng nhập
+                  <ArrowRight className="w-4 h-4 group-hover:translate-x-0.5 transition-transform" />
+                </span>
               )}
             </Button>
 
-            <div className="text-center">
-              <span className="text-gray-600">Chưa có tài khoản? </span>
+            {/* Register Link */}
+            <p className="text-center text-stone-500 text-sm">
+              Chưa có tài khoản?{" "}
               <Link
                 to="/register"
-                className="text-blue-600 hover:text-blue-700 font-semibold transition-colors"
+                className="text-emerald-600 hover:text-emerald-700 font-medium transition-colors"
               >
                 Đăng ký ngay
               </Link>
-            </div>
+            </p>
           </form>
 
-          {/* Footer */}
-          <div className="pt-8 text-center text-sm text-gray-500">
-            <p>© 2025 Hệ thống Quản lý Bến xe. Bảo lưu mọi quyền.</p>
+          {/* Footer - Mobile */}
+          <div className="lg:hidden mt-12 pt-6 border-t border-stone-200 text-center text-xs text-stone-400">
+            © 2025 ABC C&T. Bảo lưu mọi quyền.
           </div>
         </div>
       </div>

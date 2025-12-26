@@ -17,36 +17,36 @@ export interface MetricCardProps {
 
 export const metricVariants = {
   blue: {
-    gradient: "from-blue-500 to-indigo-600",
-    glow: "shadow-blue-500/25",
+    bg: "bg-blue-500",
     light: "bg-blue-50",
-    border: "border-blue-200",
-    text: "text-blue-700",
-    iconBg: "bg-blue-100",
+    border: "border-stone-200",
+    text: "text-stone-800",
+    iconBg: "bg-blue-500",
+    accent: "text-blue-600",
   },
   emerald: {
-    gradient: "from-emerald-500 to-teal-600",
-    glow: "shadow-emerald-500/25",
+    bg: "bg-emerald-500",
     light: "bg-emerald-50",
-    border: "border-emerald-200",
-    text: "text-emerald-700",
-    iconBg: "bg-emerald-100",
+    border: "border-stone-200",
+    text: "text-stone-800",
+    iconBg: "bg-emerald-500",
+    accent: "text-emerald-600",
   },
   amber: {
-    gradient: "from-amber-500 to-orange-600",
-    glow: "shadow-amber-500/25",
+    bg: "bg-amber-500",
     light: "bg-amber-50",
-    border: "border-amber-200",
-    text: "text-amber-700",
-    iconBg: "bg-amber-100",
+    border: "border-stone-200",
+    text: "text-stone-800",
+    iconBg: "bg-amber-500",
+    accent: "text-amber-600",
   },
   rose: {
-    gradient: "from-rose-500 to-red-600",
-    glow: "shadow-rose-500/25",
+    bg: "bg-rose-500",
     light: "bg-rose-50",
-    border: "border-rose-200",
-    text: "text-rose-700",
-    iconBg: "bg-rose-100",
+    border: "border-stone-200",
+    text: "text-stone-800",
+    iconBg: "bg-rose-500",
+    accent: "text-rose-600",
   },
 };
 
@@ -66,42 +66,31 @@ export const MetricCard = memo(function MetricCard({
   return (
     <div
       className={cn(
-        "group relative overflow-hidden rounded-2xl transition-all duration-500",
-        "hover:scale-[1.02] hover:-translate-y-1",
+        "group relative overflow-hidden rounded-2xl transition-all duration-300",
+        "hover:-translate-y-0.5 hover:shadow-md",
         isPulsing && "animate-pulse-subtle"
       )}
     >
-      {/* Glass Background */}
-      <div
-        className={cn(
-          "absolute inset-0 bg-gradient-to-br opacity-5",
-          styles.gradient
-        )}
-      />
-
       {/* Card Content */}
       <div
         className={cn(
-          "relative p-4 bg-white/80 backdrop-blur-xl border-2 rounded-2xl",
-          "shadow-lg hover:shadow-xl transition-shadow",
-          styles.border,
-          isPulsing && styles.glow
+          "relative p-5 bg-white border rounded-2xl",
+          "shadow-sm transition-shadow",
+          styles.border
         )}
       >
         {/* Header: Icon + Badge */}
-        <div className="flex items-center justify-between mb-2">
+        <div className="flex items-center justify-between mb-3">
           <div
             className={cn(
-              "p-2 rounded-lg",
-              `bg-gradient-to-br ${styles.gradient}`,
-              "shadow-md",
-              styles.glow
+              "p-2.5 rounded-xl",
+              styles.iconBg
             )}
           >
             <Icon className="w-5 h-5 text-white" />
           </div>
           {isPulsing && (
-            <div className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-rose-100">
+            <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-rose-50 border border-rose-100">
               <LiveBeacon size="small" />
               <span className="text-xs font-semibold text-rose-600">
                 Cần xử lý
@@ -110,29 +99,33 @@ export const MetricCard = memo(function MetricCard({
           )}
         </div>
 
-        {/* Title + Value + Subtitle inline */}
-        <p className="text-xs font-medium text-slate-500 mb-0.5">{title}</p>
+        {/* Title */}
+        <p className="text-sm font-medium text-stone-500 mb-1">{title}</p>
+
+        {/* Value */}
         <p
           className={cn(
-            "text-3xl font-black tracking-tight leading-tight",
+            "text-3xl font-bold tracking-tight leading-tight",
             styles.text
           )}
         >
           {animatedValue.toLocaleString("vi-VN")}
         </p>
+
+        {/* Subtitle */}
         {subtitle && (
-          <p className="text-xs text-slate-400 mt-0.5">{subtitle}</p>
+          <p className="text-xs text-stone-400 mt-1">{subtitle}</p>
         )}
 
         {/* Trend - compact */}
         {trend && (
-          <div className="flex items-center gap-1.5 mt-2 pt-2 border-t border-slate-100">
+          <div className="flex items-center gap-1.5 mt-3 pt-3 border-t border-stone-100">
             <span
               className={cn(
-                "inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-xs font-semibold",
+                "inline-flex items-center gap-0.5 px-2 py-0.5 rounded-full text-xs font-semibold",
                 trend.isPositive
-                  ? "bg-emerald-100 text-emerald-700"
-                  : "bg-rose-100 text-rose-700"
+                  ? "bg-emerald-50 text-emerald-600"
+                  : "bg-rose-50 text-rose-600"
               )}
             >
               {trend.isPositive ? (
@@ -143,15 +136,15 @@ export const MetricCard = memo(function MetricCard({
               {trend.isPositive ? "+" : ""}
               {trend.value}%
             </span>
-            <span className="text-xs text-slate-400">vs hôm qua</span>
+            <span className="text-xs text-stone-400">vs hôm qua</span>
           </div>
         )}
 
-        {/* Hover Decoration */}
+        {/* Hover Accent Line */}
         <div
           className={cn(
-            "absolute bottom-0 left-0 right-0 h-1 bg-gradient-to-r opacity-0 group-hover:opacity-100 transition-opacity",
-            styles.gradient
+            "absolute bottom-0 left-0 right-0 h-0.5 opacity-0 group-hover:opacity-100 transition-opacity",
+            styles.bg
           )}
         />
       </div>

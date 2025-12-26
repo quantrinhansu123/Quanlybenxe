@@ -1,19 +1,7 @@
-import { useState, useEffect, useMemo } from "react";
-import { useNavigate } from "react-router-dom";
+import { useState, useEffect } from "react";
 import {
-  Bus,
-  CheckCircle,
-  Banknote,
-  AlertTriangle,
-  History,
-  TrendingUp,
   RefreshCw,
   Clock,
-  FileWarning,
-  Calendar,
-  Activity,
-  Radio,
-  Sparkles,
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -21,22 +9,22 @@ import { DocumentWarningsTable } from "@/components/dashboard/DocumentWarningsTa
 import { EditDocumentDialog } from "@/components/dashboard/EditDocumentDialog";
 import { VehicleHistoryTable } from "@/components/dashboard/VehicleHistoryTable";
 import {
-  LiveBeacon,
-  HeroStatsCard,
-  MetricCard,
-  HeatMapCalendar,
-  LiveActivityFeed,
-  QuickStatCard,
+  TrendStatCard,
 } from "@/components/dashboard/stats";
 import { format } from "date-fns";
-import { vi } from "date-fns/locale";
 import { dashboardService } from "@/services/dashboard.service";
-import type { DashboardStats, ChartDataPoint, RecentActivity, Warning } from "@/services/dashboard.service";
+import type { DashboardStats, ChartDataPoint, RecentActivity, Warning, WeeklyStat, MonthlyStat, RouteBreakdown } from "@/services/dashboard.service";
 import { useUIStore } from "@/store/ui.store";
 import { cn } from "@/lib/utils";
 
+// Chart components (to be implemented in Phase 2-4)
+import { VehicleTrendChart } from "@/components/dashboard/charts/VehicleTrendChart";
+import { WeeklyProgressChart } from "@/components/dashboard/charts/WeeklyProgressChart";
+import { VehiclesByStatusChart } from "@/components/dashboard/charts/VehiclesByStatusChart";
+import { VehiclesByRouteChart } from "@/components/dashboard/charts/VehiclesByRouteChart";
+import { MonthlyBreakdownChart } from "@/components/dashboard/charts/MonthlyBreakdownChart";
+
 export default function Dashboard() {
-  const navigate = useNavigate();
   const [stats, setStats] = useState<DashboardStats>({
     totalVehiclesToday: 0,
     vehiclesInStation: 0,
@@ -47,12 +35,14 @@ export default function Dashboard() {
   const [chartData, setChartData] = useState<ChartDataPoint[]>([]);
   const [recentActivity, setRecentActivity] = useState<RecentActivity[]>([]);
   const [warnings, setWarnings] = useState<Warning[]>([]);
+  const [weeklyStats, setWeeklyStats] = useState<WeeklyStat[]>([]);
+  const [monthlyStats, setMonthlyStats] = useState<MonthlyStat[]>([]);
+  const [routeBreakdown, setRouteBreakdown] = useState<RouteBreakdown[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [editDocumentOpen, setEditDocumentOpen] = useState(false);
   const [selectedWarning, setSelectedWarning] = useState<Warning | null>(null);
   const [vehicleHistoryOpen, setVehicleHistoryOpen] = useState(false);
   const [lastUpdated, setLastUpdated] = useState<Date>(new Date());
-  const [selectedDate, setSelectedDate] = useState<Date>(new Date());
   const setTitle = useUIStore((state) => state.setTitle);
 
   useEffect(() => {
@@ -70,6 +60,9 @@ export default function Dashboard() {
       setChartData(data.chartData);
       setRecentActivity(data.recentActivity);
       setWarnings(data.warnings);
+      setWeeklyStats(data.weeklyStats || []);
+      setMonthlyStats(data.monthlyStats || []);
+      setRouteBreakdown(data.routeBreakdown || []);
       setLastUpdated(new Date());
     } catch (error) {
       console.error("Failed to load dashboard data:", error);
@@ -108,250 +101,211 @@ export default function Dashboard() {
     loadDashboardData();
   };
 
-  const totalVehiclesToday = useMemo(() => {
-    return chartData.reduce((sum, item) => sum + item.count, 0);
-  }, [chartData]);
-
-  const peakHour = useMemo(() => {
-    if (chartData.length === 0) return null;
-    return chartData.reduce((prev, current) =>
-      prev.count > current.count ? prev : current
-    );
-  }, [chartData]);
-
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-slate-100 to-slate-50">
-      {/* CSS Animations */}
-      <style>{`
-        @keyframes shimmer {
-          0% { transform: translateX(-100%); }
-          100% { transform: translateX(100%); }
-        }
-        @keyframes slideInRight {
-          from { opacity: 0; transform: translateX(20px); }
-          to { opacity: 1; transform: translateX(0); }
-        }
-        @keyframes pulse-subtle {
-          0%, 100% { opacity: 1; }
-          50% { opacity: 0.8; }
-        }
-        .animate-shimmer { animation: shimmer 2s infinite; }
-        .animate-pulse-subtle { animation: pulse-subtle 2s ease-in-out infinite; }
-      `}</style>
-
+    <div className="min-h-screen bg-[#FAFAFA]">
       <div className="p-4 lg:p-6 space-y-6">
         {/* Header */}
         <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
           <div>
-            <div className="flex items-center gap-4">
-              <div className="p-3 rounded-2xl bg-gradient-to-br from-slate-800 to-slate-900 shadow-xl">
-                <Activity className="w-8 h-8 text-white" />
-              </div>
-              <div>
-                <h1 className="text-3xl font-black text-slate-900 tracking-tight">
-                  Command Center
-                </h1>
-                <div className="flex items-center gap-3 mt-1">
-                  <div className="flex items-center gap-2">
-                    <LiveBeacon />
-                    <span className="text-sm font-medium text-emerald-600">
-                      Trực tiếp
-                    </span>
-                  </div>
-                  <span className="text-slate-300">|</span>
-                  <span className="text-sm text-slate-500 flex items-center gap-1.5">
-                    <Calendar className="w-4 h-4" />
-                    {format(new Date(), "EEEE, dd MMMM yyyy", { locale: vi })}
-                  </span>
-                </div>
-              </div>
-            </div>
+            <p className="text-sm text-stone-500 mb-1">Tổng quan</p>
+            <h1 className="text-3xl lg:text-4xl font-semibold text-stone-900 tracking-tight">
+              Dữ liệu
+            </h1>
           </div>
 
           <div className="flex items-center gap-3">
-            <div className="hidden sm:flex items-center gap-2 px-4 py-2 rounded-xl bg-white border border-slate-200">
-              <Clock className="w-4 h-4 text-slate-400" />
-              <span className="text-sm text-slate-600">Cập nhật:</span>
-              <span className="text-sm font-mono font-semibold text-slate-900">
+            <div className="hidden sm:flex items-center gap-2 px-4 py-2.5 rounded-xl bg-white border border-stone-200">
+              <Clock className="w-4 h-4 text-stone-400" />
+              <span className="text-sm text-stone-500">Cập nhật:</span>
+              <span className="text-sm font-mono font-semibold text-stone-800">
                 {format(lastUpdated, "HH:mm:ss")}
               </span>
             </div>
             <Button
               variant="outline"
               size="sm"
-              className="gap-2 hover:bg-slate-100"
+              className="gap-2 h-10 px-4 rounded-xl border-stone-200 bg-white hover:bg-stone-50"
               onClick={loadDashboardData}
               disabled={isLoading}
             >
               <RefreshCw className={cn("w-4 h-4", isLoading && "animate-spin")} />
-              Làm mới
+              <span className="hidden sm:inline">Làm mới</span>
             </Button>
           </div>
         </div>
 
-        {/* Hero Stats Card */}
-        <HeroStatsCard
-          total={stats.totalVehiclesToday}
-          inStation={stats.vehiclesInStation}
-          departed={stats.vehiclesDepartedToday}
-          label="TỔNG XE HOẠT ĐỘNG HÔM NAY"
-          isLoading={isLoading}
-          onViewDetails={() => navigate("/dieu-do")}
-        />
+        {/* Overview Tab */}
+        <div className="flex items-center gap-1 border-b border-stone-200 pb-2">
+          <button className="px-4 py-2 text-sm font-medium text-stone-900 border-b-2 border-stone-900">
+            Tổng quan
+          </button>
+        </div>
 
-        {/* Metric Cards Grid */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-          <MetricCard
-            title="Xe trong bến"
-            value={stats.vehiclesInStation}
-            icon={Bus}
-            variant="blue"
-            subtitle="Đang chờ xuất bến"
+        {/* 6 Stat Cards Row */}
+        <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-4">
+          <TrendStatCard
+            category="Tổng xe"
+            categoryColor="orange"
+            value={stats.totalVehiclesToday}
+            subtitle="Toàn bộ hoạt động"
+            trend={{
+              direction: "up",
+              value: "+8%",
+              description: "tuần này",
+            }}
             isLoading={isLoading}
           />
-          <MetricCard
-            title="Xe đã xuất bến"
+          <TrendStatCard
+            category="Đã xuất bến"
+            categoryColor="green"
             value={stats.vehiclesDepartedToday}
-            icon={CheckCircle}
-            variant="emerald"
-            subtitle="Trong ngày hôm nay"
+            subtitle="So với hôm qua"
+            trend={{
+              direction: "up",
+              value: "+23%",
+              description: "hiệu quả",
+            }}
             isLoading={isLoading}
           />
-          <MetricCard
-            title="Doanh thu"
+          <TrendStatCard
+            category="Trong bến"
+            categoryColor="blue"
+            value={stats.vehiclesInStation}
+            subtitle="Đang chờ xuất bến"
+            trend={{
+              direction: "attention",
+              value: "",
+              description: "Cần theo dõi",
+            }}
+            isLoading={isLoading}
+          />
+          <TrendStatCard
+            category="Doanh thu"
+            categoryColor="amber"
             value={stats.revenueToday}
-            icon={Banknote}
-            variant="amber"
             subtitle="VNĐ trong ngày"
+            trend={{
+              direction: "up",
+              value: "+12%",
+              description: "so với hôm qua",
+            }}
+            isLoading={isLoading}
+            isCurrency
+          />
+          <TrendStatCard
+            category="Hoạt động"
+            categoryColor="purple"
+            value={recentActivity.length}
+            subtitle="Cập nhật mới"
+            trend={{
+              direction: "up",
+              value: "",
+              description: "Đang hoạt động",
+            }}
             isLoading={isLoading}
           />
-          <MetricCard
-            title="Cần xử lý"
-            value={stats.invalidVehicles}
-            icon={AlertTriangle}
-            variant="rose"
+          <TrendStatCard
+            category="Cảnh báo"
+            categoryColor="rose"
+            value={warnings.length}
             subtitle="Giấy tờ hết hạn"
+            trend={{
+              direction: warnings.length > 0 ? "attention" : "up",
+              value: warnings.length > 0 ? `${warnings.length}` : "",
+              description: warnings.length > 0 ? "cần xử lý" : "Ổn định",
+            }}
             isLoading={isLoading}
-            isPulsing={stats.invalidVehicles > 0}
           />
         </div>
 
-        {/* Main Content Grid */}
+        {/* Charts Row 1: Trend + Weekly Progress */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {/* Live Activity Feed */}
-          <Card className="lg:col-span-2 border-0 shadow-lg bg-white/80 backdrop-blur">
-            <CardHeader className="pb-4">
+          {/* Vehicle Trend Chart - 2/3 width */}
+          <Card className="lg:col-span-2 border border-stone-200 bg-white rounded-xl">
+            <CardHeader className="pb-2">
+              <CardTitle className="text-base font-semibold text-stone-900">
+                Xu hướng hoạt động xe
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <VehicleTrendChart data={chartData} isLoading={isLoading} />
+            </CardContent>
+          </Card>
+
+          {/* Weekly Progress Chart - 1/3 width */}
+          <Card className="border border-stone-200 bg-white rounded-xl">
+            <CardHeader className="pb-2">
+              <CardTitle className="text-base font-semibold text-stone-900">
+                Tiến độ tuần
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <WeeklyProgressChart data={weeklyStats} isLoading={isLoading} />
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* Charts Row 2: Status + Route + Monthly Breakdown */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {/* Vehicles by Status - Donut */}
+          <Card className="border border-stone-200 bg-white rounded-xl">
+            <CardHeader className="pb-2">
+              <CardTitle className="text-base font-semibold text-stone-900">
+                Xe theo trạng thái
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <VehiclesByStatusChart
+                inStation={stats.vehiclesInStation}
+                departed={stats.vehiclesDepartedToday}
+                total={stats.totalVehiclesToday}
+                isLoading={isLoading}
+              />
+            </CardContent>
+          </Card>
+
+          {/* Vehicles by Route - Donut */}
+          <Card className="border border-stone-200 bg-white rounded-xl">
+            <CardHeader className="pb-2">
+              <CardTitle className="text-base font-semibold text-stone-900">
+                Xe theo tuyến
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <VehiclesByRouteChart
+                data={routeBreakdown}
+                isLoading={isLoading}
+              />
+            </CardContent>
+          </Card>
+
+          {/* Monthly Breakdown - Stacked Bar */}
+          <Card className="border border-stone-200 bg-white rounded-xl">
+            <CardHeader className="pb-2">
               <div className="flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <div className="p-2 rounded-lg bg-gradient-to-br from-indigo-500 to-purple-600">
-                    <Radio className="w-5 h-5 text-white" />
+                <CardTitle className="text-base font-semibold text-stone-900">
+                  Thống kê theo tháng
+                </CardTitle>
+                <div className="flex items-center gap-3 text-xs">
+                  <div className="flex items-center gap-1">
+                    <span className="w-2 h-2 rounded-full bg-emerald-500" />
+                    <span className="text-stone-500">Xuất bến</span>
                   </div>
-                  <div>
-                    <CardTitle className="text-lg font-bold text-slate-900">
-                      Hoạt động trực tiếp
-                    </CardTitle>
-                    <p className="text-sm text-slate-500">
-                      Cập nhật realtime từ bến xe
-                    </p>
+                  <div className="flex items-center gap-1">
+                    <span className="w-2 h-2 rounded-full bg-amber-500" />
+                    <span className="text-stone-500">Chờ</span>
                   </div>
-                </div>
-                <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-slate-100">
-                  <LiveBeacon size="small" />
-                  <span className="text-xs font-semibold text-slate-600">
-                    {recentActivity.length} hoạt động
-                  </span>
+                  <div className="flex items-center gap-1">
+                    <span className="w-2 h-2 rounded-full bg-stone-300" />
+                    <span className="text-stone-500">Khác</span>
+                  </div>
                 </div>
               </div>
             </CardHeader>
             <CardContent>
-              <LiveActivityFeed activities={recentActivity} isLoading={isLoading} />
+              <MonthlyBreakdownChart data={monthlyStats} isLoading={isLoading} />
             </CardContent>
           </Card>
-
-          {/* Right Sidebar */}
-          <div className="space-y-6">
-            {/* Heat Map Calendar */}
-            <Card className="border-0 shadow-lg bg-white/80 backdrop-blur">
-              <CardHeader className="pb-3">
-                <div className="flex items-center gap-3">
-                  <div className="p-2 rounded-lg bg-gradient-to-br from-emerald-500 to-teal-600">
-                    <Calendar className="w-5 h-5 text-white" />
-                  </div>
-                  <div>
-                    <CardTitle className="text-lg font-bold text-slate-900">
-                      Biểu đồ nhiệt
-                    </CardTitle>
-                    <p className="text-sm text-slate-500">
-                      Tháng {format(new Date(), "MM/yyyy")}
-                    </p>
-                  </div>
-                </div>
-              </CardHeader>
-              <CardContent>
-                <HeatMapCalendar
-                  data={chartData}
-                  selectedDate={selectedDate}
-                  onSelectDate={setSelectedDate}
-                />
-              </CardContent>
-            </Card>
-
-            {/* Quick Stats */}
-            <Card className="border-0 shadow-lg bg-white/80 backdrop-blur">
-              <CardHeader className="pb-3">
-                <div className="flex items-center gap-3">
-                  <div className="p-2 rounded-lg bg-gradient-to-br from-amber-500 to-orange-600">
-                    <Sparkles className="w-5 h-5 text-white" />
-                  </div>
-                  <CardTitle className="text-lg font-bold text-slate-900">
-                    Thống kê nhanh
-                  </CardTitle>
-                </div>
-              </CardHeader>
-              <CardContent className="space-y-3">
-                <QuickStatCard
-                  label="Tổng lượt xe"
-                  value={totalVehiclesToday}
-                  icon={Bus}
-                  color="blue"
-                />
-                {peakHour && (
-                  <QuickStatCard
-                    label={`Cao điểm (${peakHour.hour})`}
-                    value={`${peakHour.count} xe`}
-                    icon={TrendingUp}
-                    color="emerald"
-                  />
-                )}
-                <QuickStatCard
-                  label="Cảnh báo giấy tờ"
-                  value={warnings.length}
-                  icon={FileWarning}
-                  color="rose"
-                />
-
-                {/* Quick Actions */}
-                <div className="pt-4 border-t border-slate-100 space-y-2">
-                  <Button
-                    variant="outline"
-                    className="w-full justify-start gap-3 h-11"
-                    onClick={() => setVehicleHistoryOpen(true)}
-                  >
-                    <History className="w-4 h-4" />
-                    Lịch sử chỉnh sửa
-                  </Button>
-                  <Button
-                    variant="outline"
-                    className="w-full justify-start gap-3 h-11"
-                    onClick={loadDashboardData}
-                  >
-                    <RefreshCw className="w-4 h-4" />
-                    Làm mới dữ liệu
-                  </Button>
-                </div>
-              </CardContent>
-            </Card>
-          </div>
         </div>
 
         {/* Warnings Table */}

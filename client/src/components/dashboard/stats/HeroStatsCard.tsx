@@ -1,4 +1,4 @@
-import { Gauge, ChevronRight } from "lucide-react";
+import { Bus, ChevronRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useAnimatedCounter } from "@/hooks/useAnimatedCounter";
 import { LiveBeacon } from "./LiveBeacon";
@@ -25,68 +25,64 @@ export function HeroStatsCard({
   const animatedDeparted = useAnimatedCounter(isLoading ? 0 : departed, 2000);
 
   return (
-    <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 p-6 shadow-2xl">
-      {/* Animated Background Grid */}
-      <div className="absolute inset-0 opacity-10">
+    <div className="relative overflow-hidden rounded-2xl bg-stone-800 p-6 shadow-xl shadow-stone-800/20">
+      {/* Subtle Background Pattern */}
+      <div className="absolute inset-0 opacity-5">
         <div
           className="absolute inset-0"
           style={{
-            backgroundImage: `linear-gradient(rgba(59, 130, 246, 0.3) 1px, transparent 1px),
-                           linear-gradient(90deg, rgba(59, 130, 246, 0.3) 1px, transparent 1px)`,
-            backgroundSize: "40px 40px",
+            backgroundImage: `radial-gradient(circle at 2px 2px, white 1px, transparent 0)`,
+            backgroundSize: "24px 24px",
           }}
         />
       </div>
 
-      {/* Glow Effects */}
-      <div className="absolute top-0 right-0 w-96 h-96 bg-blue-500/20 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2" />
-      <div className="absolute bottom-0 left-0 w-64 h-64 bg-cyan-500/20 rounded-full blur-3xl translate-y-1/2 -translate-x-1/2" />
+      {/* Subtle Glow */}
+      <div className="absolute top-0 right-0 w-64 h-64 bg-emerald-500/10 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2" />
 
       <div className="relative">
         {/* Header */}
-        <div className="flex items-center justify-between mb-4">
-          <div className="flex items-center gap-3">
-            <div className="p-2.5 rounded-xl bg-gradient-to-br from-blue-500 to-cyan-500 shadow-lg shadow-blue-500/30">
-              <Gauge className="w-6 h-6 text-white" />
+        <div className="flex items-center justify-between mb-6">
+          <div className="flex items-center gap-4">
+            <div className="p-3 rounded-xl bg-emerald-500">
+              <Bus className="w-6 h-6 text-white" />
             </div>
             <div>
-              <h2 className="text-lg font-bold text-white">{label}</h2>
-              <div className="flex items-center gap-2 mt-0.5">
+              <h2 className="text-base font-semibold text-stone-300 uppercase tracking-wide">{label}</h2>
+              <div className="flex items-center gap-2 mt-1">
                 <LiveBeacon size="small" />
-                <span className="text-xs text-emerald-400 font-medium">
+                <span className="text-sm text-emerald-400 font-medium">
                   Đang hoạt động
                 </span>
               </div>
             </div>
           </div>
           <div className="text-right">
-            <p className="text-4xl font-black text-white tracking-tight">
+            <p className="font-display text-5xl font-bold text-white tracking-tight">
               {animatedTotal}
-              <span className="text-lg text-slate-400 font-medium ml-1">
-                lượt
-              </span>
             </p>
+            <p className="text-sm text-stone-400 mt-1">lượt xe</p>
           </div>
         </div>
 
         {/* Stats Row */}
-        <div className="flex items-center justify-between pt-4 border-t border-slate-700/50">
-          <div className="flex items-center gap-4">
-            <div className="flex items-center gap-2">
-              <div className="w-3 h-3 rounded-full bg-blue-500" />
+        <div className="flex items-center justify-between pt-5 border-t border-stone-700">
+          <div className="flex items-center gap-6">
+            <div className="flex items-center gap-3">
+              <div className="w-2.5 h-2.5 rounded-full bg-blue-400" />
               <div>
-                <p className="text-slate-400 text-xs">Trong bến</p>
-                <p className="text-xl font-bold text-white">
+                <p className="text-stone-400 text-xs font-medium">Trong bến</p>
+                <p className="text-2xl font-bold text-white mt-0.5">
                   {animatedInStation}
                 </p>
               </div>
             </div>
-            <div className="h-8 w-px bg-slate-700" />
-            <div className="flex items-center gap-2">
-              <div className="w-3 h-3 rounded-full bg-emerald-500" />
+            <div className="h-10 w-px bg-stone-700" />
+            <div className="flex items-center gap-3">
+              <div className="w-2.5 h-2.5 rounded-full bg-emerald-400" />
               <div>
-                <p className="text-slate-400 text-xs">Đã xuất bến</p>
-                <p className="text-xl font-bold text-emerald-400">
+                <p className="text-stone-400 text-xs font-medium">Đã xuất bến</p>
+                <p className="text-2xl font-bold text-emerald-400 mt-0.5">
                   {animatedDeparted}
                 </p>
               </div>
@@ -94,7 +90,7 @@ export function HeroStatsCard({
           </div>
           <Button
             variant="ghost"
-            className="text-slate-300 hover:text-white hover:bg-slate-700/50 gap-1 text-sm"
+            className="text-stone-300 hover:text-white hover:bg-stone-700 gap-1.5 text-sm rounded-xl px-4"
             onClick={onViewDetails}
           >
             Xem chi tiết

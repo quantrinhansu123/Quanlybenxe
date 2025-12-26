@@ -1,4 +1,4 @@
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Link, useLocation } from "react-router-dom"
 import { Menu, X, ChevronDown } from "lucide-react"
 import { Button } from "@/components/ui/button"
@@ -129,8 +129,18 @@ const navItems: NavItem[] = [
 export function PublicHeader() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
   const [openDropdown, setOpenDropdown] = useState<string | null>(null)
+  const [scrolled, setScrolled] = useState(false)
   const location = useLocation()
   const { isAuthenticated } = useAuthStore()
+
+  // Track scroll for header styling
+  useEffect(() => {
+    const handleScroll = () => {
+      setScrolled(window.scrollY > 20)
+    }
+    window.addEventListener("scroll", handleScroll)
+    return () => window.removeEventListener("scroll", handleScroll)
+  }, [])
 
   const isActive = (path: string) => {
     if (path === "/") {
@@ -144,64 +154,78 @@ export function PublicHeader() {
   }
 
   return (
-    <header className="sticky top-0 z-50 w-full border-b border-gray-200 bg-white shadow-sm">
-      <div className="container mx-auto px-4">
-        <div className="flex h-16 items-center justify-between">
-          {/* Logo */}
-          <Link to="/" className="flex items-center gap-3">
+    <header
+      className={`fixed top-0 left-0 right-0 z-50 transition-all duration-300 ${
+        scrolled
+          ? "bg-white/95 backdrop-blur-md shadow-sm border-b border-stone-200/50"
+          : "bg-white border-b border-stone-100"
+      }`}
+    >
+      <div className="container mx-auto px-4 lg:px-8">
+        <div className="flex h-16 lg:h-18 items-center justify-between">
+          {/* Logo - Elegant Typography */}
+          <Link to="/" className="flex items-center gap-3 group">
             <img
               src={logo}
               alt="ABC C&T"
-              className="h-12 w-auto"
+              className="h-10 lg:h-11 w-auto transition-transform group-hover:scale-105"
             />
-            <span className="text-xl font-bold text-gray-900">ABC C&T</span>
+            <span className="font-display text-xl lg:text-2xl font-semibold text-stone-800 tracking-tight">
+              ABC C&T
+            </span>
           </Link>
 
-          {/* Desktop Navigation */}
-          <nav className="hidden lg:flex items-center gap-1">
+          {/* Desktop Navigation - Centered */}
+          <nav className="hidden lg:flex items-center">
             {navItems.map((item) => (
               <div key={item.label} className="relative group">
                 <Link
                   to={item.path}
-                  className={`flex items-center gap-1 px-4 py-2 rounded-md text-sm font-medium transition-colors ${
+                  className={`relative flex items-center gap-1.5 px-4 py-2 text-sm font-medium transition-colors ${
                     isActive(item.path)
-                      ? "text-primary bg-primary/10"
-                      : "text-gray-700 hover:text-primary hover:bg-gray-50"
+                      ? "text-emerald-600"
+                      : "text-stone-600 hover:text-stone-900"
                   }`}
                   onClick={() => !item.hasDropdown && setOpenDropdown(null)}
                   onMouseEnter={() => item.hasDropdown && setOpenDropdown(item.label)}
                 >
                   {item.label}
                   {item.hasDropdown && (
-                    <ChevronDown className="h-4 w-4" />
+                    <ChevronDown className={`h-3.5 w-3.5 transition-transform duration-200 ${
+                      openDropdown === item.label ? "rotate-180" : ""
+                    }`} />
+                  )}
+                  {/* Active indicator */}
+                  {isActive(item.path) && (
+                    <span className="absolute bottom-0 left-4 right-4 h-0.5 bg-emerald-500 rounded-full" />
                   )}
                 </Link>
 
-                {/* Dropdown Menu */}
+                {/* Mega Menu Dropdown */}
                 {item.hasDropdown && item.dropdownCategories && (
                   <div
-                    className={`absolute top-full left-0 mt-1 bg-white rounded-lg shadow-lg border border-gray-200 py-4 transition-all duration-200 ${
+                    className={`absolute top-full left-1/2 -translate-x-1/2 mt-2 bg-white rounded-2xl shadow-xl shadow-stone-200/50 border border-stone-100 py-6 transition-all duration-200 ${
                       openDropdown === item.label
-                        ? "opacity-100 visible"
-                        : "opacity-0 invisible"
+                        ? "opacity-100 visible translate-y-0"
+                        : "opacity-0 invisible -translate-y-2"
                     }`}
-                    style={{ width: "max-content", minWidth: "800px" }}
+                    style={{ width: "max-content", minWidth: "720px" }}
                     onMouseEnter={() => setOpenDropdown(item.label)}
                     onMouseLeave={() => setOpenDropdown(null)}
                   >
-                    <div className="grid grid-cols-4 gap-6 px-6">
+                    <div className="grid grid-cols-4 gap-8 px-8">
                       {item.dropdownCategories.map((category) => (
-                        <div key={category.path} className="min-w-[180px]">
+                        <div key={category.path} className="min-w-[160px]">
                           <Link
                             to={category.path}
-                            className={`block mb-3 pb-2 font-bold text-sm text-gray-900 border-b-2 ${
+                            className={`block mb-3 pb-2 text-xs font-bold tracking-wide text-stone-400 uppercase border-b-2 transition-colors hover:text-stone-600 ${
                               category.underlineColor === "teal"
-                                ? "border-teal-500"
+                                ? "border-emerald-400"
                                 : category.underlineColor === "purple"
-                                ? "border-purple-600"
+                                ? "border-violet-400"
                                 : category.underlineColor === "amber"
-                                ? "border-amber-600"
-                                : "border-gray-600"
+                                ? "border-amber-400"
+                                : "border-stone-300"
                             }`}
                             onClick={() => setOpenDropdown(null)}
                           >
@@ -212,7 +236,7 @@ export function PublicHeader() {
                               <li key={subItem.path}>
                                 <Link
                                   to={subItem.path}
-                                  className="block text-sm text-teal-600 hover:text-primary hover:underline transition-colors"
+                                  className="block text-sm text-stone-600 hover:text-emerald-600 transition-colors"
                                   onClick={() => setOpenDropdown(null)}
                                 >
                                   {subItem.label}
@@ -225,12 +249,14 @@ export function PublicHeader() {
                     </div>
                   </div>
                 )}
+
+                {/* Simple Dropdown */}
                 {item.hasDropdown && item.dropdownItems && !item.dropdownCategories && (
                   <div
-                    className={`absolute top-full left-0 mt-1 w-64 bg-white rounded-lg shadow-lg border border-gray-200 py-2 transition-all duration-200 ${
+                    className={`absolute top-full left-0 mt-2 w-72 bg-white rounded-xl shadow-xl shadow-stone-200/50 border border-stone-100 py-2 transition-all duration-200 ${
                       openDropdown === item.label
-                        ? "opacity-100 visible"
-                        : "opacity-0 invisible"
+                        ? "opacity-100 visible translate-y-0"
+                        : "opacity-0 invisible -translate-y-2"
                     }`}
                     onMouseEnter={() => setOpenDropdown(item.label)}
                     onMouseLeave={() => setOpenDropdown(null)}
@@ -239,7 +265,7 @@ export function PublicHeader() {
                       <Link
                         key={dropdownItem.path}
                         to={dropdownItem.path}
-                        className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 hover:text-primary transition-colors"
+                        className="block px-4 py-2.5 text-sm text-stone-600 hover:bg-stone-50 hover:text-emerald-600 transition-colors"
                         onClick={() => setOpenDropdown(null)}
                       >
                         {dropdownItem.label}
@@ -252,18 +278,23 @@ export function PublicHeader() {
           </nav>
 
           {/* Right side actions */}
-          <div className="hidden lg:flex items-center gap-4">
+          <div className="hidden lg:flex items-center gap-3">
             {isAuthenticated ? (
               <UserDropdown variant="desktop" />
             ) : (
               <>
                 <Link to="/login">
-                  <Button variant="outline" size="sm">
+                  <Button
+                    variant="ghost"
+                    className="text-stone-600 hover:text-stone-900 hover:bg-stone-100 font-medium"
+                  >
                     Đăng nhập
                   </Button>
                 </Link>
                 <Link to="/lien-he">
-                  <Button size="sm">Liên hệ</Button>
+                  <Button className="bg-emerald-600 hover:bg-emerald-700 text-white font-medium px-6 rounded-full shadow-sm shadow-emerald-500/20">
+                    Liên hệ
+                  </Button>
                 </Link>
               </>
             )}
@@ -273,7 +304,7 @@ export function PublicHeader() {
           <Button
             variant="ghost"
             size="icon"
-            className="lg:hidden"
+            className="lg:hidden text-stone-700"
             onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
             aria-label="Toggle menu"
           >
@@ -287,16 +318,16 @@ export function PublicHeader() {
 
         {/* Mobile Navigation */}
         {mobileMenuOpen && (
-          <div className="lg:hidden border-t border-gray-200 py-4">
-            <nav className="flex flex-col gap-2">
+          <div className="lg:hidden border-t border-stone-100 py-4 bg-white">
+            <nav className="flex flex-col gap-1">
               {navItems.map((item) => (
                 <div key={item.label}>
                   <Link
                     to={item.path}
-                    className={`flex items-center justify-between px-4 py-2 rounded-md text-sm font-medium ${
+                    className={`flex items-center justify-between px-4 py-3 rounded-lg text-sm font-medium transition-colors ${
                       isActive(item.path)
-                        ? "text-primary bg-primary/10"
-                        : "text-gray-700"
+                        ? "text-emerald-600 bg-emerald-50"
+                        : "text-stone-700 hover:bg-stone-50"
                     }`}
                     onClick={() => {
                       if (item.hasDropdown) {
@@ -318,15 +349,15 @@ export function PublicHeader() {
                   {item.hasDropdown &&
                     item.dropdownCategories &&
                     openDropdown === item.label && (
-                      <div className="mt-1 ml-4 space-y-4">
+                      <div className="mt-1 ml-4 space-y-4 py-2">
                         {item.dropdownCategories.map((category) => (
                           <div key={category.path}>
                             <Link
                               to={category.path}
-                              className={`block mb-2 pb-1 font-bold text-sm text-gray-900 border-b-2 ${
+                              className={`block mb-2 pb-1 font-semibold text-xs tracking-wide text-stone-400 uppercase border-b ${
                                 category.underlineColor === "teal"
-                                  ? "border-teal-500"
-                                  : "border-gray-600"
+                                  ? "border-emerald-300"
+                                  : "border-stone-200"
                               }`}
                               onClick={() => setMobileMenuOpen(false)}
                             >
@@ -337,7 +368,7 @@ export function PublicHeader() {
                                 <li key={subItem.path}>
                                   <Link
                                     to={subItem.path}
-                                    className="block px-2 py-1 text-sm text-teal-600 rounded-md hover:bg-gray-50"
+                                    className="block px-2 py-1.5 text-sm text-stone-600 rounded-md hover:bg-stone-50"
                                     onClick={() => setMobileMenuOpen(false)}
                                   >
                                     {subItem.label}
@@ -353,12 +384,12 @@ export function PublicHeader() {
                     item.dropdownItems &&
                     !item.dropdownCategories &&
                     openDropdown === item.label && (
-                      <div className="mt-1 ml-4 space-y-1">
+                      <div className="mt-1 ml-4 space-y-1 py-2">
                         {item.dropdownItems.map((dropdownItem) => (
                           <Link
                             key={dropdownItem.path}
                             to={dropdownItem.path}
-                            className="block px-4 py-2 text-sm text-gray-600 rounded-md hover:bg-gray-50"
+                            className="block px-4 py-2 text-sm text-stone-600 rounded-lg hover:bg-stone-50"
                             onClick={() => setMobileMenuOpen(false)}
                           >
                             {dropdownItem.label}
@@ -368,7 +399,7 @@ export function PublicHeader() {
                     )}
                 </div>
               ))}
-              <div className="mt-4 pt-4 border-t border-gray-200 flex flex-col gap-2">
+              <div className="mt-4 pt-4 border-t border-stone-100 flex flex-col gap-2 px-4">
                 {isAuthenticated ? (
                   <UserDropdown
                     variant="mobile"
@@ -377,12 +408,12 @@ export function PublicHeader() {
                 ) : (
                   <>
                     <Link to="/login" onClick={() => setMobileMenuOpen(false)}>
-                      <Button variant="outline" className="w-full" size="sm">
+                      <Button variant="outline" className="w-full rounded-lg border-stone-200">
                         Đăng nhập
                       </Button>
                     </Link>
                     <Link to="/lien-he" onClick={() => setMobileMenuOpen(false)}>
-                      <Button className="w-full" size="sm">
+                      <Button className="w-full rounded-lg bg-emerald-600 hover:bg-emerald-700">
                         Liên hệ
                       </Button>
                     </Link>
@@ -396,4 +427,3 @@ export function PublicHeader() {
     </header>
   )
 }
-

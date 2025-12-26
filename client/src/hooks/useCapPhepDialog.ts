@@ -1,13 +1,12 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
 import { toast } from "react-toastify";
 import { format, startOfMonth, endOfMonth } from "date-fns";
-import { routeService } from "@/services/route.service";
 import { scheduleService } from "@/services/schedule.service";
 import { dispatchService } from "@/services/dispatch.service";
 import { vehicleService } from "@/services/vehicle.service";
-import { vehicleBadgeService, type VehicleBadge } from "@/services/vehicle-badge.service";
+import { type VehicleBadge } from "@/services/vehicle-badge.service";
 import { serviceChargeService } from "@/services/service-charge.service";
-import { operatorService } from "@/services/operator.service";
+import { quanlyDataService, type QuanLyVehicle, type QuanLyRoute, type QuanLyOperator, type QuanLyBadge } from "@/services/quanly-data.service";
 import { useUIStore } from "@/store/ui.store";
 import type { Shift } from "@/services/shift.service";
 import type { DispatchRecord, Route, Schedule, Vehicle, Driver, ServiceCharge, Operator } from "@/types";
@@ -140,41 +139,66 @@ export function useCapPhepDialog(record: DispatchRecord, onClose: () => void, on
 
   const loadInitialData = useCallback(async () => {
     try {
-      const promises: Promise<unknown>[] = [
-        routeService.getLegacy(),
-        operatorService.getLegacy(),
-        vehicleService.getAll(undefined, true),
-        vehicleBadgeService.getAll(),
-      ];
+      // Use unified endpoint - 1 request instead of 4, with frontend caching
+      const [quanlyData, schedulesData, chargesData] = await Promise.all([
+        quanlyDataService.getAll(), // Gets routes, operators, vehicles, badges in 1 call
+        record.routeId ? scheduleService.getAll(record.routeId, undefined, true) : Promise.resolve([]),
+        record.id ? serviceChargeService.getAll(record.id) : Promise.resolve([]),
+      ]);
 
-      if (record.routeId) promises.push(scheduleService.getAll(record.routeId, undefined, true));
-      if (record.id) promises.push(serviceChargeService.getAll(record.id));
-
-      const results = await Promise.all(promises);
-
-      const legacyRoutesData = results[0] as unknown[];
-      const operatorsData = results[1] as Operator[];
-      const vehiclesData = results[2] as Vehicle[];
-      const badgesData = results[3] as VehicleBadge[];
-
-      let nextIdx = 4;
-      const schedulesData = record.routeId ? results[nextIdx++] as Schedule[] : [];
-      const chargesData = record.id ? results[nextIdx] as ServiceCharge[] : [];
-
-      const routesForDropdown = (legacyRoutesData as { id: string; routePath?: string; departureProvince?: string; arrivalProvince?: string; routeCode?: string; routeType?: string; distanceKm?: number; arrivalProvinceOld?: string }[]).map((r) => ({
+      // Map routes from quanly-data format to dropdown format
+      const routesForDropdown = (quanlyData.routes || []).map((r: QuanLyRoute) => ({
         id: r.id,
-        routeName: r.routePath || `${r.departureProvince} - ${r.arrivalProvince}`,
-        routeCode: r.routeCode,
-        routeType: r.routeType,
-        distanceKm: r.distanceKm,
+        routeName: r.name || `${r.startPoint} - ${r.endPoint}`,
+        routeCode: r.code,
+        routeType: '',
+        distanceKm: r.distance ? parseFloat(r.distance) : undefined,
         destinationId: null,
-        destination: { id: null, name: r.arrivalProvince, code: r.arrivalProvinceOld },
+        destination: { id: null, name: r.endPoint, code: '' },
       }));
+
+      // Map vehicles from quanly-data format
+      const vehiclesData = (quanlyData.vehicles || []).map((v: QuanLyVehicle) => ({
+        id: v.id,
+        plateNumber: v.plateNumber,
+        seatCapacity: v.seatCapacity,
+        operatorName: v.operatorName,
+        vehicleType: v.vehicleType,
+        isActive: v.isActive,
+        source: v.source,
+        operatorId: null,
+        operator: { id: null, name: v.operatorName, code: '' },
+      })) as unknown as Vehicle[];
+
+      // Map operators from quanly-data format
+      const operatorsData = (quanlyData.operators || []).map((o: QuanLyOperator) => ({
+        id: o.id,
+        name: o.name,
+        province: o.province,
+        phone: o.phone,
+        email: o.email,
+        address: o.address,
+        representativeName: o.representativeName,
+        isActive: o.isActive,
+      })) as Operator[];
+
+      // Map badges from quanly-data format
+      const badgesData = (quanlyData.badges || []).map((b: QuanLyBadge) => ({
+        id: b.id,
+        badge_number: b.badge_number,
+        license_plate_sheet: b.license_plate_sheet,
+        badge_type: b.badge_type,
+        badge_color: b.badge_color,
+        issue_date: b.issue_date,
+        expiry_date: b.expiry_date,
+        status: b.status,
+        vehicle_id: b.id,
+      })) as VehicleBadge[];
 
       setRoutes(routesForDropdown as unknown as Route[]);
       setOperators(operatorsData);
       setVehicles(vehiclesData);
-      setVehicleBadges(badgesData || []);
+      setVehicleBadges(badgesData);
 
       if (record.routeId) {
         setRouteId(record.routeId);
