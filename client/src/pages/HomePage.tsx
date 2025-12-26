@@ -15,7 +15,7 @@ import {
   Bus,
   FileText,
   Lock,
-  Sparkles,
+  Layers,
   TrendingUp,
   Globe
 } from "lucide-react"
@@ -76,25 +76,25 @@ const features = [
     icon: FileCheck,
     title: "Lệnh vận chuyển điện tử",
     description: "Ký số lệnh vận chuyển theo chuẩn pháp lý, lưu trữ 3 năm, không giới hạn số lượng.",
-    color: "bg-blue-500"
+    color: "bg-emerald-600"
   },
   {
     icon: CreditCard,
     title: "Thanh toán tự động",
     description: "Hệ thống thanh toán điện tử đa kênh, tích hợp mọi phương thức thanh toán hiện đại.",
-    color: "bg-emerald-500"
+    color: "bg-teal-600"
   },
   {
     icon: Shield,
     title: "Cổng vào ra tự động",
     description: "Nhận diện biển số, kiểm tra lệnh điện tử real-time, quản lý xe vào ra tự động.",
-    color: "bg-violet-500"
+    color: "bg-emerald-700"
   },
   {
     icon: Smartphone,
     title: "Vé xe điện tử",
     description: "Vé điện tử hợp pháp, kết nối 400+ bến xe, đồng bộ dữ liệu lệnh điện tử tức thì.",
-    color: "bg-orange-500"
+    color: "bg-teal-700"
   }
 ]
 
@@ -312,9 +312,9 @@ export default function HomePage() {
       <section className="py-24 bg-stone-50">
         <div className="container mx-auto px-4 lg:px-8">
           <div className="text-center mb-16">
-            <div className="inline-flex items-center gap-2 px-4 py-2 bg-white rounded-full shadow-sm mb-6 border border-stone-100">
-              <Sparkles className="w-4 h-4 text-orange-500" />
-              <span className="text-sm text-stone-600 font-medium">Tính năng nổi bật</span>
+            <div className="inline-flex items-center gap-2 px-4 py-2 bg-emerald-50 rounded-full mb-6 border border-emerald-100">
+              <Layers className="w-4 h-4 text-emerald-600" />
+              <span className="text-sm text-emerald-700 font-medium">Tính năng nổi bật</span>
             </div>
             <h2 className="font-display text-3xl lg:text-5xl font-medium text-stone-800 mb-4">
               Công nghệ <span className="italic">dẫn đầu</span> ngành
