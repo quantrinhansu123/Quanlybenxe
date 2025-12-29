@@ -10,6 +10,8 @@ import type { Route, Schedule } from "@/types";
 interface VehicleEntryFormProps {
   vehicleOptions: Array<{ id: string; plateNumber: string }>;
   vehicleId: string;
+  /** Display fallback for edit mode when vehicleId is legacy format */
+  editRecordPlateNumber?: string;
   entryDateTime: Date | undefined;
   confirmPassengerDrop: boolean;
   routeId: string;
@@ -31,6 +33,7 @@ interface VehicleEntryFormProps {
 export function VehicleEntryForm({
   vehicleOptions,
   vehicleId,
+  editRecordPlateNumber,
   entryDateTime,
   confirmPassengerDrop,
   routeId,
@@ -62,6 +65,7 @@ export function VehicleEntryForm({
           </Label>
           <Autocomplete
             value={vehicleId}
+            displayValue={editRecordPlateNumber}
             onChange={onVehicleSelect}
             options={vehicleOptions.map((v) => ({
               value: v.id,

@@ -194,7 +194,7 @@ async function loadQuanLyData(): Promise<QuanLyCache> {
         const badgeExpiryDate = vehicleBadgeExpiryMap.get(normalizedPlate) || ''
         
         vehicles.push({
-          id: key,
+          id: `legacy_${key}`,  // Add legacy_ prefix for Firebase RTDB vehicles
           plateNumber: plateNumber,
           seatCapacity,
           operatorName,

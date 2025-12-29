@@ -80,9 +80,13 @@ export function VehicleInfoSection({
           <FormField label="Biển số đăng ký">
             <Autocomplete
               value={registeredPlateNumber || selectedVehicle?.plateNumber || ""}
+              displayValue={record.vehiclePlateNumber}
               onChange={(value) => setRegisteredPlateNumber(value)}
               options={vehicleBadges
                 .filter(badge => badge.license_plate_sheet)
+                .filter((badge, index, self) =>
+                  self.findIndex(b => b.license_plate_sheet === badge.license_plate_sheet) === index
+                )
                 .map(badge => ({
                   value: badge.license_plate_sheet,
                   label: `${badge.license_plate_sheet} ${badge.operational_status === 'dang_chay' ? '(Đang chạy)' : '(Trong bến)'}`
@@ -133,9 +137,13 @@ export function VehicleInfoSection({
           <FormField label="Biển số khi vào">
             <Autocomplete
               value={entryPlateNumber}
+              displayValue={record.vehiclePlateNumber}
               onChange={(value) => setEntryPlateNumber(value)}
               options={vehicleBadges
                 .filter(badge => badge.license_plate_sheet)
+                .filter((badge, index, self) =>
+                  self.findIndex(b => b.license_plate_sheet === badge.license_plate_sheet) === index
+                )
                 .map(badge => ({
                   value: badge.license_plate_sheet,
                   label: `${badge.license_plate_sheet}`

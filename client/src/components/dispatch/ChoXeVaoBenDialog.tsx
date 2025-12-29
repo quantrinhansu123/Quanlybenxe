@@ -81,6 +81,7 @@ export function ChoXeVaoBenDialog({
               <VehicleEntryForm
                 vehicleOptions={vehicleOptions}
                 vehicleId={vehicleId}
+                editRecordPlateNumber={editRecord?.vehiclePlateNumber}
                 entryDateTime={entryDateTime}
                 confirmPassengerDrop={confirmPassengerDrop}
                 routeId={routeId}
