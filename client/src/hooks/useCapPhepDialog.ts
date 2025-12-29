@@ -299,7 +299,10 @@ export function useCapPhepDialog(record: DispatchRecord, onClose: () => void, on
     } catch (error) {
       console.error("Failed to load initial data:", error);
     }
-  }, [record, registeredPlateNumber, entryPlateNumber]);
+  // Note: Removed registeredPlateNumber and entryPlateNumber from deps
+  // to prevent re-running when user clears these fields
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [record]);
 
   const normalizePlate = (plate: string): string => plate.replace(/[.\-\s]/g, '').toUpperCase();
 

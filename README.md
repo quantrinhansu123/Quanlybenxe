@@ -41,19 +41,21 @@ quanlybenxe/
 ├── client/                 # React 18 frontend (Vite)
 │   └── src/
 │       ├── features/       # Feature modules (auth, dispatch, fleet)
-│       ├── pages/          # 27 lazy-loaded page components
-│       ├── components/     # 50+ shared UI components
-│       ├── services/       # API client services
+│       ├── pages/          # 47 lazy-loaded page components
+│       ├── components/     # 117 shared UI components (ui/, dispatch/, fleet/, dashboard/, etc.)
+│       ├── services/       # 20 API client services
+│       ├── hooks/          # 8 custom React hooks
 │       ├── store/          # Zustand global stores
 │       ├── types/          # TypeScript definitions
 │       └── lib/            # Utilities and helpers
 │
 ├── server/                 # Express.js backend
 │   └── src/
-│       ├── modules/        # Feature modules (dispatch, fleet, operator)
-│       ├── controllers/    # 23 HTTP request handlers
+│       ├── modules/        # 11 feature modules (auth, billing, chat, common, dispatch, fleet, operator, report, route)
+│       ├── controllers/    # 27 HTTP request handlers
 │       ├── services/       # Business logic layer
-│       ├── middleware/     # Auth, error handling, upload
+│       ├── repositories/   # Data access layer
+│       ├── middleware/     # Auth, error handling, validation
 │       ├── config/         # Database and external service config
 │       └── types/          # Shared TypeScript types
 │
@@ -86,42 +88,47 @@ quanlybenxe/
 ## Key Features
 
 ### 1. Dispatch Management (Điều Độ)
-- Create and manage dispatch orders
-- Vehicle assignment and optimization
-- Driver and passenger tracking
-- Status workflow: entered → passengers_dropped → permit_issued → paid → departed
-- Settlement and payment processing
+- Create and manage dispatch orders with multi-step workflow
+- Vehicle and driver assignment with optimization
+- Passenger manifest and real-time tracking
+- Status workflow: entered → passengers_dropped → permit_issued → paid → departure_ordered → departed → exited
+- Settlement calculation and payment processing
+- Driver performance metrics
 
 ### 2. Fleet Management (Quản Lý Xe)
-- Vehicle registry with maintenance history
-- Driver profiles and qualifications
-- Operator (company) management
-- Vehicle badges (badge types, routes)
-- Real-time vehicle location tracking
+- Vehicle registry with maintenance history and operational status
+- Driver profiles with qualifications and license management
+- Operator (company) management and configuration
+- Vehicle badges (Buýt, Tuyến cố định) with type definitions
+- Real-time vehicle location tracking via GPS
+- Badge vehicle support for specialized routes
 
 ### 3. Financial Reporting (Báo Cáo Tài Chính)
-- 20+ specialized report pages
-- Revenue and expense tracking
-- Driver salary calculations
-- Trip and mileage analytics
-- Excel export for further analysis
+- 20+ specialized report pages with export capability
+- Revenue, expense, and cash flow tracking
+- Driver salary and commission calculations
+- Trip metrics and mileage analytics
+- Period-based financial summaries
+- Excel export for analysis and external tools
 
 ### 4. Route & Location Management (Tuyến Đường)
-- Route creation and modification
+- Route creation with stop management
 - Pickup/drop-off location management
-- Geographic mapping
-- Schedule coordination
+- Geographic mapping integration
+- Schedule coordination and optimization
 
 ### 5. Shift Management (Ca Làm Việc)
-- Shift scheduling
-- Driver shift assignment
-- Shift history and analytics
+- Shift scheduling and assignment
+- Driver shift allocation and tracking
+- Shift history and performance analytics
+- Shift-based reporting
 
 ### 6. Chat Integration
-- AI-powered chat widget
-- Intent classification (what user is asking)
-- Semantic data queries
-- Context-aware responses
+- AI-powered chat widget with semantic understanding
+- Intent classification and context awareness
+- Semantic data queries across operational data
+- Multi-turn conversation support
+- Real-time response generation
 
 ---
 
@@ -261,6 +268,6 @@ Proprietary - Freelance Project
 
 ---
 
-**Last Updated:** 2025-12-21
+**Last Updated:** 2025-12-29
 **Maintainers:** Development Team
-**Status:** Active Development
+**Status:** Phase 4 Complete - Integration Testing (Phase 5) Pending

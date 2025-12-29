@@ -97,8 +97,9 @@ export function Autocomplete({
     setIsCleared(true)  // Prevent useEffect from resetting value
     setInputValue("")
     onChange?.("")
+    // Don't open dropdown after clearing - prevents accidental clicks
+    setOpen(false)
     inputRef.current?.focus()
-    setOpen(true)
   }
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
@@ -148,7 +149,10 @@ export function Autocomplete({
       </div>
       
       {open && (
-        <div className="absolute z-50 w-full mt-1 bg-white border border-gray-200 rounded-md shadow-lg max-h-60 overflow-y-auto">
+        <div
+          className="absolute z-50 w-full mt-1 bg-white border border-gray-200 rounded-md shadow-lg max-h-60 overflow-y-auto"
+          onClick={(e) => e.stopPropagation()}
+        >
           {filteredOptions.length === 0 ? (
             <div className="py-3 px-4 text-sm text-gray-500">
               Không tìm thấy kết quả
@@ -157,7 +161,10 @@ export function Autocomplete({
             filteredOptions.map((option) => (
               <div
                 key={option.value}
-                onClick={() => handleSelect(option)}
+                onClick={(e) => {
+                  e.stopPropagation()
+                  handleSelect(option)
+                }}
                 className={cn(
                   "px-4 py-2 text-sm cursor-pointer hover:bg-blue-50",
                   value === option.value && "bg-blue-100 font-medium"
