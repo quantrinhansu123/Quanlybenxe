@@ -285,8 +285,18 @@ export function useChoXeVaoBenForm({
         onClose();
       }
     } catch (error) {
-      console.error("Failed to create dispatch record:", error);
-      toast.error("Không thể tạo bản ghi điều độ. Vui lòng thử lại sau.");
+      console.error(`Failed to ${isEditMode ? 'update' : 'create'} dispatch record:`, error);
+      const axiosError = error as { response?: { data?: { error?: string } } };
+      const serverMessage = axiosError.response?.data?.error;
+      if (serverMessage) {
+        toast.error(serverMessage);
+      } else {
+        toast.error(
+          isEditMode
+            ? "Không thể cập nhật bản ghi điều độ. Vui lòng thử lại sau."
+            : "Không thể tạo bản ghi điều độ. Vui lòng thử lại sau."
+        );
+      }
     } finally {
       setIsLoading(false);
     }

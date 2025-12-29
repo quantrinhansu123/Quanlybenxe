@@ -657,9 +657,15 @@ export const updateDispatchRecord = async (req: AuthRequest, res: Response) => {
 
     // Update vehicle if changed
     if (vehicleId && vehicleId !== existingRecord.vehicle_id) {
-      const denormalized = await fetchDenormalizedData(vehicleId)
       updateData.vehicle_id = vehicleId
-      Object.assign(updateData, buildDenormalizedFields(denormalized))
+      try {
+        const denormalized = await fetchDenormalizedData(vehicleId)
+        Object.assign(updateData, buildDenormalizedFields(denormalized))
+      } catch (denormError) {
+        // Legacy vehicle (legacy_* or badge_*) - fetch may fail
+        // Keep existing denormalized data, just update the vehicle_id
+        console.warn(`[updateDispatchRecord] fetchDenormalizedData failed for ${vehicleId}:`, denormError)
+      }
     }
 
     // Update driver if changed
