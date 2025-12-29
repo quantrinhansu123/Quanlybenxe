@@ -232,11 +232,11 @@ export function useDieuDo() {
       })
       .map((v) => ({ id: v.id, plateNumber: v.plateNumber }));
     
-    // When editing, ensure the current vehicle's plateNumber is in the options
+    // When editing, ensure the current vehicle is in options with CORRECT ID
+    // Match by ID (not plate) to ensure Autocomplete finds the option
     if (dialogType === "edit" && selectedRecord?.vehicleId && selectedRecord?.vehiclePlateNumber) {
-      const normalizedEditPlate = selectedRecord.vehiclePlateNumber.replace(/[.\-\s]/g, '').toUpperCase();
       const existsInOptions = options.some(
-        (o) => o.plateNumber?.replace(/[.\-\s]/g, '').toUpperCase() === normalizedEditPlate
+        (o) => o.id === selectedRecord.vehicleId  // Match by ID for legacy/badge vehicles
       );
       if (!existsInOptions) {
         options.unshift({

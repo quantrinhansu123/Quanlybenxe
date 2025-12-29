@@ -41,6 +41,7 @@ export function useChoXeVaoBenForm({
   const [isAnimating, setIsAnimating] = useState(false);
   const [showPermitDialog, setShowPermitDialog] = useState(false);
   const [permitDispatchRecord, setPermitDispatchRecord] = useState<DispatchRecord | null>(null);
+  const [hasUserModified, setHasUserModified] = useState(false);  // Prevents vehicleId reset after user clears
   const { currentShift } = useUIStore();
 
   const getShiftIdFromCurrentShift = (): string | undefined => {
@@ -100,7 +101,8 @@ export function useChoXeVaoBenForm({
   }, [routeId]);
 
   useEffect(() => {
-    if (isEditMode && editRecord) {
+    // Only initialize from editRecord if user hasn't modified the vehicle selection
+    if (isEditMode && editRecord && !hasUserModified) {
       // Set vehicleId - editRecord.vehicleId may not match current vehicle options
       // Keep the original vehicleId for now, Autocomplete will show plateNumber from label
       setVehicleId(editRecord.vehicleId);
@@ -115,9 +117,10 @@ export function useChoXeVaoBenForm({
           .catch(console.error);
       }
     }
-  }, [isEditMode, editRecord]);
+  }, [isEditMode, editRecord, hasUserModified]);
 
   const resetForm = () => {
+    setHasUserModified(false);  // Reset flag to allow re-initialization from editRecord
     setVehicleId("");
     setRouteId("");
     setScheduleId("");
@@ -178,6 +181,7 @@ export function useChoXeVaoBenForm({
   };
 
   const handleVehicleSelect = (id: string) => {
+    setHasUserModified(true);  // Mark as user-modified to prevent reset from editRecord
     setVehicleId(id);
   };
 
