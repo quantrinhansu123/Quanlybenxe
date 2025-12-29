@@ -17,6 +17,8 @@ export interface AutocompleteProps {
   className?: string
   disabled?: boolean
   id?: string
+  /** Explicit display fallback when value doesn't match any option (e.g., legacy vehicle plate number) */
+  displayValue?: string
 }
 
 export function Autocomplete({
@@ -27,21 +29,34 @@ export function Autocomplete({
   className,
   disabled,
   id,
+  displayValue,
 }: AutocompleteProps) {
   const [open, setOpen] = useState(false)
   const [inputValue, setInputValue] = useState("")
+  const [isCleared, setIsCleared] = useState(false)
   const containerRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLInputElement>(null)
 
   // Sync input value with selected value
   useEffect(() => {
+    // Skip if user just cleared the input - prevents race condition
+    if (isCleared) return
+
     if (value) {
       const selected = options.find(opt => opt.value === value)
-      setInputValue(selected?.label || value)
+      if (selected) {
+        setInputValue(selected.label)
+      } else if (displayValue) {
+        // Use explicit fallback (e.g., plate number for legacy vehicles)
+        setInputValue(displayValue)
+      } else {
+        // Last resort: show raw value
+        setInputValue(value)
+      }
     } else {
       setInputValue("")
     }
-  }, [value, options])
+  }, [value, options, displayValue, isCleared])
 
   // Close dropdown when clicking outside
   useEffect(() => {
@@ -62,6 +77,7 @@ export function Autocomplete({
     .slice(0, 100)
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setIsCleared(false)  // Reset flag when user types
     const newValue = e.target.value
     setInputValue(newValue)
     onChange?.(newValue)
@@ -69,6 +85,7 @@ export function Autocomplete({
   }
 
   const handleSelect = (option: AutocompleteOption) => {
+    setIsCleared(false)  // Reset flag when user selects new option
     setInputValue(option.label)
     onChange?.(option.value)
     setOpen(false)
@@ -77,6 +94,7 @@ export function Autocomplete({
   const handleClear = (e: React.MouseEvent) => {
     e.stopPropagation()
     e.preventDefault()
+    setIsCleared(true)  // Prevent useEffect from resetting value
     setInputValue("")
     onChange?.("")
     inputRef.current?.focus()
