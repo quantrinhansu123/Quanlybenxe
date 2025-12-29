@@ -4,7 +4,6 @@ import { formatVietnamTime } from "@/utils/timezone";
 import { Select } from "@/components/ui/select";
 import { Autocomplete } from "@/components/ui/autocomplete";
 import { GlassCard, SectionHeader, FormField, StyledInput, StyledSelect } from "@/components/shared/styled-components";
-import type { VehicleBadge } from "@/services/vehicle-badge.service";
 import type { DispatchRecord, Schedule, Vehicle, Operator } from "@/types";
 
 interface VehicleInfoSectionProps {
@@ -12,16 +11,10 @@ interface VehicleInfoSectionProps {
   readOnly: boolean;
   permitType: string;
   setPermitType: (value: string) => void;
-  registeredPlateNumber: string;
-  setRegisteredPlateNumber: (value: string) => void;
   selectedVehicle: Vehicle | null;
-  vehicleBadges: VehicleBadge[];
-  vehicles: Vehicle[];
   vehiclesWithStatus: (Vehicle & { isBusy: boolean })[];
   replacementVehicleId: string;
   setReplacementVehicleId: (value: string) => void;
-  entryPlateNumber: string;
-  setEntryPlateNumber: (value: string) => void;
   operatorNameFromVehicle: string;
   selectedOperatorId: string;
   setSelectedOperatorId: (value: string) => void;
@@ -38,16 +31,10 @@ export function VehicleInfoSection({
   readOnly,
   permitType,
   setPermitType,
-  registeredPlateNumber,
-  setRegisteredPlateNumber,
   selectedVehicle,
-  vehicleBadges,
-  vehicles: _vehicles,
   vehiclesWithStatus,
   replacementVehicleId,
   setReplacementVehicleId,
-  entryPlateNumber,
-  setEntryPlateNumber,
   operatorNameFromVehicle,
   selectedOperatorId,
   setSelectedOperatorId,
@@ -77,24 +64,15 @@ export function VehicleInfoSection({
       />
       <div className="p-5 space-y-4">
         <div className="grid grid-cols-2 gap-4">
-          <FormField label="Biển số đăng ký">
-            <Autocomplete
-              value={registeredPlateNumber}
-              displayValue={selectedVehicle?.plateNumber || record.vehiclePlateNumber}
-              onChange={(value) => setRegisteredPlateNumber(value)}
-              options={vehicleBadges
-                .filter(badge => badge.license_plate_sheet)
-                .filter((badge, index, self) =>
-                  self.findIndex(b => b.license_plate_sheet === badge.license_plate_sheet) === index
-                )
-                .map(badge => ({
-                  value: badge.license_plate_sheet,
-                  label: `${badge.license_plate_sheet} ${badge.operational_status === 'dang_chay' ? '(Đang chạy)' : '(Trong bến)'}`
-                }))}
-              placeholder="Chọn hoặc nhập biển số"
-              disabled={readOnly}
-              className="bg-gray-50 border-gray-200 rounded-xl"
+          <FormField label="Biển số vào bến">
+            <StyledInput
+              value={record.vehiclePlateNumber || "---"}
+              readOnly
+              className="bg-gray-100 cursor-not-allowed font-medium"
             />
+            <span className="text-xs text-gray-500 mt-1 block">
+              Để sửa biển số, vui lòng edit Entry
+            </span>
           </FormField>
           <FormField label="Xe đi thay">
             <Autocomplete
@@ -134,25 +112,6 @@ export function VehicleInfoSection({
         </div>
 
         <div className="grid grid-cols-2 gap-4">
-          <FormField label="Biển số khi vào">
-            <Autocomplete
-              value={entryPlateNumber}
-              displayValue={selectedVehicle?.plateNumber || record.vehiclePlateNumber}
-              onChange={(value) => setEntryPlateNumber(value)}
-              options={vehicleBadges
-                .filter(badge => badge.license_plate_sheet)
-                .filter((badge, index, self) =>
-                  self.findIndex(b => b.license_plate_sheet === badge.license_plate_sheet) === index
-                )
-                .map(badge => ({
-                  value: badge.license_plate_sheet,
-                  label: `${badge.license_plate_sheet}`
-                }))}
-              placeholder="Nhập biển số"
-              disabled={readOnly}
-              className="bg-gray-50 border-gray-200 rounded-xl"
-            />
-          </FormField>
           <FormField label="Đơn vị vận tải">
             {operatorNameFromVehicle && !selectedOperatorId ? (
               <StyledInput

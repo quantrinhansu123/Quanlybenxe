@@ -178,16 +178,10 @@ export function CapPhepDialog({
                   readOnly={readOnly}
                   permitType={hook.permitType}
                   setPermitType={hook.setPermitType}
-                  registeredPlateNumber={hook.registeredPlateNumber}
-                  setRegisteredPlateNumber={hook.setRegisteredPlateNumber}
                   selectedVehicle={hook.selectedVehicle}
-                  vehicleBadges={hook.vehicleBadges}
-                  vehicles={hook.vehicles}
                   vehiclesWithStatus={hook.vehiclesWithStatus}
                   replacementVehicleId={hook.replacementVehicleId}
                   setReplacementVehicleId={hook.setReplacementVehicleId}
-                  entryPlateNumber={hook.entryPlateNumber}
-                  setEntryPlateNumber={hook.setEntryPlateNumber}
                   operatorNameFromVehicle={hook.operatorNameFromVehicle}
                   selectedOperatorId={hook.selectedOperatorId}
                   setSelectedOperatorId={hook.setSelectedOperatorId}
