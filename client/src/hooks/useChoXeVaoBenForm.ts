@@ -6,6 +6,7 @@ import { scheduleService } from "@/services/schedule.service";
 import { dispatchService } from "@/services/dispatch.service";
 import { driverService } from "@/services/driver.service";
 import { useUIStore } from "@/store/ui.store";
+import { parseDatabaseTimeForEdit } from "@/lib/vietnam-time";
 import type { Route, Schedule, Driver, DispatchInput, DispatchRecord } from "@/types";
 import type { Shift } from "@/services/shift.service";
 
@@ -108,7 +109,8 @@ export function useChoXeVaoBenForm({
       setVehicleId(editRecord.vehicleId);
       setRouteId(editRecord.routeId || "");
       if (editRecord.entryTime) {
-        setEntryDateTime(new Date(editRecord.entryTime));
+        // Use parseDatabaseTimeForEdit to handle "fake UTC" timezone correctly
+        setEntryDateTime(parseDatabaseTimeForEdit(editRecord.entryTime));
       }
       if (editRecord.driverId) {
         driverService

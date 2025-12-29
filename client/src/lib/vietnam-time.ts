@@ -211,3 +211,44 @@ export function isValidISODateString(dateString: string): boolean {
   }
 }
 
+/**
+ * Parse database time string to Date object for form editing.
+ * Database stores Vietnam time as "fake UTC" (e.g., "15:22Z" means 15:22 Vietnam).
+ * This function extracts the time components directly to create correct local Date.
+ *
+ * @param dateString - ISO date string from database
+ * @returns Date object representing the correct local time for form input
+ *
+ * @example
+ * parseDatabaseTimeForEdit("2024-12-29T15:22:00.000Z")
+ * // Returns: Date object showing 15:22 (not 22:22)
+ */
+export function parseDatabaseTimeForEdit(dateString: string | undefined | null): Date {
+  if (!dateString) return new Date()
+
+  try {
+    // Extract time components directly from ISO string
+    // Database stores Vietnam time as UTC, we need to preserve the values
+    const match = dateString.match(/(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})/)
+
+    if (match) {
+      const [, year, month, day, hours, minutes, seconds] = match
+      // Create local Date with extracted values (treating them as local Vietnam time)
+      return new Date(
+        parseInt(year),
+        parseInt(month) - 1,
+        parseInt(day),
+        parseInt(hours),
+        parseInt(minutes),
+        parseInt(seconds)
+      )
+    }
+
+    // Fallback: return current time
+    return new Date()
+  } catch (error) {
+    console.error("Error parsing database time for edit:", error, dateString)
+    return new Date()
+  }
+}
+
