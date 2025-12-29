@@ -28,11 +28,6 @@ export function useCapPhepDialog(record: DispatchRecord, onClose: () => void, on
   const [bedCount, setBedCount] = useState("0");
   const [hhTicketCount, setHhTicketCount] = useState("0");
   const [hhPercentage, setHhPercentage] = useState("0");
-  const [entryPlateNumber, setEntryPlateNumberInternal] = useState(record.vehiclePlateNumber || "");
-  const [registeredPlateNumber, setRegisteredPlateNumberInternal] = useState(record.vehiclePlateNumber || "");
-  // Flags to track when user explicitly clears the plate fields (prevents auto-reset)
-  const [hasUserClearedRegisteredPlate, setHasUserClearedRegisteredPlate] = useState(false);
-  const [hasUserClearedEntryPlate, setHasUserClearedEntryPlate] = useState(false);
   const [routeId, setRouteId] = useState(record.routeId || "");
   const [scheduleId, setScheduleId] = useState(record.scheduleId || "");
   const [departureTime, setDepartureTime] = useState("");
@@ -64,24 +59,6 @@ export function useCapPhepDialog(record: DispatchRecord, onClose: () => void, on
 
   const { currentShift } = useUIStore();
 
-  // Wrapper setters that track when user explicitly clears the field
-  const setRegisteredPlateNumber = useCallback((value: string) => {
-    if (value === '') {
-      setHasUserClearedRegisteredPlate(true);
-    } else {
-      setHasUserClearedRegisteredPlate(false);
-    }
-    setRegisteredPlateNumberInternal(value);
-  }, []);
-
-  const setEntryPlateNumber = useCallback((value: string) => {
-    if (value === '') {
-      setHasUserClearedEntryPlate(true);
-    } else {
-      setHasUserClearedEntryPlate(false);
-    }
-    setEntryPlateNumberInternal(value);
-  }, []);
 
   const loadSchedules = useCallback(async (rid: string) => {
     try {
@@ -242,8 +219,6 @@ export function useCapPhepDialog(record: DispatchRecord, onClose: () => void, on
           if (vehicle.bedCapacity !== undefined && vehicle.bedCapacity !== null) {
             setBedCount(vehicle.bedCapacity.toString());
           }
-          if (!registeredPlateNumber && vehicle.plateNumber) setRegisteredPlateNumberInternal(vehicle.plateNumber);
-          if (!entryPlateNumber && vehicle.plateNumber) setEntryPlateNumberInternal(vehicle.plateNumber);
           if (vehicle.operatorId) {
             setSelectedOperatorId(vehicle.operatorId);
             if (record.driver) setDrivers([record.driver]);
@@ -266,17 +241,6 @@ export function useCapPhepDialog(record: DispatchRecord, onClose: () => void, on
         }
       }
 
-      if (!vehicleFound && record.vehicleId) {
-        try {
-          const matchingBadge = badgesData.find((b: VehicleBadge) => b.vehicle_id === record.vehicleId);
-          if (matchingBadge?.license_plate_sheet) {
-            if (!registeredPlateNumber) setRegisteredPlateNumberInternal(matchingBadge.license_plate_sheet);
-            if (!entryPlateNumber) setEntryPlateNumberInternal(matchingBadge.license_plate_sheet);
-          }
-        } catch (badgeError) {
-          console.warn("Could not load vehicle badges:", badgeError);
-        }
-      }
 
       // Fallback: Try to get seatCapacity from RTDB lookup if not found from Supabase
       const plateToCheck = record.vehiclePlateNumber;
@@ -299,21 +263,19 @@ export function useCapPhepDialog(record: DispatchRecord, onClose: () => void, on
     } catch (error) {
       console.error("Failed to load initial data:", error);
     }
-  // Note: Removed registeredPlateNumber and entryPlateNumber from deps
-  // to prevent re-running when user clears these fields
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [record]);
 
   const normalizePlate = (plate: string): string => plate.replace(/[.\-\s]/g, '').toUpperCase();
 
   const getMatchingBadge = useCallback((): VehicleBadge | undefined => {
-    const plateNumber = registeredPlateNumber || entryPlateNumber || selectedVehicle?.plateNumber;
+    // Use record.vehiclePlateNumber as primary source (read-only, from database)
+    const plateNumber = record.vehiclePlateNumber || selectedVehicle?.plateNumber;
     if (!plateNumber || !vehicleBadges.length) return undefined;
     const normalizedPlate = normalizePlate(plateNumber);
     return vehicleBadges.find(badge =>
       badge.license_plate_sheet && normalizePlate(badge.license_plate_sheet) === normalizedPlate
     );
-  }, [registeredPlateNumber, entryPlateNumber, selectedVehicle, vehicleBadges]);
+  }, [record.vehiclePlateNumber, selectedVehicle, vehicleBadges]);
 
   const getDocumentStatus = (expiryDate?: string): { status: DocumentStatus; daysRemaining?: number } => {
     if (!expiryDate) return { status: 'missing' };
@@ -561,28 +523,8 @@ export function useCapPhepDialog(record: DispatchRecord, onClose: () => void, on
       if (selectedVehicle.bedCapacity !== undefined && selectedVehicle.bedCapacity !== null) {
         setBedCount(selectedVehicle.bedCapacity.toString());
       }
-      // Only auto-fill plate numbers if not explicitly cleared by user
-      if (!registeredPlateNumber && !hasUserClearedRegisteredPlate && selectedVehicle.plateNumber) {
-        setRegisteredPlateNumberInternal(selectedVehicle.plateNumber);
-      }
-      if (!entryPlateNumber && !hasUserClearedEntryPlate && selectedVehicle.plateNumber) {
-        setEntryPlateNumberInternal(selectedVehicle.plateNumber);
-      }
     }
-  }, [selectedVehicle, record.seatCount, entryPlateNumber, registeredPlateNumber, hasUserClearedRegisteredPlate, hasUserClearedEntryPlate]);
-
-  useEffect(() => {
-    const plateNumber = registeredPlateNumber || entryPlateNumber;
-    if (!plateNumber || vehicles.length === 0) return;
-    const normalizedPlate = plateNumber.replace(/[.\-\s]/g, '').toUpperCase();
-    const matchedVehicle = vehicles.find(v => v.plateNumber && v.plateNumber.replace(/[.\-\s]/g, '').toUpperCase() === normalizedPlate);
-    if (matchedVehicle && matchedVehicle.id !== selectedVehicle?.id) {
-      setSelectedVehicle(matchedVehicle);
-      if (matchedVehicle.operatorId && !selectedOperatorId) setSelectedOperatorId(matchedVehicle.operatorId);
-      if (matchedVehicle.operatorName) setOperatorNameFromVehicle(matchedVehicle.operatorName);
-      else if (matchedVehicle.operator?.name) setOperatorNameFromVehicle(matchedVehicle.operator.name);
-    }
-  }, [registeredPlateNumber, entryPlateNumber, vehicles, selectedVehicle, selectedOperatorId]);
+  }, [selectedVehicle, record.seatCount]);
 
   // Compute busy vehicle plates from active dispatch records
   const busyVehiclePlates = useMemo(() => {
@@ -616,8 +558,6 @@ export function useCapPhepDialog(record: DispatchRecord, onClose: () => void, on
     bedCount, setBedCount,
     hhTicketCount, setHhTicketCount,
     hhPercentage, setHhPercentage,
-    entryPlateNumber, setEntryPlateNumber,
-    registeredPlateNumber, setRegisteredPlateNumber,
     routeId, setRouteId,
     scheduleId, setScheduleId,
     departureTime, setDepartureTime,

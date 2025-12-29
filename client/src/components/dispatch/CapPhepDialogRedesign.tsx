@@ -225,7 +225,7 @@ export function CapPhepDialogRedesign({
                       <div>
                         <label className="text-sm font-medium text-slate-500 mb-1.5 block">Biển số ĐK</label>
                         <div className="h-11 px-4 flex items-center bg-white rounded-lg border border-slate-200 text-base font-semibold text-slate-700">
-                          {hook.registeredPlateNumber || record.vehiclePlateNumber || "---"}
+                          {record.vehiclePlateNumber || "---"}
                         </div>
                       </div>
                       
