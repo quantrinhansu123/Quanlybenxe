@@ -391,6 +391,93 @@ export const cancelDispatchRecord = async (req: AuthRequest, res: Response) => {
   }
 }
 
+/**
+ * Update dispatch record (edit entry)
+ * Allows editing vehicle, driver, route, entry time for records in early stages
+ */
+export const updateDispatchRecord = async (req: AuthRequest, res: Response) => {
+  try {
+    const { id } = req.params
+    const { vehicleId, driverId, routeId, entryTime, notes } = req.body
+
+    // Check if record exists
+    const existingRecord = await dispatchRepository.findById(id)
+    if (!existingRecord) {
+      return res.status(404).json({ error: 'Dispatch record not found' })
+    }
+
+    // Only allow editing of records in early stages
+    const editableStatuses = ['entered', 'passengers_dropped']
+    if (!editableStatuses.includes(existingRecord.current_status)) {
+      return res.status(400).json({
+        error: 'Cannot edit a record that has already been permitted or paid'
+      })
+    }
+
+    // Build update data
+    const updateData: Record<string, unknown> = {
+      updated_at: new Date().toISOString(),
+    }
+
+    // Update vehicle if changed
+    if (vehicleId && vehicleId !== existingRecord.vehicle_id) {
+      updateData.vehicle_id = vehicleId
+      try {
+        const denormData = await fetchDenormalizedData({ vehicleId })
+        Object.assign(updateData, buildDenormalizedFields(denormData))
+      } catch (denormError) {
+        // Legacy vehicle (legacy_* or badge_*) - fetch may fail
+        // Keep existing denormalized data, just update the vehicle_id
+        console.warn(`[updateDispatchRecord] fetchDenormalizedData failed for ${vehicleId}:`, denormError)
+      }
+    }
+
+    // Update driver if changed
+    if (driverId && driverId !== existingRecord.driver_id) {
+      const driverName = await fetchUserName(driverId)
+      updateData.driver_id = driverId
+      updateData.driver_full_name = driverName
+    }
+
+    // Update route if changed
+    if (routeId !== undefined) {
+      if (routeId && routeId !== existingRecord.route_id) {
+        const routeData = await fetchRouteData(routeId)
+        updateData.route_id = routeId
+        Object.assign(updateData, buildRouteDenormalizedFields(routeData))
+      } else if (!routeId) {
+        updateData.route_id = null
+        updateData.route_name = null
+        updateData.route_type = null
+        updateData.route_destination_id = null
+        updateData.route_destination_name = null
+        updateData.route_destination_code = null
+      }
+    }
+
+    // Update entry time if changed
+    if (entryTime) {
+      updateData.entry_time = convertVietnamISOToUTCForStorage(entryTime)
+    }
+
+    // Update notes if provided
+    if (notes !== undefined) {
+      updateData.notes = notes
+    }
+
+    // Perform update
+    const updatedRecord = await dispatchRepository.update(id, updateData)
+    if (!updatedRecord) {
+      return res.status(500).json({ error: 'Failed to update dispatch record' })
+    }
+
+    return res.json(mapDispatchToAPI(updatedRecord))
+  } catch (error: unknown) {
+    console.error('Error updating dispatch record:', error)
+    return res.status(500).json({ error: getErrorMessage(error, 'Failed to update dispatch record') })
+  }
+}
+
 // Legacy endpoints
 export const updateDispatchStatus = async (_req: Request, res: Response) => {
   return res.status(400).json({ error: 'This endpoint is deprecated. Use specific workflow endpoints instead.' })

@@ -9,6 +9,7 @@ import {
   getAllDispatchRecords,
   getDispatchRecordById,
   createDispatchRecord,
+  updateDispatchRecord,
   recordPassengerDrop,
   issuePermit,
   processPayment,
@@ -32,6 +33,7 @@ router.get('/:id', getDispatchRecordById)
 
 // Workflow endpoints
 router.post('/', createDispatchRecord)
+router.put('/:id', updateDispatchRecord)
 router.delete('/:id', deleteDispatchRecord)
 router.post('/:id/cancel', cancelDispatchRecord)
 router.post('/:id/passenger-drop', recordPassengerDrop)
