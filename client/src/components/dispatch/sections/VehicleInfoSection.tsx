@@ -79,8 +79,8 @@ export function VehicleInfoSection({
         <div className="grid grid-cols-2 gap-4">
           <FormField label="Biển số đăng ký">
             <Autocomplete
-              value={registeredPlateNumber || selectedVehicle?.plateNumber || ""}
-              displayValue={record.vehiclePlateNumber}
+              value={registeredPlateNumber}
+              displayValue={selectedVehicle?.plateNumber || record.vehiclePlateNumber}
               onChange={(value) => setRegisteredPlateNumber(value)}
               options={vehicleBadges
                 .filter(badge => badge.license_plate_sheet)
@@ -137,7 +137,7 @@ export function VehicleInfoSection({
           <FormField label="Biển số khi vào">
             <Autocomplete
               value={entryPlateNumber}
-              displayValue={record.vehiclePlateNumber}
+              displayValue={selectedVehicle?.plateNumber || record.vehiclePlateNumber}
               onChange={(value) => setEntryPlateNumber(value)}
               options={vehicleBadges
                 .filter(badge => badge.license_plate_sheet)

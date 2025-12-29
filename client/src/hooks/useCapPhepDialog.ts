@@ -28,8 +28,11 @@ export function useCapPhepDialog(record: DispatchRecord, onClose: () => void, on
   const [bedCount, setBedCount] = useState("0");
   const [hhTicketCount, setHhTicketCount] = useState("0");
   const [hhPercentage, setHhPercentage] = useState("0");
-  const [entryPlateNumber, setEntryPlateNumber] = useState(record.vehiclePlateNumber || "");
-  const [registeredPlateNumber, setRegisteredPlateNumber] = useState(record.vehiclePlateNumber || "");
+  const [entryPlateNumber, setEntryPlateNumberInternal] = useState(record.vehiclePlateNumber || "");
+  const [registeredPlateNumber, setRegisteredPlateNumberInternal] = useState(record.vehiclePlateNumber || "");
+  // Flags to track when user explicitly clears the plate fields (prevents auto-reset)
+  const [hasUserClearedRegisteredPlate, setHasUserClearedRegisteredPlate] = useState(false);
+  const [hasUserClearedEntryPlate, setHasUserClearedEntryPlate] = useState(false);
   const [routeId, setRouteId] = useState(record.routeId || "");
   const [scheduleId, setScheduleId] = useState(record.scheduleId || "");
   const [departureTime, setDepartureTime] = useState("");
@@ -60,6 +63,25 @@ export function useCapPhepDialog(record: DispatchRecord, onClose: () => void, on
   const [cachedDispatchRecords, setCachedDispatchRecords] = useState<DispatchRecord[] | null>(null);
 
   const { currentShift } = useUIStore();
+
+  // Wrapper setters that track when user explicitly clears the field
+  const setRegisteredPlateNumber = useCallback((value: string) => {
+    if (value === '') {
+      setHasUserClearedRegisteredPlate(true);
+    } else {
+      setHasUserClearedRegisteredPlate(false);
+    }
+    setRegisteredPlateNumberInternal(value);
+  }, []);
+
+  const setEntryPlateNumber = useCallback((value: string) => {
+    if (value === '') {
+      setHasUserClearedEntryPlate(true);
+    } else {
+      setHasUserClearedEntryPlate(false);
+    }
+    setEntryPlateNumberInternal(value);
+  }, []);
 
   const loadSchedules = useCallback(async (rid: string) => {
     try {
@@ -220,8 +242,8 @@ export function useCapPhepDialog(record: DispatchRecord, onClose: () => void, on
           if (vehicle.bedCapacity !== undefined && vehicle.bedCapacity !== null) {
             setBedCount(vehicle.bedCapacity.toString());
           }
-          if (!registeredPlateNumber && vehicle.plateNumber) setRegisteredPlateNumber(vehicle.plateNumber);
-          if (!entryPlateNumber && vehicle.plateNumber) setEntryPlateNumber(vehicle.plateNumber);
+          if (!registeredPlateNumber && vehicle.plateNumber) setRegisteredPlateNumberInternal(vehicle.plateNumber);
+          if (!entryPlateNumber && vehicle.plateNumber) setEntryPlateNumberInternal(vehicle.plateNumber);
           if (vehicle.operatorId) {
             setSelectedOperatorId(vehicle.operatorId);
             if (record.driver) setDrivers([record.driver]);
@@ -248,8 +270,8 @@ export function useCapPhepDialog(record: DispatchRecord, onClose: () => void, on
         try {
           const matchingBadge = badgesData.find((b: VehicleBadge) => b.vehicle_id === record.vehicleId);
           if (matchingBadge?.license_plate_sheet) {
-            if (!registeredPlateNumber) setRegisteredPlateNumber(matchingBadge.license_plate_sheet);
-            if (!entryPlateNumber) setEntryPlateNumber(matchingBadge.license_plate_sheet);
+            if (!registeredPlateNumber) setRegisteredPlateNumberInternal(matchingBadge.license_plate_sheet);
+            if (!entryPlateNumber) setEntryPlateNumberInternal(matchingBadge.license_plate_sheet);
           }
         } catch (badgeError) {
           console.warn("Could not load vehicle badges:", badgeError);
@@ -536,10 +558,15 @@ export function useCapPhepDialog(record: DispatchRecord, onClose: () => void, on
       if (selectedVehicle.bedCapacity !== undefined && selectedVehicle.bedCapacity !== null) {
         setBedCount(selectedVehicle.bedCapacity.toString());
       }
-      if (!registeredPlateNumber && selectedVehicle.plateNumber) setRegisteredPlateNumber(selectedVehicle.plateNumber);
-      if (!entryPlateNumber && selectedVehicle.plateNumber) setEntryPlateNumber(selectedVehicle.plateNumber);
+      // Only auto-fill plate numbers if not explicitly cleared by user
+      if (!registeredPlateNumber && !hasUserClearedRegisteredPlate && selectedVehicle.plateNumber) {
+        setRegisteredPlateNumberInternal(selectedVehicle.plateNumber);
+      }
+      if (!entryPlateNumber && !hasUserClearedEntryPlate && selectedVehicle.plateNumber) {
+        setEntryPlateNumberInternal(selectedVehicle.plateNumber);
+      }
     }
-  }, [selectedVehicle, record.seatCount, entryPlateNumber, registeredPlateNumber]);
+  }, [selectedVehicle, record.seatCount, entryPlateNumber, registeredPlateNumber, hasUserClearedRegisteredPlate, hasUserClearedEntryPlate]);
 
   useEffect(() => {
     const plateNumber = registeredPlateNumber || entryPlateNumber;
