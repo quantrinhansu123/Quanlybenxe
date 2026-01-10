@@ -91,7 +91,7 @@ export class DriverService {
       throw new AlreadyExistsError('Driver', 'licenseNumber', data.licenseNumber)
     }
 
-    return this.repository.create({
+    return this.repository.createFromAPI({
       ...data,
       isActive: data.isActive ?? true,
     })

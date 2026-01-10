@@ -22,23 +22,56 @@ export const dispatchRecords = pgTable('dispatch_records', {
   operatorId: uuid('operator_id').references(() => operators.id),
   userId: uuid('user_id').references(() => users.id),
   shiftId: uuid('shift_id').references(() => shifts.id),
+  scheduleId: uuid('schedule_id'), // Schedule reference (optional)
   // Status workflow
   status: varchar('status', { length: 50 }).default('entered').notNull(),
-  // Timing
+  permitStatus: varchar('permit_status', { length: 20 }), // 'approved' | 'rejected' | null
+  // Timing - Entry
   entryTime: timestamp('entry_time', { withTimezone: true }),
-  exitTime: timestamp('exit_time', { withTimezone: true }),
-  departureTime: timestamp('departure_time', { withTimezone: true }),
+  entryBy: uuid('entry_by').references(() => users.id),
+  entryByName: varchar('entry_by_name', { length: 255 }),
+  entryShiftId: uuid('entry_shift_id').references(() => shifts.id),
+  entryImageUrl: text('entry_image_url'),
+  // Timing - Passenger drop
   passengerDropTime: timestamp('passenger_drop_time', { withTimezone: true }),
-  permitIssuedTime: timestamp('permit_issued_time', { withTimezone: true }),
+  passengersArrived: integer('passengers_arrived'),
+  passengerDropBy: uuid('passenger_drop_by').references(() => users.id),
+  passengerDropByName: varchar('passenger_drop_by_name', { length: 255 }),
+  // Timing - Permit (boarding)
+  boardingPermitTime: timestamp('boarding_permit_time', { withTimezone: true }),
+  boardingPermitBy: uuid('boarding_permit_by').references(() => users.id),
+  boardingPermitByName: varchar('boarding_permit_by_name', { length: 255 }),
+  permitShiftId: uuid('permit_shift_id').references(() => shifts.id),
+  plannedDepartureTime: timestamp('planned_departure_time', { withTimezone: true }),
+  transportOrderCode: varchar('transport_order_code', { length: 50 }),
+  seatCount: integer('seat_count'),
+  // Timing - Payment
   paymentTime: timestamp('payment_time', { withTimezone: true }),
-  // Passenger info
+  paymentAmount: decimal('payment_amount', { precision: 12, scale: 2 }),
+  paymentMethod: varchar('payment_method', { length: 20 }), // 'cash' | 'transfer' | 'card'
+  invoiceNumber: varchar('invoice_number', { length: 50 }),
+  paymentBy: uuid('payment_by').references(() => users.id),
+  paymentByName: varchar('payment_by_name', { length: 255 }),
+  paymentShiftId: uuid('payment_shift_id').references(() => shifts.id),
+  // Timing - Departure order
+  departureOrderTime: timestamp('departure_order_time', { withTimezone: true }),
+  passengersDeparting: integer('passengers_departing'),
+  departureOrderBy: uuid('departure_order_by').references(() => users.id),
+  departureOrderByName: varchar('departure_order_by_name', { length: 255 }),
+  departureOrderShiftId: uuid('departure_order_shift_id').references(() => shifts.id),
+  // Timing - Exit
+  exitTime: timestamp('exit_time', { withTimezone: true }),
+  exitBy: uuid('exit_by').references(() => users.id),
+  exitByName: varchar('exit_by_name', { length: 255 }),
+  exitShiftId: uuid('exit_shift_id').references(() => shifts.id),
+  // Passenger info (legacy)
   passengers: integer('passengers').default(0),
   passengerManifest: jsonb('passenger_manifest'),
-  // Financial
+  // Financial (legacy)
   fare: decimal('fare', { precision: 12, scale: 2 }),
   totalAmount: decimal('total_amount', { precision: 12, scale: 2 }),
   serviceCharges: jsonb('service_charges'),
-  // Permit info
+  // Permit info (legacy)
   permitNumber: varchar('permit_number', { length: 50 }),
   departureOrderNumber: varchar('departure_order_number', { length: 50 }),
   // Notes
@@ -48,15 +81,22 @@ export const dispatchRecords = pgTable('dispatch_records', {
   // Vehicle snapshot
   vehiclePlateNumber: varchar('vehicle_plate_number', { length: 20 }),
   vehicleSeatCount: integer('vehicle_seat_count'),
+  vehicleOperatorId: uuid('vehicle_operator_id'),
+  vehicleOperatorName: varchar('vehicle_operator_name', { length: 255 }),
+  vehicleOperatorCode: varchar('vehicle_operator_code', { length: 50 }),
   // Driver snapshot
-  driverName: varchar('driver_name', { length: 255 }),
+  driverFullName: varchar('driver_full_name', { length: 255 }),
   driverPhone: varchar('driver_phone', { length: 20 }),
-  // Operator snapshot
+  // Operator snapshot (legacy - use vehicle_operator_* instead)
   operatorName: varchar('operator_name', { length: 255 }),
   operatorCode: varchar('operator_code', { length: 50 }),
   // Route snapshot
   routeCode: varchar('route_code', { length: 50 }),
   routeName: varchar('route_name', { length: 255 }),
+  routeType: varchar('route_type', { length: 50 }),
+  routeDestinationId: uuid('route_destination_id'),
+  routeDestinationName: varchar('route_destination_name', { length: 255 }),
+  routeDestinationCode: varchar('route_destination_code', { length: 50 }),
   departureStation: varchar('departure_station', { length: 255 }),
   arrivalStation: varchar('arrival_station', { length: 255 }),
   // User snapshot

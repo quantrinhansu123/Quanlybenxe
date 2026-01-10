@@ -1,14 +1,23 @@
 /**
- * Denormalization utilities for Firebase RTDB optimization
+ * Denormalization utilities for Drizzle ORM
  *
- * These utilities help fetch and build denormalized data for dispatch_records
+ * These utilities fetch and build denormalized data for dispatch_records
  * to reduce the number of queries needed when reading dispatch data.
+ *
+ * Migrated from Firebase to Drizzle ORM
  */
 
-import { firebase, firebaseDb } from '../config/database.js'
+import { db } from '../db/drizzle.js'
+import { vehicles } from '../db/schema/vehicles.js'
+import { drivers } from '../db/schema/drivers.js'
+import { routes } from '../db/schema/routes.js'
+import { users } from '../db/schema/users.js'
+import { operators } from '../db/schema/operators.js'
+import { eq } from 'drizzle-orm'
 
 export interface DenormalizedVehicleData {
   plateNumber: string
+  seatCount: number | null
   operatorId: string | null
   operatorName: string | null
   operatorCode: string | null
@@ -21,6 +30,7 @@ export interface DenormalizedDriverData {
 export interface DenormalizedRouteData {
   name: string | null
   type: string | null
+  code: string | null
   destinationId: string | null
   destinationName: string | null
   destinationCode: string | null
@@ -38,165 +48,149 @@ export interface DenormalizedData {
 }
 
 /**
- * Fetches vehicle data from legacy datasheet/Xe
- */
-async function fetchLegacyVehicle(legacyKey: string): Promise<DenormalizedVehicleData> {
-  try {
-    const snapshot = await firebaseDb.ref(`datasheet/Xe/${legacyKey}`).once('value')
-    const data = snapshot.val()
-    if (!data) {
-      return { plateNumber: '', operatorId: null, operatorName: null, operatorCode: null }
-    }
-    return {
-      plateNumber: data.plate_number || data.BienSo || '',
-      operatorId: null,
-      operatorName: data.owner_name || data.TenDangKyXe || null,
-      operatorCode: null,
-    }
-  } catch (error) {
-    console.error('Failed to fetch legacy vehicle:', error)
-    return { plateNumber: '', operatorId: null, operatorName: null, operatorCode: null }
-  }
-}
-
-/**
- * Fetches vehicle data from badge datasheet/PHUHIEUXE
- */
-async function fetchBadgeVehicle(badgeKey: string): Promise<DenormalizedVehicleData> {
-  try {
-    const snapshot = await firebaseDb.ref(`datasheet/PHUHIEUXE/${badgeKey}`).once('value')
-    const data = snapshot.val()
-    if (!data) {
-      return { plateNumber: '', operatorId: null, operatorName: null, operatorCode: null }
-    }
-    return {
-      plateNumber: data.BienSoXe || '',
-      operatorId: null,
-      operatorName: null,
-      operatorCode: null,
-    }
-  } catch (error) {
-    console.error('Failed to fetch badge vehicle:', error)
-    return { plateNumber: '', operatorId: null, operatorName: null, operatorCode: null }
-  }
-}
-
-/**
  * Fetches denormalized data for a dispatch record in parallel
- * to minimize database round trips while capturing all related entity names
- * Supports legacy vehicles (legacy_xxx) and badge vehicles (badge_xxx)
+ * Uses Drizzle ORM to query PostgreSQL
  */
 export async function fetchDenormalizedData(params: {
   vehicleId: string
-  driverId?: string | null  // Optional - bypass driver requirement
+  driverId?: string | null
   routeId?: string | null
   userId?: string | null
 }): Promise<DenormalizedData> {
-  console.log('[fetchDenormalizedData] params:', JSON.stringify(params))
-  
-  // Check if vehicleId is legacy or badge
+  if (!db) {
+    throw new Error('[Denormalization] Database not initialized')
+  }
+
+  // Check if vehicleId is legacy format (these don't exist in Supabase yet)
   const isLegacyVehicle = params.vehicleId.startsWith('legacy_')
   const isBadgeVehicle = params.vehicleId.startsWith('badge_')
-  console.log('[fetchDenormalizedData] isLegacy:', isLegacyVehicle, 'isBadge:', isBadgeVehicle)
 
-  let vehicleData: DenormalizedVehicleData
+  let vehicleData: DenormalizedVehicleData = {
+    plateNumber: '',
+    seatCount: null,
+    operatorId: null,
+    operatorName: null,
+    operatorCode: null,
+  }
 
-  if (isLegacyVehicle) {
-    // Extract key from legacy_xxx format
-    const legacyKey = params.vehicleId.replace('legacy_', '')
-    console.log('[fetchDenormalizedData] Fetching legacy vehicle with key:', legacyKey)
-    vehicleData = await fetchLegacyVehicle(legacyKey)
-    console.log('[fetchDenormalizedData] Legacy vehicle data:', JSON.stringify(vehicleData))
-  } else if (isBadgeVehicle) {
-    // Extract key from badge_xxx format
-    const badgeKey = params.vehicleId.replace('badge_', '')
-    vehicleData = await fetchBadgeVehicle(badgeKey)
-  } else {
-    // Normal vehicle from vehicles table
-    const { data: vehicle } = await firebase.from('vehicles')
-      .select('id, plate_number, operator_id')
-      .eq('id', params.vehicleId)
-      .single()
+  // For legacy vehicles, we can't fetch from Supabase - return empty data
+  // The vehicle info should be passed from frontend or stored elsewhere
+  if (!isLegacyVehicle && !isBadgeVehicle && params.vehicleId) {
+    try {
+      const [vehicle] = await db
+        .select({
+          id: vehicles.id,
+          plateNumber: vehicles.plateNumber,
+          seatCount: vehicles.seatCount,
+          operatorId: vehicles.operatorId,
+        })
+        .from(vehicles)
+        .where(eq(vehicles.id, params.vehicleId))
+        .limit(1)
 
-    let operatorData = null
-    if (vehicle?.operator_id) {
-      const { data: op } = await firebase.from('operators').select('id, name, code').eq('id', vehicle.operator_id).single()
-      operatorData = op
-    }
+      if (vehicle) {
+        let operatorData = null
+        if (vehicle.operatorId) {
+          const [op] = await db
+            .select({ id: operators.id, name: operators.name, code: operators.code })
+            .from(operators)
+            .where(eq(operators.id, vehicle.operatorId))
+            .limit(1)
+          operatorData = op
+        }
 
-    vehicleData = {
-      plateNumber: vehicle?.plate_number || '',
-      operatorId: vehicle?.operator_id || null,
-      operatorName: operatorData?.name || null,
-      operatorCode: operatorData?.code || null,
+        vehicleData = {
+          plateNumber: vehicle.plateNumber || '',
+          seatCount: vehicle.seatCount || null,
+          operatorId: vehicle.operatorId || null,
+          operatorName: operatorData?.name || null,
+          operatorCode: operatorData?.code || null,
+        }
+      }
+    } catch (error) {
+      console.warn(`[fetchDenormalizedData] Failed to fetch vehicle ${params.vehicleId}:`, error)
     }
   }
 
   // Fetch other entities in parallel
   const [driverResult, routeResult, userResult] = await Promise.all([
-    params.driverId ? firebase.from('drivers')
-      .select('id, full_name')
-      .eq('id', params.driverId)
-      .single() : Promise.resolve({ data: null }),
-    params.routeId ? firebase.from('routes')
-      .select('id, route_name, route_type, destination_id')
-      .eq('id', params.routeId)
-      .single() : Promise.resolve({ data: null }),
-    params.userId ? firebase.from('users')
-      .select('id, full_name')
-      .eq('id', params.userId)
-      .single() : Promise.resolve({ data: null })
+    params.driverId
+      ? db.select({ id: drivers.id, name: drivers.name })
+          .from(drivers)
+          .where(eq(drivers.id, params.driverId))
+          .limit(1)
+      : Promise.resolve([]),
+    params.routeId
+      ? db.select({
+            id: routes.id,
+            routeCode: routes.routeCode,
+            routeType: routes.routeType,
+            departureStation: routes.departureStation,
+            arrivalStation: routes.arrivalStation,
+          })
+          .from(routes)
+          .where(eq(routes.id, params.routeId))
+          .limit(1)
+      : Promise.resolve([]),
+    params.userId
+      ? db.select({ id: users.id, name: users.name })
+          .from(users)
+          .where(eq(users.id, params.userId))
+          .limit(1)
+      : Promise.resolve([]),
   ])
 
-  const driver = driverResult.data
-  const route = routeResult.data
-  const user = userResult.data
+  const driver = driverResult[0]
+  const route = routeResult[0]
+  const user = userResult[0]
 
-  // Fetch destination if route has one
-  let destinationData = null
-  if (route?.destination_id) {
-    const { data: dest } = await firebase.from('destinations').select('id, name, code').eq('id', route.destination_id).single()
-    destinationData = dest
-  }
+  // Note: Destination lookup would need destinations table - not yet migrated
+  // For now, return null destination data
 
   return {
     vehicle: vehicleData,
     driver: {
-      fullName: driver?.full_name || '',
+      fullName: driver?.name || '',
     },
-    route: route ? {
-      name: route.route_name || null,
-      type: route.route_type || null,
-      destinationId: destinationData?.id || null,
-      destinationName: destinationData?.name || null,
-      destinationCode: destinationData?.code || null,
-    } : null,
-    user: user ? {
-      fullName: user.full_name || null,
-    } : null,
+    route: route
+      ? {
+          name: route.arrivalStation || null, // Use arrival station as route name
+          type: route.routeType || null,
+          code: route.routeCode || null,
+          destinationId: null, // Not available in current schema
+          destinationName: route.arrivalStation || null,
+          destinationCode: null,
+        }
+      : null,
+    user: user
+      ? {
+          fullName: user.name || null,
+        }
+      : null,
   }
 }
 
 /**
  * Builds the denormalized fields object for database insert/update
+ * Returns camelCase fields matching Drizzle schema
  */
 export function buildDenormalizedFields(data: DenormalizedData) {
   return {
     // Vehicle denormalized data
-    vehicle_plate_number: data.vehicle.plateNumber,
-    vehicle_operator_id: data.vehicle.operatorId,
-    vehicle_operator_name: data.vehicle.operatorName,
-    vehicle_operator_code: data.vehicle.operatorCode,
-
+    vehiclePlateNumber: data.vehicle.plateNumber,
+    vehicleSeatCount: data.vehicle.seatCount,
+    vehicleOperatorId: data.vehicle.operatorId,
+    vehicleOperatorName: data.vehicle.operatorName,
+    vehicleOperatorCode: data.vehicle.operatorCode,
     // Driver denormalized data
-    driver_full_name: data.driver.fullName,
-
+    driverFullName: data.driver.fullName,
     // Route denormalized data
-    route_name: data.route?.name || null,
-    route_type: data.route?.type || null,
-    route_destination_id: data.route?.destinationId || null,
-    route_destination_name: data.route?.destinationName || null,
-    route_destination_code: data.route?.destinationCode || null,
+    routeName: data.route?.name || null,
+    routeType: data.route?.type || null,
+    routeCode: data.route?.code || null,
+    routeDestinationId: data.route?.destinationId || null,
+    routeDestinationName: data.route?.destinationName || null,
+    routeDestinationCode: data.route?.destinationCode || null,
   }
 }
 
@@ -205,15 +199,20 @@ export function buildDenormalizedFields(data: DenormalizedData) {
  * Returns null if userId is not provided or user not found
  */
 export async function fetchUserName(userId: string | null | undefined): Promise<string | null> {
-  if (!userId) return null
+  if (!userId || !db) return null
 
-  const { data } = await firebase
-    .from('users')
-    .select('id, full_name')
-    .eq('id', userId)
-    .single()
+  try {
+    const [user] = await db
+      .select({ id: users.id, name: users.name })
+      .from(users)
+      .where(eq(users.id, userId))
+      .limit(1)
 
-  return data?.full_name || null
+    return user?.name || null
+  } catch (error) {
+    console.warn(`[fetchUserName] Failed to fetch user ${userId}:`, error)
+    return null
+  }
 }
 
 /**
@@ -221,48 +220,58 @@ export async function fetchUserName(userId: string | null | undefined): Promise<
  * Used when route is updated during workflow
  */
 export async function fetchRouteData(routeId: string | null | undefined): Promise<DenormalizedRouteData | null> {
-  if (!routeId) return null
+  if (!routeId || !db) return null
 
-  const { data: route } = await firebase
-    .from('routes')
-    .select('id, route_name, route_type, destination:destination_id(id, name, code)')
-    .eq('id', routeId)
-    .single()
+  try {
+    const [route] = await db
+      .select({
+        id: routes.id,
+        routeCode: routes.routeCode,
+        routeType: routes.routeType,
+        arrivalStation: routes.arrivalStation,
+      })
+      .from(routes)
+      .where(eq(routes.id, routeId))
+      .limit(1)
 
-  if (!route) return null
+    if (!route) return null
 
-  const destinationData = route.destination
-    ? (Array.isArray(route.destination) ? route.destination[0] : route.destination)
-    : null
-
-  return {
-    name: route.route_name || null,
-    type: route.route_type || null,
-    destinationId: destinationData?.id || null,
-    destinationName: destinationData?.name || null,
-    destinationCode: destinationData?.code || null,
+    return {
+      name: route.arrivalStation || null,
+      type: route.routeType || null,
+      code: route.routeCode || null,
+      destinationId: null,
+      destinationName: route.arrivalStation || null,
+      destinationCode: null,
+    }
+  } catch (error) {
+    console.warn(`[fetchRouteData] Failed to fetch route ${routeId}:`, error)
+    return null
   }
 }
 
 /**
  * Builds route denormalized fields for database update
+ * Returns camelCase fields matching Drizzle schema
  */
 export function buildRouteDenormalizedFields(routeData: DenormalizedRouteData | null) {
   if (!routeData) {
     return {
-      route_name: null,
-      route_type: null,
-      route_destination_id: null,
-      route_destination_name: null,
-      route_destination_code: null,
+      routeName: null,
+      routeType: null,
+      routeCode: null,
+      routeDestinationId: null,
+      routeDestinationName: null,
+      routeDestinationCode: null,
     }
   }
 
   return {
-    route_name: routeData.name,
-    route_type: routeData.type,
-    route_destination_id: routeData.destinationId,
-    route_destination_name: routeData.destinationName,
-    route_destination_code: routeData.destinationCode,
+    routeName: routeData.name,
+    routeType: routeData.type,
+    routeCode: routeData.code,
+    routeDestinationId: routeData.destinationId,
+    routeDestinationName: routeData.destinationName,
+    routeDestinationCode: routeData.destinationCode,
   }
 }

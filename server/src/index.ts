@@ -1,6 +1,9 @@
+// Load environment variables FIRST before any other imports
+import dotenv from 'dotenv'
+dotenv.config()
+
 import express, { Request, Response } from 'express'
 import cors from 'cors'
-import dotenv from 'dotenv'
 import { errorHandler } from './middleware/errorHandler.js'
 
 // Routes
@@ -26,8 +29,6 @@ import vehicleBadgeRoutes from './routes/vehicle-badge.routes.js'
 import provinceRoutes from './routes/province.routes.js'
 import chatRoutes from './modules/chat/chat.routes.js'
 import quanlyDataRoutes from './routes/quanly-data.routes.js'
-
-dotenv.config()
 
 const app = express()
 // Use APP_PORT instead of PORT (reserved in Firebase Functions)
@@ -177,30 +178,7 @@ if (!isCloudFunction && isMainModule) {
         }
       })
     })
-    
-    // Start sync cron jobs in background
-    setTimeout(async () => {
-      try {
-        // Operator sync (every 30 minutes)
-        const { startOperatorSyncCron } = await import('./services/operator-sync.service.js')
-        startOperatorSyncCron()
-        
-        // Vehicle sync (every 15 minutes)
-        const { startVehicleSyncCron } = await import('./services/vehicle-sync.service.js')
-        startVehicleSyncCron()
-        
-        // Badge sync (every 15 minutes, runs after vehicle sync)
-        const { startBadgeSyncCron } = await import('./services/badge-sync.service.js')
-        // Delay badge sync by 30 seconds to ensure vehicles are synced first
-        setTimeout(() => startBadgeSyncCron(), 30 * 1000)
-        
-        // Route sync (every 30 minutes)
-        const { startRouteSyncCron } = await import('./services/route-sync.service.js')
-        startRouteSyncCron()
-      } catch (error) {
-        console.warn('[SyncCron] Failed to start cron jobs:', error)
-      }
-    }, 1000)
+
   }).catch((error) => {
     console.error('Failed to import database config:', error)
     process.exit(1)

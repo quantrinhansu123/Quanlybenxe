@@ -1,26 +1,24 @@
 import { Request, Response } from 'express'
-import { firebase, firebaseDb } from '../config/database.js'
+import { firebaseDb } from '../config/database.js'
+import { db } from '../db/drizzle.js'
+import { operators } from '../db/schema/operators.js'
+import { eq, desc } from 'drizzle-orm'
 import { z } from 'zod'
 
 // Cache for legacy operators
 let legacyOperatorsCache: { data: any[]; timestamp: number } | null = null
 const LEGACY_CACHE_TTL = 30 * 60 * 1000 // 30 minutes
 
-// Export function to invalidate cache (called by sync service)
-export const invalidateOperatorCache = () => {
-  legacyOperatorsCache = null
-}
-
 const operatorSchema = z.object({
   name: z.string().min(1, 'Name is required'),
   code: z.string().min(1, 'Code is required'),
   taxCode: z.string().optional(),
-  
+
   isTicketDelegated: z.boolean().optional(),
   province: z.string().optional(),
   district: z.string().optional(),
   address: z.string().optional(),
-  
+
   phone: z.string().optional(),
   email: z.string().email().optional().or(z.literal('')),
   representativeName: z.string().optional(),
@@ -29,43 +27,41 @@ const operatorSchema = z.object({
 
 export const getAllOperators = async (req: Request, res: Response) => {
   try {
+    if (!db) throw new Error('Database not initialized')
+
     const { isActive } = req.query
 
-    let query = firebase
-      .from('operators')
-      .select('*')
-      .order('created_at', { ascending: false })
+    let query = db.select().from(operators).orderBy(desc(operators.createdAt))
 
-    if (isActive !== undefined) {
-      query = query.eq('is_active', isActive === 'true')
-    }
+    // Apply isActive filter if provided
+    const data = await query
 
-    const { data, error } = await query
+    const filteredData = isActive !== undefined
+      ? data.filter(op => op.isActive === (isActive === 'true'))
+      : data
 
-    if (error) throw error
-
-    const operators = data.map((op: any) => ({
+    const operatorsData = filteredData.map((op: any) => ({
       id: op.id,
       name: op.name,
       code: op.code,
-      taxCode: op.tax_code,
-      
-      isTicketDelegated: op.is_ticket_delegated,
+      taxCode: op.taxCode,
+
+      isTicketDelegated: op.isTicketDelegated,
       province: op.province,
       district: op.district,
       address: op.address,
-      
+
       phone: op.phone,
       email: op.email,
-      representativeName: op.representative_name,
-      representativePosition: op.representative_position,
-      
-      isActive: op.is_active,
-      createdAt: op.created_at,
-      updatedAt: op.updated_at,
+      representativeName: op.representative,
+      representativePosition: op.representativePosition,
+
+      isActive: op.isActive,
+      createdAt: op.createdAt,
+      updatedAt: op.updatedAt,
     }))
 
-    return res.json(operators)
+    return res.json(operatorsData)
   } catch (error) {
     console.error('Error fetching operators:', error)
     return res.status(500).json({ error: 'Failed to fetch operators' })
@@ -180,15 +176,12 @@ export const getLegacyOperators = async (req: Request, res: Response) => {
 
 export const getOperatorById = async (req: Request, res: Response) => {
   try {
+    if (!db) throw new Error('Database not initialized')
+
     const { id } = req.params
 
-    const { data, error } = await firebase
-      .from('operators')
-      .select('*')
-      .eq('id', id)
-      .single()
+    const [data] = await db.select().from(operators).where(eq(operators.id, id))
 
-    if (error) throw error
     if (!data) {
       return res.status(404).json({ error: 'Operator not found' })
     }
@@ -197,21 +190,21 @@ export const getOperatorById = async (req: Request, res: Response) => {
       id: data.id,
       name: data.name,
       code: data.code,
-      taxCode: data.tax_code,
-      
-      isTicketDelegated: data.is_ticket_delegated,
+      taxCode: data.taxCode,
+
+      isTicketDelegated: data.isTicketDelegated,
       province: data.province,
       district: data.district,
       address: data.address,
-      
+
       phone: data.phone,
       email: data.email,
-      representativeName: data.representative_name,
-      representativePosition: data.representative_position,
-      
-      isActive: data.is_active,
-      createdAt: data.created_at,
-      updatedAt: data.updated_at,
+      representativeName: data.representative,
+      representativePosition: data.representativePosition,
+
+      isActive: data.isActive,
+      createdAt: data.createdAt,
+      updatedAt: data.updatedAt,
     })
   } catch (error) {
     console.error('Error fetching operator:', error)
@@ -221,51 +214,47 @@ export const getOperatorById = async (req: Request, res: Response) => {
 
 export const createOperator = async (req: Request, res: Response) => {
   try {
+    if (!db) throw new Error('Database not initialized')
+
     const validated = operatorSchema.parse(req.body)
 
-    const { data, error } = await firebase
-      .from('operators')
-      .insert({
-        name: validated.name,
-        code: validated.code,
-        tax_code: validated.taxCode || null,
-        
-        is_ticket_delegated: validated.isTicketDelegated || false,
-        province: validated.province && validated.province.trim() !== '' ? validated.province.trim() : null,
-        district: validated.district && validated.district.trim() !== '' ? validated.district.trim() : null,
-        address: validated.address || null,
-        
-        phone: validated.phone || null,
-        email: validated.email || null,
-        representative_name: validated.representativeName || null,
-        representative_position: validated.representativePosition || null,
-        
-        is_active: true,
-      })
-      .select()
-      .single()
+    const [data] = await db.insert(operators).values({
+      name: validated.name,
+      code: validated.code,
+      taxCode: validated.taxCode || null,
 
-    if (error) throw error
+      isTicketDelegated: validated.isTicketDelegated || false,
+      province: validated.province && validated.province.trim() !== '' ? validated.province.trim() : null,
+      district: validated.district && validated.district.trim() !== '' ? validated.district.trim() : null,
+      address: validated.address || null,
+
+      phone: validated.phone || null,
+      email: validated.email || null,
+      representative: validated.representativeName || null,
+      representativePosition: validated.representativePosition || null,
+
+      isActive: true,
+    }).returning()
 
     return res.status(201).json({
       id: data.id,
       name: data.name,
       code: data.code,
-      taxCode: data.tax_code,
-      
-      isTicketDelegated: data.is_ticket_delegated,
+      taxCode: data.taxCode,
+
+      isTicketDelegated: data.isTicketDelegated,
       province: data.province,
       district: data.district,
       address: data.address,
-      
+
       phone: data.phone,
       email: data.email,
-      representativeName: data.representative_name,
-      representativePosition: data.representative_position,
-      
-      isActive: data.is_active,
-      createdAt: data.created_at,
-      updatedAt: data.updated_at,
+      representativeName: data.representative,
+      representativePosition: data.representativePosition,
+
+      isActive: data.isActive,
+      createdAt: data.createdAt,
+      updatedAt: data.updatedAt,
     })
   } catch (error: any) {
     console.error('Error creating operator:', error)
@@ -281,32 +270,28 @@ export const createOperator = async (req: Request, res: Response) => {
 
 export const updateOperator = async (req: Request, res: Response) => {
   try {
+    if (!db) throw new Error('Database not initialized')
+
     const { id } = req.params
     const validated = operatorSchema.partial().parse(req.body)
 
     const updateData: any = {}
     if (validated.name) updateData.name = validated.name
     if (validated.code) updateData.code = validated.code
-    if (validated.taxCode !== undefined) updateData.tax_code = validated.taxCode || null
-    
-    if (validated.isTicketDelegated !== undefined) updateData.is_ticket_delegated = validated.isTicketDelegated
+    if (validated.taxCode !== undefined) updateData.taxCode = validated.taxCode || null
+
+    if (validated.isTicketDelegated !== undefined) updateData.isTicketDelegated = validated.isTicketDelegated
     if (validated.province !== undefined) updateData.province = validated.province && validated.province.trim() !== '' ? validated.province.trim() : null
     if (validated.district !== undefined) updateData.district = validated.district && validated.district.trim() !== '' ? validated.district.trim() : null
     if (validated.address !== undefined) updateData.address = validated.address || null
-    
+
     if (validated.phone !== undefined) updateData.phone = validated.phone || null
     if (validated.email !== undefined) updateData.email = validated.email || null
-    if (validated.representativeName !== undefined) updateData.representative_name = validated.representativeName || null
-    if (validated.representativePosition !== undefined) updateData.representative_position = validated.representativePosition || null
+    if (validated.representativeName !== undefined) updateData.representative = validated.representativeName || null
+    if (validated.representativePosition !== undefined) updateData.representativePosition = validated.representativePosition || null
 
-    const { data, error } = await firebase
-      .from('operators')
-      .update(updateData)
-      .eq('id', id)
-      .select()
-      .single()
+    const [data] = await db.update(operators).set(updateData).where(eq(operators.id, id)).returning()
 
-    if (error) throw error
     if (!data) {
       return res.status(404).json({ error: 'Operator not found' })
     }
@@ -315,21 +300,21 @@ export const updateOperator = async (req: Request, res: Response) => {
       id: data.id,
       name: data.name,
       code: data.code,
-      taxCode: data.tax_code,
-      
-      isTicketDelegated: data.is_ticket_delegated,
+      taxCode: data.taxCode,
+
+      isTicketDelegated: data.isTicketDelegated,
       province: data.province,
       district: data.district,
       address: data.address,
-      
+
       phone: data.phone,
       email: data.email,
-      representativeName: data.representative_name,
-      representativePosition: data.representative_position,
-      
-      isActive: data.is_active,
-      createdAt: data.created_at,
-      updatedAt: data.updated_at,
+      representativeName: data.representative,
+      representativePosition: data.representativePosition,
+
+      isActive: data.isActive,
+      createdAt: data.createdAt,
+      updatedAt: data.updatedAt,
     })
   } catch (error: any) {
     console.error('Error updating operator:', error)
@@ -342,14 +327,11 @@ export const updateOperator = async (req: Request, res: Response) => {
 
 export const deleteOperator = async (req: Request, res: Response) => {
   try {
+    if (!db) throw new Error('Database not initialized')
+
     const { id } = req.params
 
-    const { error } = await firebase
-      .from('operators')
-      .delete()
-      .eq('id', id)
-
-    if (error) throw error
+    await db.delete(operators).where(eq(operators.id, id))
 
     return res.status(204).send()
   } catch (error) {
@@ -388,7 +370,7 @@ export const updateLegacyOperator = async (req: Request, res: Response) => {
     await firebaseDb.ref(`datasheet/DONVIVANTAI/${id}`).update(updateData)
 
     // Invalidate cache
-    invalidateOperatorCache()
+    legacyOperatorsCache = null
 
     // Return updated operator
     const updatedSnapshot = await firebaseDb.ref(`datasheet/DONVIVANTAI/${id}`).once('value')
@@ -432,7 +414,7 @@ export const deleteLegacyOperator = async (req: Request, res: Response) => {
     await firebaseDb.ref(`datasheet/DONVIVANTAI/${id}`).remove()
 
     // Invalidate cache
-    invalidateOperatorCache()
+    legacyOperatorsCache = null
 
     return res.status(204).send()
   } catch (error) {

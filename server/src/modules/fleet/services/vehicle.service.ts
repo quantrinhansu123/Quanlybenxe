@@ -197,7 +197,7 @@ export class VehicleService {
       throw new AlreadyExistsError('Vehicle', 'plateNumber', data.plateNumber);
     }
 
-    return this.repository.create({
+    return this.repository.createFromAPI({
       ...data,
       isActive: data.isActive ?? true,
     });

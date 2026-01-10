@@ -1,5 +1,7 @@
 import { Request, Response } from 'express'
-import { firebase } from '../config/database.js'
+import { db } from '../db/drizzle.js'
+import { shifts } from '../db/schema/shifts.js'
+import { eq } from 'drizzle-orm'
 import { z } from 'zod'
 
 const shiftSchema = z.object({
@@ -10,24 +12,20 @@ const shiftSchema = z.object({
 
 export const getAllShifts = async (_req: Request, res: Response) => {
   try {
-    const { data, error } = await firebase
-      .from('shifts')
-      .select('*')
-      .eq('is_active', true)
-      .order('start_time', { ascending: true })
+    if (!db) throw new Error('Database not initialized')
 
-    if (error) throw error
+    const data = await db.select().from(shifts).where(eq(shifts.isActive, true)).orderBy(shifts.startTime)
 
-    const shifts = data.map((shift: any) => ({
+    const shiftsData = data.map((shift: any) => ({
       id: shift.id,
       name: shift.name,
-      startTime: shift.start_time.substring(0, 5), // Format TIME to HH:mm
-      endTime: shift.end_time.substring(0, 5), // Format TIME to HH:mm
-      createdAt: shift.created_at,
-      updatedAt: shift.updated_at,
+      startTime: shift.startTime ? shift.startTime.substring(0, 5) : '', // Format TIME to HH:mm
+      endTime: shift.endTime ? shift.endTime.substring(0, 5) : '', // Format TIME to HH:mm
+      createdAt: shift.createdAt,
+      updatedAt: shift.updatedAt,
     }))
 
-    return res.json(shifts)
+    return res.json(shiftsData)
   } catch (error: any) {
     return res.status(500).json({ error: error.message || 'Không thể tải danh sách ca trực' })
   }
@@ -35,27 +33,23 @@ export const getAllShifts = async (_req: Request, res: Response) => {
 
 export const getShiftById = async (req: Request, res: Response) => {
   try {
+    if (!db) throw new Error('Database not initialized')
+
     const { id } = req.params
 
-    const { data, error } = await firebase
-      .from('shifts')
-      .select('*')
-      .eq('id', id)
-      .eq('is_active', true)
-      .single()
+    const [data] = await db.select().from(shifts).where(eq(shifts.id, id))
 
-    if (error) throw error
-    if (!data) {
+    if (!data || !data.isActive) {
       return res.status(404).json({ error: 'Ca trực không tồn tại' })
     }
 
     return res.json({
       id: data.id,
       name: data.name,
-      startTime: data.start_time.substring(0, 5), // Format TIME to HH:mm
-      endTime: data.end_time.substring(0, 5), // Format TIME to HH:mm
-      createdAt: data.created_at,
-      updatedAt: data.updated_at,
+      startTime: data.startTime ? data.startTime.substring(0, 5) : '', // Format TIME to HH:mm
+      endTime: data.endTime ? data.endTime.substring(0, 5) : '', // Format TIME to HH:mm
+      createdAt: data.createdAt,
+      updatedAt: data.updatedAt,
     })
   } catch (error: any) {
     return res.status(500).json({ error: error.message || 'Không thể tải thông tin ca trực' })
@@ -64,32 +58,28 @@ export const getShiftById = async (req: Request, res: Response) => {
 
 export const createShift = async (req: Request, res: Response) => {
   try {
+    if (!db) throw new Error('Database not initialized')
+
     const validated = shiftSchema.parse(req.body)
 
     // Convert HH:mm to TIME format (HH:mm:ss)
     const startTime = `${validated.startTime}:00`
     const endTime = `${validated.endTime}:00`
 
-    const { data, error } = await firebase
-      .from('shifts')
-      .insert({
-        name: validated.name,
-        start_time: startTime,
-        end_time: endTime,
-        is_active: true,
-      })
-      .select()
-      .single()
-
-    if (error) throw error
+    const [data] = await db.insert(shifts).values({
+      name: validated.name,
+      startTime: startTime,
+      endTime: endTime,
+      isActive: true,
+    }).returning()
 
     return res.status(201).json({
       id: data.id,
       name: data.name,
-      startTime: data.start_time.substring(0, 5),
-      endTime: data.end_time.substring(0, 5),
-      createdAt: data.created_at,
-      updatedAt: data.updated_at,
+      startTime: data.startTime ? data.startTime.substring(0, 5) : '',
+      endTime: data.endTime ? data.endTime.substring(0, 5) : '',
+      createdAt: data.createdAt,
+      updatedAt: data.updatedAt,
     })
   } catch (error: any) {
     if (error.name === 'ZodError') {
@@ -105,34 +95,29 @@ export const createShift = async (req: Request, res: Response) => {
 
 export const updateShift = async (req: Request, res: Response) => {
   try {
+    if (!db) throw new Error('Database not initialized')
+
     const { id } = req.params
     const validated = shiftSchema.partial().parse(req.body)
 
     const updateData: any = {}
     if (validated.name) updateData.name = validated.name
-    if (validated.startTime) updateData.start_time = `${validated.startTime}:00`
-    if (validated.endTime) updateData.end_time = `${validated.endTime}:00`
+    if (validated.startTime) updateData.startTime = `${validated.startTime}:00`
+    if (validated.endTime) updateData.endTime = `${validated.endTime}:00`
 
-    const { data, error } = await firebase
-      .from('shifts')
-      .update(updateData)
-      .eq('id', id)
-      .eq('is_active', true)
-      .select()
-      .single()
+    const [data] = await db.update(shifts).set(updateData).where(eq(shifts.id, id)).returning()
 
-    if (error) throw error
-    if (!data) {
+    if (!data || !data.isActive) {
       return res.status(404).json({ error: 'Ca trực không tồn tại' })
     }
 
     return res.json({
       id: data.id,
       name: data.name,
-      startTime: data.start_time.substring(0, 5),
-      endTime: data.end_time.substring(0, 5),
-      createdAt: data.created_at,
-      updatedAt: data.updated_at,
+      startTime: data.startTime ? data.startTime.substring(0, 5) : '',
+      endTime: data.endTime ? data.endTime.substring(0, 5) : '',
+      createdAt: data.createdAt,
+      updatedAt: data.updatedAt,
     })
   } catch (error: any) {
     if (error.name === 'ZodError') {
@@ -148,15 +133,12 @@ export const updateShift = async (req: Request, res: Response) => {
 
 export const deleteShift = async (req: Request, res: Response) => {
   try {
+    if (!db) throw new Error('Database not initialized')
+
     const { id } = req.params
 
     // Soft delete by setting is_active to false
-    const { error } = await firebase
-      .from('shifts')
-      .update({ is_active: false })
-      .eq('id', id)
-
-    if (error) throw error
+    await db.update(shifts).set({ isActive: false }).where(eq(shifts.id, id))
 
     return res.status(204).send()
   } catch (error: any) {

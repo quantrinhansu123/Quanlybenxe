@@ -1,71 +1,73 @@
 /**
  * Dispatch Mappers
- * Transform database records to API format
+ * Transform Drizzle DB records to API format
+ *
+ * Note: Drizzle returns camelCase field names matching the schema
  */
 
 import type { DispatchDBRecord, DispatchRecord } from './dispatch-types.js'
 
 /**
- * Map database record to API response format
+ * Map Drizzle database record to API response format
  */
 export function mapDispatchToAPI(record: DispatchDBRecord): DispatchRecord {
   return {
     id: record.id,
-    vehicleId: record.vehicle_id,
+    vehicleId: record.vehicleId || '',
     vehicle: {
-      id: record.vehicle_id,
-      plateNumber: record.vehicle_plate_number || '',
-      operatorId: record.vehicle_operator_id || null,
-      operator: record.vehicle_operator_name ? {
-        id: record.vehicle_operator_id!,
-        name: record.vehicle_operator_name,
-        code: record.vehicle_operator_code || '',
+      id: record.vehicleId || '',
+      plateNumber: record.vehiclePlateNumber || '',
+      operatorId: record.vehicleOperatorId || null,
+      operator: record.vehicleOperatorName ? {
+        id: record.vehicleOperatorId!,
+        name: record.vehicleOperatorName,
+        code: record.vehicleOperatorCode || '',
       } : undefined,
     },
-    vehiclePlateNumber: record.vehicle_plate_number || '',
-    driverId: record.driver_id,
-    driverName: record.driver_full_name || '',
-    scheduleId: record.schedule_id,
-    routeId: record.route_id,
-    route: record.route_name ? {
-      id: record.route_id!,
-      routeName: record.route_name,
-      routeType: record.route_type,
-      destination: record.route_destination_name ? {
-        id: record.route_destination_id!,
-        name: record.route_destination_name,
-        code: record.route_destination_code || '',
+    vehiclePlateNumber: record.vehiclePlateNumber || '',
+    driverId: record.driverId || '',
+    driverName: record.driverFullName || '',
+    scheduleId: record.scheduleId || null,
+    routeId: record.routeId || null,
+    route: record.routeName ? {
+      id: record.routeId!,
+      routeName: record.routeName,
+      routeType: record.routeType || null,
+      destination: record.routeDestinationName ? {
+        id: record.routeDestinationId || '',
+        name: record.routeDestinationName,
+        code: record.routeDestinationCode || '',
       } : undefined,
     } : undefined,
-    routeName: record.route_name || '',
-    entryTime: record.entry_time,
-    entryBy: record.entry_by_name || record.entry_by,
-    entryImageUrl: record.entry_image_url,
-    passengerDropTime: record.passenger_drop_time,
-    passengersArrived: record.passengers_arrived,
-    passengerDropBy: record.passenger_drop_by_name || record.passenger_drop_by,
-    boardingPermitTime: record.boarding_permit_time,
-    plannedDepartureTime: record.planned_departure_time,
-    transportOrderCode: record.transport_order_code,
-    seatCount: record.seat_count,
-    permitStatus: record.permit_status as 'approved' | 'rejected' | null,
-    rejectionReason: record.rejection_reason,
-    boardingPermitBy: record.boarding_permit_by_name || record.boarding_permit_by,
-    paymentTime: record.payment_time,
-    paymentAmount: record.payment_amount ? parseFloat(String(record.payment_amount)) : null,
-    paymentMethod: record.payment_method as 'cash' | 'transfer' | 'card' | null,
-    invoiceNumber: record.invoice_number,
-    paymentBy: record.payment_by_name || record.payment_by,
-    departureOrderTime: record.departure_order_time,
-    passengersDeparting: record.passengers_departing,
-    departureOrderBy: record.departure_order_by_name || record.departure_order_by,
-    exitTime: record.exit_time,
-    exitBy: record.exit_by_name || record.exit_by,
-    currentStatus: record.current_status,
-    notes: record.notes,
-    metadata: record.metadata,
-    createdAt: record.created_at,
-    updatedAt: record.updated_at,
+    routeName: record.routeName || '',
+    entryTime: record.entryTime?.toISOString() || '',
+    entryBy: record.entryByName || record.entryBy || null,
+    entryImageUrl: record.entryImageUrl || null,
+    passengerDropTime: record.passengerDropTime?.toISOString() || null,
+    passengersArrived: record.passengersArrived ?? null,
+    passengerDropBy: record.passengerDropByName || record.passengerDropBy || null,
+    boardingPermitTime: record.boardingPermitTime?.toISOString() || null,
+    plannedDepartureTime: record.plannedDepartureTime?.toISOString() || null,
+    transportOrderCode: record.transportOrderCode || null,
+    seatCount: record.seatCount ?? null,
+    permitStatus: record.permitStatus as 'approved' | 'rejected' | null,
+    rejectionReason: record.rejectionReason || null,
+    boardingPermitBy: record.boardingPermitByName || record.boardingPermitBy || null,
+    paymentTime: record.paymentTime?.toISOString() || null,
+    paymentAmount: record.paymentAmount ? parseFloat(String(record.paymentAmount)) : null,
+    paymentMethod: record.paymentMethod as 'cash' | 'transfer' | 'card' | null,
+    invoiceNumber: record.invoiceNumber || null,
+    paymentBy: record.paymentByName || record.paymentBy || null,
+    departureOrderTime: record.departureOrderTime?.toISOString() || null,
+    passengersDeparting: record.passengersDeparting ?? null,
+    departureOrderBy: record.departureOrderByName || record.departureOrderBy || null,
+    exitTime: record.exitTime?.toISOString() || null,
+    exitBy: record.exitByName || record.exitBy || null,
+    currentStatus: record.status || 'entered',
+    notes: record.notes || null,
+    metadata: record.metadata as Record<string, unknown> | null,
+    createdAt: record.createdAt?.toISOString() || '',
+    updatedAt: record.updatedAt?.toISOString() || '',
   }
 }
 

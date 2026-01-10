@@ -2,7 +2,7 @@
  * Dispatch Controller
  * Thin controller that delegates to repository and helpers
  *
- * Target: < 200 lines (from 585 lines original)
+ * Migrated to use Drizzle ORM with camelCase field names
  */
 
 import { Request, Response } from 'express'
@@ -29,12 +29,26 @@ import {
 } from '../dispatch-validation.js'
 
 /**
+ * Helper to get current Vietnam time as Date object
+ */
+function getCurrentVietnamTimeAsDate(): Date {
+  return new Date(getCurrentVietnamTime())
+}
+
+/**
+ * Helper to convert ISO string to Date
+ */
+function toDate(isoString: string): Date {
+  return new Date(convertVietnamISOToUTCForStorage(isoString))
+}
+
+/**
  * Get all dispatch records with optional filters
  */
 export const getAllDispatchRecords = async (req: Request, res: Response) => {
   try {
     const { status, vehicleId, driverId, routeId } = req.query
-    const records = await dispatchRepository.findAll({
+    const records = await dispatchRepository.findAllWithFilters({
       status: status as string,
       vehicleId: vehicleId as string,
       driverId: driverId as string,
@@ -74,7 +88,7 @@ export const createDispatchRecord = async (req: AuthRequest, res: Response) => {
     const input = validateCreateDispatch(req.body)
     const userId = req.user?.id
 
-    const entryTimeForDB = convertVietnamISOToUTCForStorage(input.entryTime)
+    const entryTimeForDB = new Date(convertVietnamISOToUTCForStorage(input.entryTime))
     const denormData = await fetchDenormalizedData({
       vehicleId: input.vehicleId,
       driverId: input.driverId,
@@ -83,17 +97,17 @@ export const createDispatchRecord = async (req: AuthRequest, res: Response) => {
     })
 
     const insertData = {
-      vehicle_id: input.vehicleId,
-      driver_id: input.driverId,
-      schedule_id: input.scheduleId || null,
-      route_id: input.routeId || null,
-      entry_time: entryTimeForDB,
-      entry_by: userId || null,
-      entry_shift_id: input.entryShiftId || null,
-      current_status: DISPATCH_STATUS.ENTERED,
+      vehicleId: input.vehicleId,
+      driverId: input.driverId,
+      scheduleId: input.scheduleId || null,
+      routeId: input.routeId || null,
+      entryTime: entryTimeForDB,
+      entryBy: userId || null,
+      entryShiftId: input.entryShiftId || null,
+      status: DISPATCH_STATUS.ENTERED,
       notes: input.notes || null,
       ...buildDenormalizedFields(denormData),
-      entry_by_name: denormData.user?.fullName || null,
+      entryByName: denormData.user?.fullName || null,
     }
 
     const record = await dispatchRepository.create(insertData)
@@ -118,15 +132,15 @@ export const recordPassengerDrop = async (req: AuthRequest, res: Response) => {
     const userName = await fetchUserName(userId)
 
     const updateData: Record<string, unknown> = {
-      passenger_drop_time: getCurrentVietnamTime(),
-      passengers_arrived: input.passengersArrived ?? null,
-      passenger_drop_by: userId || null,
-      passenger_drop_by_name: userName,
-      current_status: DISPATCH_STATUS.PASSENGERS_DROPPED,
+      passengerDropTime: getCurrentVietnamTimeAsDate(),
+      passengersArrived: input.passengersArrived ?? null,
+      passengerDropBy: userId || null,
+      passengerDropByName: userName,
+      status: DISPATCH_STATUS.PASSENGERS_DROPPED,
     }
 
     if (input.routeId) {
-      updateData.route_id = input.routeId
+      updateData.routeId = input.routeId
       const routeData = await fetchRouteData(input.routeId)
       if (routeData) Object.assign(updateData, buildRouteDenormalizedFields(routeData))
     }
@@ -154,38 +168,38 @@ export const issuePermit = async (req: AuthRequest, res: Response) => {
     const currentRecord = await dispatchRepository.findById(id)
     if (!currentRecord) return res.status(404).json({ error: 'Dispatch record not found' })
 
-    const metadata = { ...(currentRecord.metadata || {}) }
+    const metadata = { ...(currentRecord.metadata as Record<string, unknown> || {}) }
     if (input.replacementVehicleId) metadata.replacementVehicleId = input.replacementVehicleId
     else if (input.replacementVehicleId === '') delete metadata.replacementVehicleId
 
     const updateData: Record<string, unknown> = {
-      boarding_permit_time: getCurrentVietnamTime(),
-      boarding_permit_by: userId || null,
-      boarding_permit_by_name: userName,
-      permit_status: input.permitStatus,
+      boardingPermitTime: getCurrentVietnamTimeAsDate(),
+      boardingPermitBy: userId || null,
+      boardingPermitByName: userName,
+      permitStatus: input.permitStatus,
       metadata,
-      permit_shift_id: input.permitShiftId || null,
+      permitShiftId: input.permitShiftId || null,
     }
 
     if (input.routeId) {
-      updateData.route_id = input.routeId
+      updateData.routeId = input.routeId
       const routeData = await fetchRouteData(input.routeId)
       if (routeData) Object.assign(updateData, buildRouteDenormalizedFields(routeData))
     }
-    if (input.scheduleId) updateData.schedule_id = input.scheduleId
+    if (input.scheduleId) updateData.scheduleId = input.scheduleId
 
     if (input.permitStatus === 'approved') {
-      updateData.transport_order_code = input.transportOrderCode
-      updateData.planned_departure_time = input.plannedDepartureTime
-      updateData.seat_count = input.seatCount
-      updateData.current_status = DISPATCH_STATUS.PERMIT_ISSUED
-      updateData.rejection_reason = input.rejectionReason || null
+      updateData.transportOrderCode = input.transportOrderCode
+      updateData.plannedDepartureTime = input.plannedDepartureTime
+      updateData.seatCount = input.seatCount
+      updateData.status = DISPATCH_STATUS.PERMIT_ISSUED
+      updateData.rejectionReason = input.rejectionReason || null
     } else {
-      updateData.transport_order_code = input.transportOrderCode || null
-      updateData.planned_departure_time = input.plannedDepartureTime || null
-      updateData.seat_count = input.seatCount || null
-      updateData.current_status = DISPATCH_STATUS.PERMIT_REJECTED
-      updateData.rejection_reason = input.rejectionReason || null
+      updateData.transportOrderCode = input.transportOrderCode || null
+      updateData.plannedDepartureTime = input.plannedDepartureTime || null
+      updateData.seatCount = input.seatCount || null
+      updateData.status = DISPATCH_STATUS.PERMIT_REJECTED
+      updateData.rejectionReason = input.rejectionReason || null
     }
 
     const record = await dispatchRepository.update(id, updateData)
@@ -208,14 +222,14 @@ export const processPayment = async (req: AuthRequest, res: Response) => {
     const userName = await fetchUserName(userId)
 
     const updateData = {
-      payment_time: getCurrentVietnamTime(),
-      payment_amount: input.paymentAmount,
-      payment_method: input.paymentMethod || 'cash',
-      invoice_number: input.invoiceNumber || null,
-      payment_by: userId || null,
-      payment_by_name: userName,
-      payment_shift_id: input.paymentShiftId || null,
-      current_status: DISPATCH_STATUS.PAID,
+      paymentTime: getCurrentVietnamTimeAsDate(),
+      paymentAmount: String(input.paymentAmount),
+      paymentMethod: input.paymentMethod || 'cash',
+      invoiceNumber: input.invoiceNumber || null,
+      paymentBy: userId || null,
+      paymentByName: userName,
+      paymentShiftId: input.paymentShiftId || null,
+      status: DISPATCH_STATUS.PAID,
     }
 
     const record = await dispatchRepository.update(id, updateData)
@@ -240,12 +254,12 @@ export const issueDepartureOrder = async (req: AuthRequest, res: Response) => {
     const userName = await fetchUserName(userId)
 
     const updateData = {
-      departure_order_time: getCurrentVietnamTime(),
-      passengers_departing: input.passengersDeparting ?? null,
-      departure_order_by: userId || null,
-      departure_order_by_name: userName,
-      departure_order_shift_id: input.departureOrderShiftId || null,
-      current_status: DISPATCH_STATUS.DEPARTURE_ORDERED,
+      departureOrderTime: getCurrentVietnamTimeAsDate(),
+      passengersDeparting: input.passengersDeparting ?? null,
+      departureOrderBy: userId || null,
+      departureOrderByName: userName,
+      departureOrderShiftId: input.departureOrderShiftId || null,
+      status: DISPATCH_STATUS.DEPARTURE_ORDERED,
     }
 
     const record = await dispatchRepository.update(id, updateData)
@@ -269,15 +283,15 @@ export const recordExit = async (req: AuthRequest, res: Response) => {
     const userName = await fetchUserName(userId)
 
     const updateData: Record<string, unknown> = {
-      exit_time: input.exitTime ? convertVietnamISOToUTCForStorage(input.exitTime) : getCurrentVietnamTime(),
-      exit_by: userId || null,
-      exit_by_name: userName,
-      exit_shift_id: input.exitShiftId || null,
-      current_status: DISPATCH_STATUS.DEPARTED,
+      exitTime: input.exitTime ? toDate(input.exitTime) : getCurrentVietnamTimeAsDate(),
+      exitBy: userId || null,
+      exitByName: userName,
+      exitShiftId: input.exitShiftId || null,
+      status: DISPATCH_STATUS.DEPARTED,
     }
 
     if (input.passengersDeparting !== undefined) {
-      updateData.passengers_departing = input.passengersDeparting
+      updateData.passengersDeparting = input.passengersDeparting
     }
 
     const record = await dispatchRepository.update(id, updateData)
@@ -304,7 +318,7 @@ export const updateEntryImage = async (req: AuthRequest, res: Response) => {
     }
 
     const record = await dispatchRepository.update(id, {
-      entry_image_url: entryImageUrl,
+      entryImageUrl: entryImageUrl,
     })
 
     if (!record) return res.status(404).json({ error: 'Dispatch record not found' })
@@ -323,14 +337,14 @@ export const updateEntryImage = async (req: AuthRequest, res: Response) => {
 export const deleteDispatchRecord = async (req: AuthRequest, res: Response) => {
   try {
     const { id } = req.params
-    
+
     const existingRecord = await dispatchRepository.findById(id)
     if (!existingRecord) {
       return res.status(404).json({ error: 'Dispatch record not found' })
     }
 
     // Only allow deletion of records that haven't departed yet
-    if (existingRecord.current_status === 'departed') {
+    if (existingRecord.status === 'departed') {
       return res.status(400).json({ error: 'Không thể xóa record đã xuất bến. Hãy sử dụng chức năng Hủy bỏ.' })
     }
 
@@ -358,7 +372,7 @@ export const cancelDispatchRecord = async (req: AuthRequest, res: Response) => {
     }
 
     // Already cancelled
-    if (existingRecord.current_status === 'cancelled') {
+    if (existingRecord.status === 'cancelled') {
       return res.status(400).json({ error: 'Record đã được hủy bỏ trước đó' })
     }
 
@@ -366,14 +380,14 @@ export const cancelDispatchRecord = async (req: AuthRequest, res: Response) => {
 
     // Update status to cancelled and store cancellation info in metadata
     const updatedRecord = await dispatchRepository.update(id, {
-      current_status: 'cancelled',
+      status: 'cancelled',
       metadata: {
-        ...existingRecord.metadata,
+        ...(existingRecord.metadata as Record<string, unknown> || {}),
         cancelled_at: new Date().toISOString(),
         cancelled_by: userId,
         cancelled_by_name: userName,
         cancellation_reason: reason || 'Hủy bỏ bởi người dùng',
-        previous_status: existingRecord.current_status,
+        previous_status: existingRecord.status,
       }
     })
 
@@ -381,7 +395,7 @@ export const cancelDispatchRecord = async (req: AuthRequest, res: Response) => {
       return res.status(500).json({ error: 'Failed to update record' })
     }
 
-    return res.json({ 
+    return res.json({
       message: 'Record đã được hủy bỏ thành công',
       dispatch: mapDispatchToAPI(updatedRecord)
     })
@@ -408,56 +422,54 @@ export const updateDispatchRecord = async (req: AuthRequest, res: Response) => {
 
     // Only allow editing of records in early stages
     const editableStatuses = ['entered', 'passengers_dropped']
-    if (!editableStatuses.includes(existingRecord.current_status)) {
+    if (!editableStatuses.includes(existingRecord.status)) {
       return res.status(400).json({
         error: 'Cannot edit a record that has already been permitted or paid'
       })
     }
 
     // Build update data
-    const updateData: Record<string, unknown> = {
-      updated_at: new Date().toISOString(),
-    }
+    const updateData: Record<string, unknown> = {}
 
     // Update vehicle if changed
-    if (vehicleId && vehicleId !== existingRecord.vehicle_id) {
-      updateData.vehicle_id = vehicleId
+    if (vehicleId && vehicleId !== existingRecord.vehicleId) {
+      updateData.vehicleId = vehicleId
       try {
         const denormData = await fetchDenormalizedData({ vehicleId })
         Object.assign(updateData, buildDenormalizedFields(denormData))
       } catch (denormError) {
         // Legacy vehicle (legacy_* or badge_*) - fetch may fail
-        // Keep existing denormalized data, just update the vehicle_id
+        // Keep existing denormalized data, just update the vehicleId
         console.warn(`[updateDispatchRecord] fetchDenormalizedData failed for ${vehicleId}:`, denormError)
       }
     }
 
     // Update driver if changed
-    if (driverId && driverId !== existingRecord.driver_id) {
+    if (driverId && driverId !== existingRecord.driverId) {
       const driverName = await fetchUserName(driverId)
-      updateData.driver_id = driverId
-      updateData.driver_full_name = driverName
+      updateData.driverId = driverId
+      updateData.driverFullName = driverName
     }
 
     // Update route if changed
     if (routeId !== undefined) {
-      if (routeId && routeId !== existingRecord.route_id) {
+      if (routeId && routeId !== existingRecord.routeId) {
         const routeData = await fetchRouteData(routeId)
-        updateData.route_id = routeId
+        updateData.routeId = routeId
         Object.assign(updateData, buildRouteDenormalizedFields(routeData))
       } else if (!routeId) {
-        updateData.route_id = null
-        updateData.route_name = null
-        updateData.route_type = null
-        updateData.route_destination_id = null
-        updateData.route_destination_name = null
-        updateData.route_destination_code = null
+        updateData.routeId = null
+        updateData.routeName = null
+        updateData.routeType = null
+        updateData.routeDestinationId = null
+        updateData.routeDestinationName = null
+        updateData.routeDestinationCode = null
       }
     }
 
     // Update entry time if changed
     if (entryTime) {
-      updateData.entry_time = convertVietnamISOToUTCForStorage(entryTime)
+      updateData.entryTime = toDate(entryTime)
     }
 
     // Update notes if provided

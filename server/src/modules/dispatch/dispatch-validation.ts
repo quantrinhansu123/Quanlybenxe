@@ -37,8 +37,8 @@ export const createDispatchSchema = z.object({
  * Schema for passenger drop
  */
 export const passengerDropSchema = z.object({
-  passengersArrived: z.number().int().min(0, 'Passengers must be non-negative').optional(),
-  routeId: z.string().min(1).optional(),
+  passengersArrived: z.number().int().min(0, 'Passengers must be non-negative').max(100, 'Passengers must not exceed 100').optional(),
+  routeId: z.string().uuid('Invalid route ID').optional(),
 })
 
 /**
@@ -70,17 +70,31 @@ export const paymentSchema = z.object({
  * Schema for departure order
  */
 export const departureOrderSchema = z.object({
-  passengersDeparting: z.number().int().min(0).optional(),
-  departureOrderShiftId: z.string().min(1).optional(),
+  passengersDeparting: z.number().int().min(0, 'Passengers must be non-negative').max(100, 'Passengers must not exceed 100').optional(),
+  departureOrderShiftId: z.string().uuid('Invalid shift ID').optional(),
 })
 
 /**
  * Schema for exit
  */
 export const exitSchema = z.object({
-  exitTime: z.string().optional(),
-  passengersDeparting: z.number().int().min(0).optional(),
-  exitShiftId: z.string().min(1).optional(),
+  exitTime: z.string().datetime({ message: 'Invalid datetime format' }).optional(),
+  exitShiftId: z.string().uuid('Invalid shift ID').optional(),
+  passengersDeparting: z.number().int().min(0, 'Passengers must be non-negative').max(100, 'Passengers must not exceed 100').optional(),
+})
+
+/**
+ * Schema for cancel
+ */
+export const cancelSchema = z.object({
+  reason: z.string().min(1, 'Reason cannot be empty').max(500, 'Reason must not exceed 500 characters').optional(),
+})
+
+/**
+ * Schema for updating entry image
+ */
+export const updateEntryImageSchema = z.object({
+  entryImageUrl: z.string().url('Invalid URL format').nullable().optional(),
 })
 
 /**
@@ -92,6 +106,8 @@ export type IssuePermitInput = z.infer<typeof issuePermitSchema>
 export type PaymentInput = z.infer<typeof paymentSchema>
 export type DepartureOrderInput = z.infer<typeof departureOrderSchema>
 export type ExitInput = z.infer<typeof exitSchema>
+export type CancelInput = z.infer<typeof cancelSchema>
+export type UpdateEntryImageInput = z.infer<typeof updateEntryImageSchema>
 
 /**
  * Validation functions
@@ -127,4 +143,12 @@ export function validateDepartureOrder(data: unknown): DepartureOrderInput {
 
 export function validateExit(data: unknown): ExitInput {
   return exitSchema.parse(data)
+}
+
+export function validateCancel(data: unknown): CancelInput {
+  return cancelSchema.parse(data)
+}
+
+export function validateUpdateEntryImage(data: unknown): UpdateEntryImageInput {
+  return updateEntryImageSchema.parse(data)
 }

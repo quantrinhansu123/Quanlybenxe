@@ -1,6 +1,6 @@
 import { Request, Response } from 'express'
-import { firebase } from '../config/database.js'
 import { z } from 'zod'
+import { invoiceRepository } from '../modules/invoice/invoice.repository.js'
 
 const invoiceSchema = z.object({
   invoiceNumber: z.string().min(1, 'Invoice number is required'),
@@ -18,52 +18,12 @@ export const getAllInvoices = async (req: Request, res: Response) => {
   try {
     const { operatorId, paymentStatus, startDate, endDate } = req.query
 
-    let query = firebase
-      .from('invoices')
-      .select(`
-        *,
-        operators:operator_id(id, name, code)
-      `)
-      .order('issue_date', { ascending: false })
-
-    if (operatorId) {
-      query = query.eq('operator_id', operatorId as string)
-    }
-    if (paymentStatus) {
-      query = query.eq('payment_status', paymentStatus as string)
-    }
-    if (startDate) {
-      query = query.gte('issue_date', startDate as string)
-    }
-    if (endDate) {
-      query = query.lte('issue_date', endDate as string)
-    }
-
-    const { data, error } = await query
-
-    if (error) throw error
-
-    const invoices = data.map((invoice: any) => ({
-      id: invoice.id,
-      invoiceNumber: invoice.invoice_number,
-      dispatchRecordId: invoice.dispatch_record_id,
-      operatorId: invoice.operator_id,
-      operator: invoice.operators ? {
-        id: invoice.operators.id,
-        name: invoice.operators.name,
-        code: invoice.operators.code,
-      } : undefined,
-      issueDate: invoice.issue_date,
-      dueDate: invoice.due_date,
-      subtotal: parseFloat(invoice.subtotal),
-      taxAmount: parseFloat(invoice.tax_amount),
-      totalAmount: parseFloat(invoice.total_amount),
-      paymentStatus: invoice.payment_status,
-      paymentDate: invoice.payment_date,
-      notes: invoice.notes,
-      createdAt: invoice.created_at,
-      updatedAt: invoice.updated_at,
-    }))
+    const invoices = await invoiceRepository.findAllWithRelations({
+      operatorId: operatorId as string | undefined,
+      paymentStatus: paymentStatus as string | undefined,
+      startDate: startDate as string | undefined,
+      endDate: endDate as string | undefined,
+    })
 
     return res.json(invoices)
   } catch (error) {
@@ -76,41 +36,13 @@ export const getInvoiceById = async (req: Request, res: Response) => {
   try {
     const { id } = req.params
 
-    const { data, error } = await firebase
-      .from('invoices')
-      .select(`
-        *,
-        operators:operator_id(id, name, code)
-      `)
-      .eq('id', id)
-      .single()
+    const invoice = await invoiceRepository.findByIdWithRelations(id)
 
-    if (error) throw error
-    if (!data) {
+    if (!invoice) {
       return res.status(404).json({ error: 'Invoice not found' })
     }
 
-    return res.json({
-      id: data.id,
-      invoiceNumber: data.invoice_number,
-      dispatchRecordId: data.dispatch_record_id,
-      operatorId: data.operator_id,
-      operator: data.operators ? {
-        id: data.operators.id,
-        name: data.operators.name,
-        code: data.operators.code,
-      } : undefined,
-      issueDate: data.issue_date,
-      dueDate: data.due_date,
-      subtotal: parseFloat(data.subtotal),
-      taxAmount: parseFloat(data.tax_amount),
-      totalAmount: parseFloat(data.total_amount),
-      paymentStatus: data.payment_status,
-      paymentDate: data.payment_date,
-      notes: data.notes,
-      createdAt: data.created_at,
-      updatedAt: data.updated_at,
-    })
+    return res.json(invoice)
   } catch (error) {
     console.error('Error fetching invoice:', error)
     return res.status(500).json({ error: 'Failed to fetch invoice' })
@@ -121,49 +53,19 @@ export const createInvoice = async (req: Request, res: Response) => {
   try {
     const validated = invoiceSchema.parse(req.body)
 
-    const { data, error } = await firebase
-      .from('invoices')
-      .insert({
-        invoice_number: validated.invoiceNumber,
-        dispatch_record_id: validated.dispatchRecordId || null,
-        operator_id: validated.operatorId,
-        issue_date: validated.issueDate,
-        due_date: validated.dueDate || null,
-        subtotal: validated.subtotal,
-        tax_amount: validated.taxAmount || 0,
-        total_amount: validated.totalAmount,
-        payment_status: 'pending',
-        notes: validated.notes || null,
-      })
-      .select(`
-        *,
-        operators:operator_id(id, name, code)
-      `)
-      .single()
-
-    if (error) throw error
-
-    return res.status(201).json({
-      id: data.id,
-      invoiceNumber: data.invoice_number,
-      dispatchRecordId: data.dispatch_record_id,
-      operatorId: data.operator_id,
-      operator: data.operators ? {
-        id: data.operators.id,
-        name: data.operators.name,
-        code: data.operators.code,
-      } : undefined,
-      issueDate: data.issue_date,
-      dueDate: data.due_date,
-      subtotal: parseFloat(data.subtotal),
-      taxAmount: parseFloat(data.tax_amount),
-      totalAmount: parseFloat(data.total_amount),
-      paymentStatus: data.payment_status,
-      paymentDate: data.payment_date,
-      notes: data.notes,
-      createdAt: data.created_at,
-      updatedAt: data.updated_at,
+    const invoice = await invoiceRepository.createFromAPI({
+      invoiceNumber: validated.invoiceNumber,
+      dispatchRecordId: validated.dispatchRecordId,
+      operatorId: validated.operatorId,
+      issueDate: validated.issueDate,
+      dueDate: validated.dueDate,
+      subtotal: validated.subtotal,
+      taxAmount: validated.taxAmount,
+      totalAmount: validated.totalAmount,
+      notes: validated.notes,
     })
+
+    return res.status(201).json(invoice)
   } catch (error: any) {
     console.error('Error creating invoice:', error)
     if (error.code === '23505') {
@@ -181,53 +83,13 @@ export const updateInvoice = async (req: Request, res: Response) => {
     const { id } = req.params
     const validated = invoiceSchema.partial().parse(req.body)
 
-    const updateData: any = {}
-    if (validated.invoiceNumber) updateData.invoice_number = validated.invoiceNumber
-    if (validated.dispatchRecordId !== undefined) updateData.dispatch_record_id = validated.dispatchRecordId || null
-    if (validated.operatorId) updateData.operator_id = validated.operatorId
-    if (validated.issueDate) updateData.issue_date = validated.issueDate
-    if (validated.dueDate !== undefined) updateData.due_date = validated.dueDate || null
-    if (validated.subtotal !== undefined) updateData.subtotal = validated.subtotal
-    if (validated.taxAmount !== undefined) updateData.tax_amount = validated.taxAmount
-    if (validated.totalAmount !== undefined) updateData.total_amount = validated.totalAmount
-    if (validated.notes !== undefined) updateData.notes = validated.notes || null
+    const invoice = await invoiceRepository.updateById(id, validated)
 
-    const { data, error } = await firebase
-      .from('invoices')
-      .update(updateData)
-      .eq('id', id)
-      .select(`
-        *,
-        operators:operator_id(id, name, code)
-      `)
-      .single()
-
-    if (error) throw error
-    if (!data) {
+    if (!invoice) {
       return res.status(404).json({ error: 'Invoice not found' })
     }
 
-    return res.json({
-      id: data.id,
-      invoiceNumber: data.invoice_number,
-      dispatchRecordId: data.dispatch_record_id,
-      operatorId: data.operator_id,
-      operator: data.operators ? {
-        id: data.operators.id,
-        name: data.operators.name,
-        code: data.operators.code,
-      } : undefined,
-      issueDate: data.issue_date,
-      dueDate: data.due_date,
-      subtotal: parseFloat(data.subtotal),
-      taxAmount: parseFloat(data.tax_amount),
-      totalAmount: parseFloat(data.total_amount),
-      paymentStatus: data.payment_status,
-      paymentDate: data.payment_date,
-      notes: data.notes,
-      createdAt: data.created_at,
-      updatedAt: data.updated_at,
-    })
+    return res.json(invoice)
   } catch (error: any) {
     console.error('Error updating invoice:', error)
     if (error.name === 'ZodError') {
@@ -246,55 +108,19 @@ export const updateInvoicePayment = async (req: Request, res: Response) => {
       return res.status(400).json({ error: 'Invalid payment status' })
     }
 
-    const updateData: any = {
-      payment_status: paymentStatus,
-    }
+    const invoice = await invoiceRepository.updatePaymentStatus(
+      id,
+      paymentStatus,
+      paymentDate
+    )
 
-    if (paymentStatus === 'paid' && paymentDate) {
-      updateData.payment_date = paymentDate
-    } else if (paymentStatus !== 'paid') {
-      updateData.payment_date = null
-    }
-
-    const { data, error } = await firebase
-      .from('invoices')
-      .update(updateData)
-      .eq('id', id)
-      .select(`
-        *,
-        operators:operator_id(id, name, code)
-      `)
-      .single()
-
-    if (error) throw error
-    if (!data) {
+    if (!invoice) {
       return res.status(404).json({ error: 'Invoice not found' })
     }
 
-    return res.json({
-      id: data.id,
-      invoiceNumber: data.invoice_number,
-      dispatchRecordId: data.dispatch_record_id,
-      operatorId: data.operator_id,
-      operator: data.operators ? {
-        id: data.operators.id,
-        name: data.operators.name,
-        code: data.operators.code,
-      } : undefined,
-      issueDate: data.issue_date,
-      dueDate: data.due_date,
-      subtotal: parseFloat(data.subtotal),
-      taxAmount: parseFloat(data.tax_amount),
-      totalAmount: parseFloat(data.total_amount),
-      paymentStatus: data.payment_status,
-      paymentDate: data.payment_date,
-      notes: data.notes,
-      createdAt: data.created_at,
-      updatedAt: data.updated_at,
-    })
+    return res.json(invoice)
   } catch (error: any) {
     console.error('Error updating invoice payment:', error)
     return res.status(500).json({ error: error.message || 'Failed to update invoice payment' })
   }
 }
-

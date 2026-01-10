@@ -2,6 +2,7 @@
  * Drizzle Database Client
  * Connects to Supabase PostgreSQL using connection pooling
  */
+import 'dotenv/config' // Load env vars before anything else
 import { drizzle } from 'drizzle-orm/postgres-js'
 import postgres from 'postgres'
 import * as schema from './schema'
@@ -29,6 +30,28 @@ export const db = client ? drizzle(client, { schema }) : null
 
 // Export type for use in repositories
 export type Database = typeof db
+
+/**
+ * Execute operations within a transaction
+ * Rollback automatically on error
+ *
+ * @example
+ * await withTransaction(async (tx) => {
+ *   await tx.insert(table1).values(data1)
+ *   await tx.insert(table2).values(data2)
+ * })
+ */
+export async function withTransaction<T>(
+  fn: (tx: NonNullable<typeof db>) => Promise<T>
+): Promise<T> {
+  if (!db) {
+    throw new Error('[Drizzle] Database not initialized. Check DATABASE_URL.')
+  }
+
+  return db.transaction(async (tx) => {
+    return fn(tx as unknown as NonNullable<typeof db>)
+  })
+}
 
 /**
  * Test database connection

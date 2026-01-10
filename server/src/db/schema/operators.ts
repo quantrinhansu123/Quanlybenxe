@@ -17,7 +17,13 @@ export const operators = pgTable('operators', {
   email: varchar('email', { length: 255 }),
   taxCode: varchar('tax_code', { length: 20 }),
   representative: varchar('representative', { length: 255 }),
+  representativePosition: varchar('representative_position', { length: 100 }),
   businessLicense: varchar('business_license', { length: 100 }),
+  // Location
+  province: varchar('province', { length: 100 }),
+  district: varchar('district', { length: 100 }),
+  // Ticket delegation
+  isTicketDelegated: boolean('is_ticket_delegated').default(false),
   // Status
   isActive: boolean('is_active').default(true).notNull(),
   // Metadata from Sheets

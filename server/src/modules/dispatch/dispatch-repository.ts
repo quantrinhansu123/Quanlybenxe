@@ -1,99 +1,173 @@
 /**
- * Dispatch Repository
- * Handles all Firebase operations for dispatch records
+ * Dispatch Repository - Drizzle ORM Version
+ * Handles all PostgreSQL operations for dispatch records via Supabase
  */
+import { db, withTransaction } from '../../db/drizzle'
+import { dispatchRecords } from '../../db/schema'
+import { DrizzleRepository, eq, and, gte, lte, desc, sql } from '../../shared/database/drizzle-repository'
+import type { DispatchFilters } from './dispatch-types'
 
-import { firebase } from '../../config/database.js'
-import type { DispatchDBRecord, DispatchFilters } from './dispatch-types.js'
+// Infer types from schema
+type DispatchRecord = typeof dispatchRecords.$inferSelect
+type NewDispatchRecord = typeof dispatchRecords.$inferInsert
 
 /**
- * Dispatch Repository class
+ * Dispatch Repository class - extends DrizzleRepository for common CRUD
  */
-class DispatchRepository {
-  private collection = 'dispatch_records'
+class DrizzleDispatchRepository extends DrizzleRepository<
+  typeof dispatchRecords,
+  DispatchRecord,
+  NewDispatchRecord
+> {
+  protected table = dispatchRecords
+  protected idColumn = dispatchRecords.id
 
   /**
    * Find all dispatch records with optional filters
+   * Overrides base class to support DispatchFilters
    */
-  async findAll(filters?: DispatchFilters): Promise<DispatchDBRecord[]> {
-    let query = firebase
-      .from(this.collection)
-      .select('*')
-      .order('entry_time', { ascending: false })
+  async findAllWithFilters(filters?: DispatchFilters): Promise<DispatchRecord[]> {
+    const database = this.getDb()
+    const conditions = []
 
     if (filters?.status) {
-      query = query.eq('current_status', filters.status)
+      conditions.push(eq(dispatchRecords.status, filters.status))
     }
     if (filters?.vehicleId) {
-      query = query.eq('vehicle_id', filters.vehicleId)
+      conditions.push(eq(dispatchRecords.vehicleId, filters.vehicleId))
     }
     if (filters?.driverId) {
-      query = query.eq('driver_id', filters.driverId)
+      conditions.push(eq(dispatchRecords.driverId, filters.driverId))
     }
     if (filters?.routeId) {
-      query = query.eq('route_id', filters.routeId)
+      conditions.push(eq(dispatchRecords.routeId, filters.routeId))
+    }
+    if (filters?.startDate) {
+      conditions.push(gte(dispatchRecords.entryTime, new Date(filters.startDate)))
+    }
+    if (filters?.endDate) {
+      conditions.push(lte(dispatchRecords.entryTime, new Date(filters.endDate)))
     }
 
-    const { data, error } = await query
-    if (error) throw error
-    return data || []
+    let query = database.select().from(dispatchRecords)
+
+    if (conditions.length > 0) {
+      query = query.where(and(...conditions)) as typeof query
+    }
+
+    return query.orderBy(desc(dispatchRecords.entryTime))
   }
 
   /**
-   * Find single dispatch record by ID
+   * Find dispatch records by date range
    */
-  async findById(id: string): Promise<DispatchDBRecord | null> {
-    const { data, error } = await firebase
-      .from(this.collection)
-      .select('*')
-      .eq('id', id)
-      .single()
+  async findByDateRange(startDate: string, endDate: string): Promise<DispatchRecord[]> {
+    const database = this.getDb()
 
-    if (error) throw error
-    return data || null
+    return database
+      .select()
+      .from(dispatchRecords)
+      .where(
+        and(
+          gte(dispatchRecords.entryTime, new Date(startDate)),
+          lte(dispatchRecords.entryTime, new Date(endDate))
+        )
+      )
+      .orderBy(desc(dispatchRecords.entryTime))
   }
 
   /**
-   * Create new dispatch record
+   * Find dispatch records by vehicle plate number
    */
-  async create(insertData: Partial<DispatchDBRecord>): Promise<DispatchDBRecord> {
-    const { data, error } = await firebase
-      .from(this.collection)
-      .insert(insertData)
-      .select('*')
-      .single()
+  async findByPlateNumber(plateNumber: string): Promise<DispatchRecord[]> {
+    const database = this.getDb()
 
-    if (error) throw error
-    return data
+    return database
+      .select()
+      .from(dispatchRecords)
+      .where(eq(dispatchRecords.vehiclePlateNumber, plateNumber))
+      .orderBy(desc(dispatchRecords.entryTime))
   }
 
   /**
-   * Update dispatch record
+   * Find today's dispatch records
    */
-  async update(id: string, updateData: Partial<DispatchDBRecord>): Promise<DispatchDBRecord | null> {
-    const { data, error } = await firebase
-      .from(this.collection)
-      .update(updateData)
-      .eq('id', id)
-      .select('*')
-      .single()
+  async findToday(): Promise<DispatchRecord[]> {
+    const database = this.getDb()
+    const today = new Date()
+    today.setHours(0, 0, 0, 0)
+    const tomorrow = new Date(today)
+    tomorrow.setDate(tomorrow.getDate() + 1)
 
-    if (error) throw error
-    return data || null
+    return database
+      .select()
+      .from(dispatchRecords)
+      .where(
+        and(
+          gte(dispatchRecords.entryTime, today),
+          lte(dispatchRecords.entryTime, tomorrow)
+        )
+      )
+      .orderBy(desc(dispatchRecords.entryTime))
   }
 
   /**
-   * Delete dispatch record
+   * Update dispatch status
    */
-  async delete(id: string): Promise<void> {
-    const { error } = await firebase
-      .from(this.collection)
-      .delete()
-      .eq('id', id)
+  async updateStatus(id: string, status: string, additionalData?: Partial<NewDispatchRecord>): Promise<DispatchRecord | null> {
+    const database = this.getDb()
 
-    if (error) throw error
+    const [result] = await database
+      .update(dispatchRecords)
+      .set({
+        status,
+        ...additionalData,
+        updatedAt: new Date(),
+      })
+      .where(eq(dispatchRecords.id, id))
+      .returning()
+
+    return result || null
+  }
+
+  /**
+   * Count dispatch records by status
+   */
+  async countByStatus(status: string): Promise<number> {
+    const database = this.getDb()
+
+    const [result] = await database
+      .select({ count: sql<number>`count(*)` })
+      .from(dispatchRecords)
+      .where(eq(dispatchRecords.status, status))
+
+    return Number(result?.count || 0)
+  }
+
+  /**
+   * Create dispatch record with transaction support
+   */
+  async createWithTransaction<T>(
+    data: NewDispatchRecord,
+    callback?: (tx: NonNullable<typeof db>, dispatchId: string) => Promise<T>
+  ): Promise<DispatchRecord> {
+    return withTransaction(async (tx) => {
+      const [dispatch] = await tx
+        .insert(dispatchRecords)
+        .values(data)
+        .returning()
+
+      if (callback) {
+        await callback(tx, dispatch.id)
+      }
+
+      return dispatch
+    })
   }
 }
 
 // Export singleton instance
-export const dispatchRepository = new DispatchRepository()
+export const dispatchRepository = new DrizzleDispatchRepository()
+
+// Re-export types
+export type { DispatchRecord, NewDispatchRecord }

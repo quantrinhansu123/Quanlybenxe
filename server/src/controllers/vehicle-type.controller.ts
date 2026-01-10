@@ -1,6 +1,8 @@
 import { Request, Response } from 'express'
-import { firebase } from '../config/database.js'
+import { db } from '../db/drizzle.js'
+import { vehicleTypes } from '../db/schema/index.js'
 import { z } from 'zod'
+import { asc, eq } from 'drizzle-orm'
 
 const vehicleTypeSchema = z.object({
   name: z.string().min(1, 'Name is required'),
@@ -11,23 +13,25 @@ const vehicleTypeSchema = z.object({
 
 export const getAllVehicleTypes = async (_req: Request, res: Response) => {
   try {
-    const { data, error } = await firebase
-      .from('vehicle_types')
-      .select('*')
-      .order('name', { ascending: true })
+    if (!db) {
+      return res.status(503).json({ error: 'Database not available' })
+    }
 
-    if (error) throw error
+    const data = await db
+      .select()
+      .from(vehicleTypes)
+      .orderBy(asc(vehicleTypes.name))
 
-    const vehicleTypes = data.map((vt: any) => ({
+    const mapped = data.map((vt) => ({
       id: vt.id,
       name: vt.name,
       description: vt.description,
-      defaultSeatCapacity: vt.default_seat_capacity ?? null,
-      defaultBedCapacity: vt.default_bed_capacity ?? null,
-      createdAt: vt.created_at,
+      defaultSeatCapacity: vt.seatCount ?? null,
+      defaultBedCapacity: null, // Schema doesn't have bedCapacity field
+      createdAt: vt.createdAt,
     }))
 
-    return res.json(vehicleTypes)
+    return res.json(mapped)
   } catch (error: any) {
     return res.status(500).json({ error: error.message || 'Failed to fetch vehicle types' })
   }
@@ -35,26 +39,30 @@ export const getAllVehicleTypes = async (_req: Request, res: Response) => {
 
 export const getVehicleTypeById = async (req: Request, res: Response) => {
   try {
+    if (!db) {
+      return res.status(503).json({ error: 'Database not available' })
+    }
+
     const { id } = req.params
 
-    const { data, error } = await firebase
-      .from('vehicle_types')
-      .select('*')
-      .eq('id', id)
-      .single()
+    const data = await db
+      .select()
+      .from(vehicleTypes)
+      .where(eq(vehicleTypes.id, id))
+      .limit(1)
 
-    if (error) throw error
-    if (!data) {
+    if (!data || data.length === 0) {
       return res.status(404).json({ error: 'Vehicle type not found' })
     }
 
+    const vt = data[0]
     return res.json({
-      id: data.id,
-      name: data.name,
-      description: data.description,
-      defaultSeatCapacity: data.default_seat_capacity ?? null,
-      defaultBedCapacity: data.default_bed_capacity ?? null,
-      createdAt: data.created_at,
+      id: vt.id,
+      name: vt.name,
+      description: vt.description,
+      defaultSeatCapacity: vt.seatCount ?? null,
+      defaultBedCapacity: null,
+      createdAt: vt.createdAt,
     })
   } catch (error: any) {
     return res.status(500).json({ error: error.message || 'Failed to fetch vehicle type' })
@@ -63,28 +71,29 @@ export const getVehicleTypeById = async (req: Request, res: Response) => {
 
 export const createVehicleType = async (req: Request, res: Response) => {
   try {
+    if (!db) {
+      return res.status(503).json({ error: 'Database not available' })
+    }
+
     const validated = vehicleTypeSchema.parse(req.body)
 
-    const { data, error } = await firebase
-      .from('vehicle_types')
-      .insert({
+    const inserted = await db
+      .insert(vehicleTypes)
+      .values({
         name: validated.name,
         description: validated.description || null,
-        default_seat_capacity: validated.defaultSeatCapacity ?? null,
-        default_bed_capacity: validated.defaultBedCapacity ?? null,
+        seatCount: validated.defaultSeatCapacity ?? null,
       })
-      .select()
-      .single()
+      .returning()
 
-    if (error) throw error
-
+    const data = inserted[0]
     return res.status(201).json({
       id: data.id,
       name: data.name,
       description: data.description,
-      defaultSeatCapacity: data.default_seat_capacity ?? null,
-      defaultBedCapacity: data.default_bed_capacity ?? null,
-      createdAt: data.created_at,
+      defaultSeatCapacity: data.seatCount ?? null,
+      defaultBedCapacity: null,
+      createdAt: data.createdAt,
     })
   } catch (error: any) {
     if (error.name === 'ZodError') {
@@ -96,34 +105,36 @@ export const createVehicleType = async (req: Request, res: Response) => {
 
 export const updateVehicleType = async (req: Request, res: Response) => {
   try {
+    if (!db) {
+      return res.status(503).json({ error: 'Database not available' })
+    }
+
     const { id } = req.params
     const validated = vehicleTypeSchema.partial().parse(req.body)
 
     const updateData: any = {}
     if (validated.name) updateData.name = validated.name
     if (validated.description !== undefined) updateData.description = validated.description || null
-    if (validated.defaultSeatCapacity !== undefined) updateData.default_seat_capacity = validated.defaultSeatCapacity
-    if (validated.defaultBedCapacity !== undefined) updateData.default_bed_capacity = validated.defaultBedCapacity
+    if (validated.defaultSeatCapacity !== undefined) updateData.seatCount = validated.defaultSeatCapacity
 
-    const { data, error } = await firebase
-      .from('vehicle_types')
-      .update(updateData)
-      .eq('id', id)
-      .select()
-      .single()
+    const updated = await db
+      .update(vehicleTypes)
+      .set(updateData)
+      .where(eq(vehicleTypes.id, id))
+      .returning()
 
-    if (error) throw error
-    if (!data) {
+    if (!updated || updated.length === 0) {
       return res.status(404).json({ error: 'Vehicle type not found' })
     }
 
+    const data = updated[0]
     return res.json({
       id: data.id,
       name: data.name,
       description: data.description,
-      defaultSeatCapacity: data.default_seat_capacity ?? null,
-      defaultBedCapacity: data.default_bed_capacity ?? null,
-      createdAt: data.created_at,
+      defaultSeatCapacity: data.seatCount ?? null,
+      defaultBedCapacity: null,
+      createdAt: data.createdAt,
     })
   } catch (error: any) {
     if (error.name === 'ZodError') {
@@ -135,18 +146,19 @@ export const updateVehicleType = async (req: Request, res: Response) => {
 
 export const deleteVehicleType = async (req: Request, res: Response) => {
   try {
+    if (!db) {
+      return res.status(503).json({ error: 'Database not available' })
+    }
+
     const { id } = req.params
 
-    const { error } = await firebase
-      .from('vehicle_types')
-      .delete()
-      .eq('id', id)
+    await db
+      .delete(vehicleTypes)
+      .where(eq(vehicleTypes.id, id))
 
-    if (error) throw error
-
-    res.status(204).send()
+    return res.status(204).send()
   } catch (error: any) {
-    res.status(500).json({ error: error.message || 'Failed to delete vehicle type' })
+    return res.status(500).json({ error: error.message || 'Failed to delete vehicle type' })
   }
 }
 
