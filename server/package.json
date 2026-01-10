@@ -31,7 +31,11 @@
     "db:push": "drizzle-kit push",
     "db:migrate": "drizzle-kit migrate",
     "db:studio": "drizzle-kit studio",
-    "db:test": "tsx src/scripts/test-drizzle-connection.ts"
+    "db:test": "tsx src/scripts/test-drizzle-connection.ts",
+    "etl:export": "tsx src/db/migrations/etl/export-firebase.ts",
+    "etl:migrate": "tsx src/db/migrations/etl/migrate-all.ts",
+    "etl:validate": "tsx src/db/migrations/etl/validate-migration.ts",
+    "etl:rollback": "tsx src/db/migrations/etl/rollback.ts"
   },
   "keywords": [
     "express",

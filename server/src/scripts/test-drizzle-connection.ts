@@ -2,6 +2,7 @@
  * Test Drizzle Connection Script
  * Run: npx tsx src/scripts/test-drizzle-connection.ts
  */
+import 'dotenv/config'
 import { testDrizzleConnection, closeDrizzleConnection, db } from '../db/drizzle'
 import { operators } from '../db/schema'
 import { sql } from 'drizzle-orm'

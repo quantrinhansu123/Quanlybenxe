@@ -46,8 +46,7 @@ export async function testDrizzleConnection(): Promise<boolean> {
     console.log('[Drizzle] Connection test: SUCCESS at', result[0]?.current_time)
     return true
   } catch (error: unknown) {
-    const message = error instanceof Error ? error.message : 'Unknown error'
-    console.error('[Drizzle] Connection test: FAILED -', message)
+    console.error('[Drizzle] Connection test: FAILED -', error)
     return false
   }
 }
