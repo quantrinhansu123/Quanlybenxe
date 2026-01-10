@@ -24,6 +24,8 @@
     "db:migrate": "drizzle-kit migrate",
     "db:studio": "drizzle-kit studio",
     "db:test": "tsx src/scripts/test-drizzle-connection.ts",
+    "db:validate": "tsx src/scripts/validate-data-consistency.ts",
+    "db:benchmark": "tsx src/scripts/benchmark.ts",
     "etl:export": "tsx src/db/migrations/etl/export-firebase.ts",
     "etl:migrate": "tsx src/db/migrations/etl/migrate-all.ts",
     "etl:validate": "tsx src/db/migrations/etl/validate-migration.ts",

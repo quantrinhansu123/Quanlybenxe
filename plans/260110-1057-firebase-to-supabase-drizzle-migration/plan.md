@@ -32,7 +32,7 @@ Di chuyển hệ thống QuanLyBenXe từ Firebase (RTDB + Firestore) sang Supab
 | 2 | [Data Migration ETL](./phase-02-data-migration-etl.md) | 2w | ✅ done | 100% |
 | 3 | [Backend Drizzle Migration](./phase-03-backend-drizzle-migration.md) | 4w | ✅ done | 100% |
 | 4 | [Storage & Cleanup](./phase-04-storage-and-cleanup.md) | 1.5w | ✅ done | 100% |
-| 5 | [Testing & Validation](./phase-05-testing-validation.md) | 2w | pending | 0% |
+| 5 | [Testing & Validation](./phase-05-testing-validation.md) | 2w | ✅ done | 100% |
 | 6 | [Deployment & Cutover](./phase-06-deployment-cutover.md) | 1w | pending | 0% |
 
 **Total: 12 weeks**
