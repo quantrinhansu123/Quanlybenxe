@@ -1,68 +1,92 @@
-import { Request, Response } from 'express';
-import { getStorage } from 'firebase-admin/storage';
-import { getApps } from 'firebase-admin/app';
-import fs from 'fs';
-import path from 'path';
+/**
+ * Upload Controller
+ * Handles file uploads using Supabase Storage
+ */
+import { Request, Response } from 'express'
+import { storageService } from '../services/storage.service.js'
+import fs from 'fs'
 
-// Import to trigger Firebase initialization  
-import '../config/database.js';
-
-// Get Firebase Storage bucket (uses default bucket configured in initializeApp)
-function getStorageBucket() {
-  if (getApps().length === 0) {
-    throw new Error('Firebase not initialized. Make sure database.ts is imported first.');
-  }
-  return getStorage().bucket();
-}
-
+/**
+ * Upload dispatch entry image
+ * POST /api/upload/image
+ */
 export const uploadImage = async (req: Request, res: Response): Promise<Response> => {
   try {
     if (!req.file) {
-      return res.status(400).json({ message: 'No file uploaded' });
+      return res.status(400).json({ message: 'No file uploaded' })
     }
 
-    const bucket = getStorageBucket();
-    const timestamp = Date.now();
-    const ext = path.extname(req.file.originalname);
-    const fileName = `dispatch-images/${timestamp}-${Math.random().toString(36).substring(7)}${ext}`;
+    // Validate file type
+    const allowedTypes = ['image/jpeg', 'image/png', 'image/webp']
+    if (!allowedTypes.includes(req.file.mimetype)) {
+      // Clean up temp file if exists
+      if (req.file.path && fs.existsSync(req.file.path)) {
+        fs.unlinkSync(req.file.path)
+      }
+      return res.status(400).json({ message: 'Invalid file type. Only JPEG, PNG, WebP allowed.' })
+    }
 
-    // Upload to Firebase Storage
-    await bucket.upload(req.file.path, {
-      destination: fileName,
-      metadata: {
-        contentType: req.file.mimetype,
-        metadata: {
-          originalName: req.file.originalname,
-          uploadedAt: new Date().toISOString(),
-        },
-      },
-    });
+    // Validate file size (max 5MB)
+    const maxSize = 5 * 1024 * 1024
+    if (req.file.size > maxSize) {
+      // Clean up temp file if exists
+      if (req.file.path && fs.existsSync(req.file.path)) {
+        fs.unlinkSync(req.file.path)
+      }
+      return res.status(400).json({ message: 'File too large. Maximum 5MB allowed.' })
+    }
 
-    // Make file publicly accessible
-    const file = bucket.file(fileName);
-    await file.makePublic();
+    // If file is on disk (not memory), read it to buffer
+    if (req.file.path && !req.file.buffer) {
+      req.file.buffer = fs.readFileSync(req.file.path)
+      // Clean up temp file after reading
+      fs.unlinkSync(req.file.path)
+    }
 
-    // Get public URL
-    const publicUrl = `https://storage.googleapis.com/${bucket.name}/${fileName}`;
-
-    // Remove temp file
-    fs.unlinkSync(req.file.path);
+    // Upload to Supabase Storage
+    const imageUrl = await storageService.upload(req.file, 'entries')
 
     return res.status(200).json({
-      url: publicUrl,
-      fileName: fileName,
-    });
-  } catch (error: any) {
-    console.error('Upload error:', error);
-    
+      url: imageUrl,
+      fileName: imageUrl.split('/').pop() || '',
+    })
+  } catch (error: unknown) {
+    console.error('[Upload] Error:', error)
+
     // Try to remove temp file if it exists
-    if (req.file && fs.existsSync(req.file.path)) {
-      fs.unlinkSync(req.file.path);
+    if (req.file?.path && fs.existsSync(req.file.path)) {
+      fs.unlinkSync(req.file.path)
     }
-    
-    return res.status(500).json({ 
-      message: 'Image upload failed', 
-      error: error.message || 'Unknown error'
-    });
+
+    const message = error instanceof Error ? error.message : 'Unknown error'
+    return res.status(500).json({
+      message: 'Image upload failed',
+      error: message
+    })
   }
-};
+}
+
+/**
+ * Delete uploaded image
+ * DELETE /api/upload/image
+ */
+export const deleteImage = async (req: Request, res: Response): Promise<Response> => {
+  try {
+    const { url } = req.body
+
+    if (!url) {
+      return res.status(400).json({ message: 'No URL provided' })
+    }
+
+    await storageService.delete(url)
+
+    return res.json({ success: true })
+  } catch (error: unknown) {
+    console.error('[Upload] Delete error:', error)
+    const message = error instanceof Error ? error.message : 'Unknown error'
+    return res.status(500).json({
+      message: 'Failed to delete image',
+      error: message
+    })
+  }
+}
