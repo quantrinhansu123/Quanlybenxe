@@ -1,10 +1,11 @@
-import { firebaseDb } from '../../../config/database.js'
+import { firebase } from '../../../config/database.js'
 
-const COLLECTIONS = {
-  vehicles: 'datasheet/Xe',
-  badges: 'datasheet/PHUHIEUXE',
-  operators: 'datasheet/DONVIVANTAI',
-  routes: 'datasheet/DANHMUCTUYENCODINH',
+// Supabase table names (matching existing schema)
+const TABLES = {
+  vehicles: 'vehicles',
+  badges: 'vehicle_badges',
+  operators: 'operators',
+  routes: 'routes',
   drivers: 'drivers',
   dispatch_records: 'dispatch_records',
   schedules: 'schedules',
@@ -44,21 +45,21 @@ class ChatCacheService {
     if (this.isWarming) return
     this.isWarming = true
 
-    console.log('[ChatCache] Pre-warming cache...')
+    console.log('[ChatCache] Pre-warming cache from Supabase...')
     const startTime = Date.now()
 
     try {
-      const loadPromises = Object.entries(COLLECTIONS).map(async ([key, path]) => {
+      const loadPromises = Object.entries(TABLES).map(async ([key, table]) => {
         try {
-          const snapshot = await firebaseDb.ref(path).once('value')
-          const data = snapshot.val()
-          if (data) {
-            const items = Object.entries(data).map(([id, item]) => ({ id, ...(item as any) }))
-            this.cache.set(key, items)
-            return { key, count: items.length }
+          const { data, error } = await firebase.from(table).select('*')
+          if (error) {
+            console.warn(`[ChatCache] Error loading ${key}:`, error.message)
+            this.cache.set(key, [])
+            return { key, count: 0 }
           }
-          this.cache.set(key, [])
-          return { key, count: 0 }
+          const items = data || []
+          this.cache.set(key, items)
+          return { key, count: items.length }
         } catch (error) {
           console.warn(`[ChatCache] Failed to load ${key}:`, error)
           this.cache.set(key, [])
@@ -93,50 +94,50 @@ class ChatCacheService {
     this.nameIndex.clear()
     this.codeIndex.clear()
 
-    // Index vehicles by plate
+    // Index vehicles by plate (Supabase uses snake_case)
     const vehicles = this.cache.get('vehicles') || []
-    vehicles.forEach(v => {
-      const plate = this.normalizePlate(v.plate_number || v.BienSo || '')
+    vehicles.forEach((v: any) => {
+      const plate = this.normalizePlate(v.plate_number || '')
       if (plate) {
         const existing = this.plateIndex.get(plate) || []
         this.plateIndex.set(plate, [...existing, { ...v, _source: 'vehicles' }])
       }
     })
 
-    // Index badges by plate
+    // Index badges by plate (Supabase uses snake_case)
     const badges = this.cache.get('badges') || []
-    badges.forEach(b => {
-      const plate = this.normalizePlate(b.BienSoXe || b.plate_number || '')
+    badges.forEach((b: any) => {
+      const plate = this.normalizePlate(b.plate_number || b.license_plate_sheet || '')
       if (plate) {
         const existing = this.plateIndex.get(plate) || []
         this.plateIndex.set(plate, [...existing, { ...b, _source: 'badges' }])
       }
     })
 
-    // Index operators by name
+    // Index operators by name (Supabase uses 'name')
     const operators = this.cache.get('operators') || []
-    operators.forEach(o => {
-      const name = this.normalizeText(o.TenDonVi || o.name || '')
+    operators.forEach((o: any) => {
+      const name = this.normalizeText(o.name || '')
       if (name) {
         const existing = this.nameIndex.get(name) || []
         this.nameIndex.set(name, [...existing, { ...o, _source: 'operators' }])
       }
     })
 
-    // Index drivers by name
+    // Index drivers by name (Supabase uses 'full_name')
     const drivers = this.cache.get('drivers') || []
-    drivers.forEach(d => {
-      const name = this.normalizeText(d.full_name || d.fullName || '')
+    drivers.forEach((d: any) => {
+      const name = this.normalizeText(d.full_name || '')
       if (name) {
         const existing = this.nameIndex.get(name) || []
         this.nameIndex.set(name, [...existing, { ...d, _source: 'drivers' }])
       }
     })
 
-    // Index routes by code
+    // Index routes by code (Supabase uses 'route_code')
     const routes = this.cache.get('routes') || []
-    routes.forEach(r => {
-      const code = this.normalizeText(r.MaSoTuyen || r.route_code || '')
+    routes.forEach((r: any) => {
+      const code = this.normalizeText(r.route_code || '')
       if (code) {
         const existing = this.codeIndex.get(code) || []
         this.codeIndex.set(code, [...existing, { ...r, _source: 'routes' }])
@@ -179,11 +180,11 @@ class ChatCacheService {
       })
     }
 
-    // Fallback to full scan
+    // Fallback to full scan (Supabase uses snake_case)
     if (results.length === 0 && normalized.length >= 3) {
       const vehicles = this.cache.get('vehicles') || []
-      vehicles.forEach(v => {
-        const vPlate = this.normalizePlate(v.plate_number || v.BienSo || '')
+      vehicles.forEach((v: any) => {
+        const vPlate = this.normalizePlate(v.plate_number || '')
         if (vPlate.includes(normalized)) {
           results.push({ ...v, _source: 'vehicles' })
         }
@@ -200,15 +201,15 @@ class ChatCacheService {
     // Search in name index
     this.nameIndex.forEach((items, key) => {
       if (key.includes(normalized) || normalized.includes(key)) {
-        items.filter(i => i._source === 'drivers').forEach(item => results.push(item))
+        items.filter((i: any) => i._source === 'drivers').forEach((item: any) => results.push(item))
       }
     })
 
-    // Fallback to full scan
+    // Fallback to full scan (Supabase uses 'full_name')
     if (results.length === 0) {
       const drivers = this.cache.get('drivers') || []
-      drivers.forEach(d => {
-        const dName = this.normalizeText(d.full_name || d.fullName || '')
+      drivers.forEach((d: any) => {
+        const dName = this.normalizeText(d.full_name || '')
         if (dName.includes(normalized)) {
           results.push({ ...d, _source: 'drivers' })
         }
@@ -225,15 +226,15 @@ class ChatCacheService {
     // Search in name index
     this.nameIndex.forEach((items, key) => {
       if (key.includes(normalized) || normalized.includes(key)) {
-        items.filter(i => i._source === 'operators').forEach(item => results.push(item))
+        items.filter((i: any) => i._source === 'operators').forEach((item: any) => results.push(item))
       }
     })
 
-    // Fallback to full scan
+    // Fallback to full scan (Supabase uses 'name')
     if (results.length === 0) {
       const operators = this.cache.get('operators') || []
-      operators.forEach(o => {
-        const oName = this.normalizeText(o.TenDonVi || o.name || '')
+      operators.forEach((o: any) => {
+        const oName = this.normalizeText(o.name || '')
         if (oName.includes(normalized)) {
           results.push({ ...o, _source: 'operators' })
         }
@@ -254,12 +255,12 @@ class ChatCacheService {
       }
     })
 
-    // Search by departure/arrival station
+    // Search by departure/arrival station (Supabase uses snake_case)
     if (results.length === 0) {
       const routes = this.cache.get('routes') || []
-      routes.forEach(r => {
-        const departure = this.normalizeText(r.BenDi || r.departure_station || '')
-        const arrival = this.normalizeText(r.BenDen || r.arrival_station || '')
+      routes.forEach((r: any) => {
+        const departure = this.normalizeText(r.departure_station || '')
+        const arrival = this.normalizeText(r.arrival_station || '')
         if (departure.includes(normalized) || arrival.includes(normalized)) {
           results.push({ ...r, _source: 'routes' })
         }
@@ -273,11 +274,11 @@ class ChatCacheService {
     const normalized = this.normalizePlate(number)
     const badges = this.cache.get('badges') || []
 
-    return badges.filter(b => {
-      const badgeNum = this.normalizePlate(b.SoPhuHieu || b.badge_number || '')
-      const plate = this.normalizePlate(b.BienSoXe || b.plate_number || '')
+    return badges.filter((b: any) => {
+      const badgeNum = this.normalizePlate(b.badge_number || '')
+      const plate = this.normalizePlate(b.plate_number || b.license_plate_sheet || '')
       return badgeNum.includes(normalized) || plate.includes(normalized)
-    }).map(b => ({ ...b, _source: 'badges' }))
+    }).map((b: any) => ({ ...b, _source: 'badges' }))
   }
 
   searchSchedules(term: string): any[] {
@@ -285,13 +286,13 @@ class ChatCacheService {
     const schedules = this.cache.get('schedules') || []
 
     if (!term || term === 'today') {
-      return schedules.slice(0, 20).map(s => ({ ...s, _source: 'schedules' }))
+      return schedules.slice(0, 20).map((s: any) => ({ ...s, _source: 'schedules' }))
     }
 
-    return schedules.filter(s => {
-      const code = this.normalizeText(s.schedule_code || s.scheduleCode || '')
+    return schedules.filter((s: any) => {
+      const code = this.normalizeText(s.schedule_code || '')
       return code.includes(normalized)
-    }).map(s => ({ ...s, _source: 'schedules' }))
+    }).map((s: any) => ({ ...s, _source: 'schedules' }))
   }
 
   searchServices(term: string): any[] {
@@ -299,14 +300,14 @@ class ChatCacheService {
     const services = this.cache.get('services') || []
 
     if (!term) {
-      return services.slice(0, 20).map(s => ({ ...s, _source: 'services' }))
+      return services.slice(0, 20).map((s: any) => ({ ...s, _source: 'services' }))
     }
 
-    return services.filter(s => {
+    return services.filter((s: any) => {
       const name = this.normalizeText(s.name || s.service_name || '')
       const code = this.normalizeText(s.code || s.service_code || '')
       return name.includes(normalized) || code.includes(normalized)
-    }).map(s => ({ ...s, _source: 'services' }))
+    }).map((s: any) => ({ ...s, _source: 'services' }))
   }
 
   getDispatchStats(date?: string): { date: string; entered: number; departed: number; total: number } {
@@ -316,10 +317,10 @@ class ChatCacheService {
     let entered = 0
     let departed = 0
 
-    records.forEach(r => {
-      const entryDate = (r.entry_time || r.entryTime || '').split('T')[0]
-      const exitDate = (r.exit_time || r.exitTime || '').split('T')[0]
-      const status = r.status || ''
+    records.forEach((r: any) => {
+      const entryDate = (r.entry_time || '').split('T')[0]
+      const exitDate = (r.exit_time || '').split('T')[0]
+      const status = r.current_status || r.status || ''
 
       if (entryDate === targetDate) {
         entered++
@@ -353,47 +354,47 @@ class ChatCacheService {
   getShiftInfo(date?: string): any[] {
     const shifts = this.cache.get('shifts') || []
     if (!date) {
-      return shifts.slice(0, 10).map(s => ({ ...s, _source: 'shifts' }))
+      return shifts.slice(0, 10).map((s: any) => ({ ...s, _source: 'shifts' }))
     }
-    return shifts.filter(s => {
+    return shifts.filter((s: any) => {
       const shiftDate = (s.date || s.shift_date || '').split('T')[0]
       return shiftDate === date
-    }).map(s => ({ ...s, _source: 'shifts' }))
+    }).map((s: any) => ({ ...s, _source: 'shifts' }))
   }
 
   getInvoices(date?: string, limit: number = 10): any[] {
     const invoices = this.cache.get('invoices') || []
     if (!date) {
-      return invoices.slice(0, limit).map(i => ({ ...i, _source: 'invoices' }))
+      return invoices.slice(0, limit).map((i: any) => ({ ...i, _source: 'invoices' }))
     }
-    return invoices.filter(i => {
+    return invoices.filter((i: any) => {
       const invoiceDate = (i.date || i.invoice_date || i.created_at || '').split('T')[0]
       return invoiceDate === date
-    }).slice(0, limit).map(i => ({ ...i, _source: 'invoices' }))
+    }).slice(0, limit).map((i: any) => ({ ...i, _source: 'invoices' }))
   }
 
   getViolations(plate?: string): any[] {
     const violations = this.cache.get('violations') || []
     if (!plate) {
-      return violations.slice(0, 20).map(v => ({ ...v, _source: 'violations' }))
+      return violations.slice(0, 20).map((v: any) => ({ ...v, _source: 'violations' }))
     }
     const normalized = this.normalizePlate(plate)
-    return violations.filter(v => {
-      const vPlate = this.normalizePlate(v.plate_number || v.plateNumber || '')
+    return violations.filter((v: any) => {
+      const vPlate = this.normalizePlate(v.plate_number || '')
       return vPlate.includes(normalized)
-    }).map(v => ({ ...v, _source: 'violations' }))
+    }).map((v: any) => ({ ...v, _source: 'violations' }))
   }
 
   getServiceCharges(service?: string): any[] {
     const charges = this.cache.get('service_charges') || []
     if (!service) {
-      return charges.slice(0, 20).map(c => ({ ...c, _source: 'service_charges' }))
+      return charges.slice(0, 20).map((c: any) => ({ ...c, _source: 'service_charges' }))
     }
     const normalized = this.normalizeText(service)
-    return charges.filter(c => {
+    return charges.filter((c: any) => {
       const name = this.normalizeText(c.service_name || c.name || '')
       return name.includes(normalized)
-    }).map(c => ({ ...c, _source: 'service_charges' }))
+    }).map((c: any) => ({ ...c, _source: 'service_charges' }))
   }
 
   // Fuzzy search across all collections (fallback)

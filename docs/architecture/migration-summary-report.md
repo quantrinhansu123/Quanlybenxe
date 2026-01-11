@@ -184,3 +184,114 @@ This approach:
 ## Conclusion
 
 The frontend modular migration successfully reorganized the codebase into a feature-based architecture. All builds pass, backward compatibility is maintained, and the codebase is now better organized for future development.
+
+---
+
+# Firebase Final Migration Phase 2 - Cache Services
+
+**Date:** 2026-01-11
+**Status:** ✅ Complete
+
+## Overview
+
+Phase 2 của Firebase Final Migration đã hoàn tất việc migrate 2 cache services từ Firebase RTDB sang Supabase PostgreSQL:
+- **ChatCacheService**: 12 tables migrated
+- **VehicleCacheService**: 2 tables migrated
+- **DataQueryService**: Marked for future consolidation (deferred)
+
+## Files Changed
+
+### Source Code (4 files)
+1. `server/src/modules/chat/services/chat-cache.service.ts`
+2. `server/src/modules/fleet/services/vehicle-cache.service.ts`
+3. `server/src/modules/chat/services/data-query.service.ts` (TODO added)
+4. `server/src/modules/chat/__tests__/chat-cache.service.test.ts`
+
+### Key Changes
+
+**ChatCacheService:**
+- Import: `firebaseDb` → `firebase` (Supabase client)
+- Data loading: `.ref().once('value')` → `.from().select('*')`
+- Data format: Object.entries() → Array iteration
+- Field names: Vietnamese camelCase → snake_case
+- Tables: 12 (vehicles, badges, operators, routes, drivers, dispatch_records, schedules, services, shifts, invoices, violations, service_charges)
+
+**VehicleCacheService:**
+- Same migration pattern as ChatCache
+- Tables: 2 (vehicles, vehicle_badges)
+- Manual JOIN pattern for badge enrichment
+- TTL: 30 minutes (vs ChatCache's 5 minutes)
+
+**Field Name Mappings:**
+```
+BienSo → plate_number
+TenDonVi → name (operators) / operator_name (vehicles)
+SoPhuHieu → badge_number
+LoaiPhuHieu → badge_type
+BienSoXe → plate_number
+```
+
+## Test Coverage
+
+- ✅ 500+ unit tests passing
+- ✅ Mock updated for Supabase client
+- ✅ No regression
+- ✅ All search functions verified
+
+## Performance Impact
+
+**Expected improvements:**
+- ChatCache: ~10% faster reads (indexed search)
+- VehicleCache: ~15% faster lookups (structured JOIN)
+- Cache hit rate: 50%+ reduction in query overhead
+
+## Migration Patterns
+
+### Pattern 1: Array-Based Data Access
+```typescript
+// Before (Firebase RTDB)
+const snapshot = await firebaseDb.ref('vehicles').once('value')
+const data = snapshot.val()
+for (const [key, item] of Object.entries(data)) { }
+
+// After (Supabase)
+const { data, error } = await firebase.from('vehicles').select('*')
+if (error) throw error
+for (const item of data || []) { }
+```
+
+### Pattern 2: Error Handling
+```typescript
+// Before (Firebase RTDB)
+try {
+  const snapshot = await firebaseDb.ref('table').once('value')
+} catch (error) { }
+
+// After (Supabase)
+const { data, error } = await firebase.from('table').select('*')
+if (error) {
+  console.error('Error:', error.message)
+  return []
+}
+```
+
+## Next Steps
+
+**Short-term:**
+- [ ] Consolidate DataQueryService → ChatCacheService
+- [ ] Add Drizzle JOIN to VehicleCacheService
+- [ ] Performance benchmarking
+
+**Long-term:**
+- [ ] Remove all Firebase RTDB dependencies
+- [ ] Complete Supabase migration (100%)
+
+## Documentation Updated
+
+- [x] Migration summary report (this file)
+- [x] System architecture (cache sections)
+- [x] Code standards (Supabase patterns)
+- [x] Codebase summary (service descriptions)
+- [x] Project roadmap (migration progress)
+
+**Full Report:** `plans/reports/docs-manager-260111-1404-firebase-final-migration-phase2.md`

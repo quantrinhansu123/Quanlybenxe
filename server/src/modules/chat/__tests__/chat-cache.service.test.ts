@@ -1,8 +1,9 @@
 /**
  * ChatCacheService Unit Tests
  * Tests for cache service with indexed search functionality
- * 
+ *
  * Uses jest.unstable_mockModule() for ESM compatibility
+ * Updated for Supabase migration
  */
 
 import { describe, it, expect, beforeEach, afterEach, jest, beforeAll } from '@jest/globals';
@@ -21,18 +22,18 @@ import {
   mockInvoices,
   mockViolations,
   mockServiceCharges,
-  createMockSnapshot,
   plateVariations,
 } from './mocks/chat-mock-data.js';
 
 // Define typed mock function at module scope BEFORE mock registration
-const mockOnce = jest.fn<(path: string) => Promise<{ val: () => any; exists: () => boolean }>>();
+const mockSelect = jest.fn<() => Promise<{ data: any[] | null; error: any }>>()
 
 // Register mock BEFORE importing the service (ESM requirement)
+// Now mocking Supabase client instead of Firebase RTDB
 jest.unstable_mockModule('../../../config/database.js', () => ({
-  firebaseDb: {
-    ref: (path: string) => ({
-      once: () => mockOnce(path),
+  firebase: {
+    from: (table: string) => ({
+      select: () => mockSelect(),
     }),
   },
 }));
@@ -40,32 +41,50 @@ jest.unstable_mockModule('../../../config/database.js', () => ({
 // Dynamic import AFTER mock registration
 const { chatCacheService } = await import('../services/chat-cache.service.js');
 
-// Helper to setup mock for all collections
-const setupCollectionMocks = () => {
-  mockOnce.mockImplementation((path: string) => {
-    const collectionMap: Record<string, any[]> = {
-      'datasheet/Xe': mockVehicles,
-      'datasheet/PHUHIEUXE': mockBadges,
-      'datasheet/DONVIVANTAI': mockOperators,
-      'datasheet/DANHMUCTUYENCODINH': mockRoutes,
-      'drivers': mockDrivers,
-      'dispatch_records': mockDispatchRecords,
-      'schedules': mockSchedules,
-      'services': mockServices,
-      'shifts': mockShifts,
-      'invoices': mockInvoices,
-      'violations': mockViolations,
-      'service_charges': mockServiceCharges,
-    };
-    const data = collectionMap[path] || [];
-    return Promise.resolve(createMockSnapshot(data));
-  });
-};
+// Helper to setup mock for all tables (Supabase returns arrays directly)
+const setupTableMocks = () => {
+  mockSelect.mockImplementation(() => {
+    // This is a simplified mock - in reality each table call is separate
+    // We'll track the table being queried via the call order
+    return Promise.resolve({ data: [], error: null })
+  })
+}
+
+// Better mock that tracks table names
+const setupAllTableMocks = () => {
+  const tableDataMap: Record<string, any[]> = {
+    'vehicles': mockVehicles.map((v, i) => ({ id: `v${i}`, ...v })),
+    'vehicle_badges': mockBadges.map((b, i) => ({ id: `b${i}`, ...b })),
+    'operators': mockOperators.map((o, i) => ({ id: `o${i}`, ...o })),
+    'routes': mockRoutes.map((r, i) => ({ id: `r${i}`, ...r })),
+    'drivers': mockDrivers.map((d, i) => ({ id: `d${i}`, ...d })),
+    'dispatch_records': mockDispatchRecords.map((dr, i) => ({ id: `dr${i}`, ...dr })),
+    'schedules': mockSchedules.map((s, i) => ({ id: `s${i}`, ...s })),
+    'services': mockServices.map((sv, i) => ({ id: `sv${i}`, ...sv })),
+    'shifts': mockShifts.map((sh, i) => ({ id: `sh${i}`, ...sh })),
+    'invoices': mockInvoices.map((inv, i) => ({ id: `inv${i}`, ...inv })),
+    'violations': mockViolations.map((vio, i) => ({ id: `vio${i}`, ...vio })),
+    'service_charges': mockServiceCharges.map((sc, i) => ({ id: `sc${i}`, ...sc })),
+  }
+
+  let callIndex = 0
+  const tableOrder = [
+    'vehicles', 'vehicle_badges', 'operators', 'routes',
+    'drivers', 'dispatch_records', 'schedules', 'services',
+    'shifts', 'invoices', 'violations', 'service_charges'
+  ]
+
+  mockSelect.mockImplementation(() => {
+    const table = tableOrder[callIndex % tableOrder.length]
+    callIndex++
+    return Promise.resolve({ data: tableDataMap[table] || [], error: null })
+  })
+}
 
 describe('ChatCacheService', () => {
   beforeEach(() => {
     jest.clearAllMocks();
-    setupCollectionMocks();
+    setupAllTableMocks();
   });
 
   afterEach(() => {
@@ -78,21 +97,21 @@ describe('ChatCacheService', () => {
       expect(chatCacheService.isReady()).toBe(true);
     });
 
-    it('should call Firebase for each collection', async () => {
+    it('should call Supabase for each table', async () => {
       await chatCacheService.preWarm();
-      expect(mockOnce).toHaveBeenCalled();
-      // Should be called for 12 collections
-      expect(mockOnce.mock.calls.length).toBeGreaterThanOrEqual(12);
+      expect(mockSelect).toHaveBeenCalled();
+      // Should be called for 12 tables
+      expect(mockSelect.mock.calls.length).toBeGreaterThanOrEqual(12);
     });
 
     it('should handle empty collections gracefully', async () => {
-      mockOnce.mockImplementation(() => Promise.resolve({ val: () => null, exists: () => false }));
+      mockSelect.mockImplementation(() => Promise.resolve({ data: [], error: null }));
       await chatCacheService.preWarm();
       expect(chatCacheService.isReady()).toBe(true);
     });
 
-    it('should handle Firebase errors gracefully', async () => {
-      mockOnce.mockImplementation(() => Promise.reject(new Error('Firebase error')));
+    it('should handle Supabase errors gracefully', async () => {
+      mockSelect.mockImplementation(() => Promise.resolve({ data: null, error: { message: 'Database error' } }));
       await chatCacheService.preWarm();
       expect(chatCacheService.isReady()).toBe(true);
     });

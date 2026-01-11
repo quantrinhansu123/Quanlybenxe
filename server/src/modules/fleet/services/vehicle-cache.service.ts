@@ -1,9 +1,9 @@
 /**
  * Vehicle Cache Service
- * Handles legacy and badge vehicles from Firebase RTDB with caching
+ * Handles legacy and badge vehicles from Supabase with caching
  */
 
-import { firebaseDb } from '../../../config/database.js';
+import { firebase } from '../../../config/database.js';
 
 export interface LegacyVehicleData {
   id: string;
@@ -95,50 +95,53 @@ class VehicleCacheService {
       return this.legacyCache.data!;
     }
 
-    const snapshot = await firebaseDb.ref('datasheet/Xe').once('value');
-    const data = snapshot.val();
+    const { data, error } = await firebase.from('vehicles').select('*');
+    if (error) {
+      console.error('[VehicleCache] Error loading legacy vehicles:', error);
+      return [];
+    }
+
     const vehicles: LegacyVehicleData[] = [];
     const operatorIndex = new Map<string, number[]>();
 
     if (data) {
       let idx = 0;
-      for (const [key, xe] of Object.entries(data)) {
-        const x = xe as Record<string, unknown>;
+      for (const x of data) {
         if (!x) continue;
 
-        const plateNumber = (x.plate_number || x.BienSo || '') as string;
+        const plateNumber = (x.plate_number || '') as string;
         if (!plateNumber) continue;
 
-        const operatorName = ((x.owner_name || x.TenDangKyXe || '') as string).trim().toLowerCase();
-        const vehicleCategory = (x.vehicle_category || x.LoaiPhuongTien || '') as string;
-        const seatCount = parseInt(String(x.seat_count || x.SoCho)) || 0;
+        const operatorName = ((x.operator_name || '') as string).trim().toLowerCase();
+        const vehicleCategory = (x.vehicle_category || '') as string;
+        const seatCount = parseInt(String(x.seat_count || x.seat_capacity || 0)) || 0;
         // If vehicle category contains "giường nằm", seatCount is actually bedCount
         const hasBeds = isBedVehicle(vehicleCategory);
 
         vehicles.push({
-          id: `legacy_${key}`,
+          id: `legacy_${x.id}`,
           plateNumber,
-          vehicleType: { id: null, name: (x.vehicle_type || x.LoaiXe || '') as string },
-          vehicleTypeName: (x.vehicle_type || x.LoaiXe || '') as string,
+          vehicleType: { id: null, name: (x.vehicle_type || '') as string },
+          vehicleTypeName: (x.vehicle_type || '') as string,
           vehicleCategory,
           seatCapacity: hasBeds ? 0 : seatCount,
           bedCapacity: hasBeds ? seatCount : 0,
-          manufacturer: (x.manufacturer || x.NhanHieu || '') as string,
-          modelCode: (x.model_code || x.SoLoai || '') as string,
-          manufactureYear: (x.manufacture_year || x.NamSanXuat)
-            ? parseInt(String(x.manufacture_year || x.NamSanXuat))
+          manufacturer: (x.manufacturer || '') as string,
+          modelCode: (x.model_code || '') as string,
+          manufactureYear: x.manufacture_year
+            ? parseInt(String(x.manufacture_year))
             : null,
-          color: (x.color || x.MauSon || '') as string,
-          chassisNumber: (x.chassis_number || x.SoKhung || '') as string,
-          engineNumber: (x.engine_number || x.SoMay || '') as string,
+          color: (x.color || '') as string,
+          chassisNumber: (x.chassis_number || '') as string,
+          engineNumber: (x.engine_number || '') as string,
           operatorId: null,
-          operator: { id: null, name: (x.owner_name || x.TenDangKyXe || '') as string, code: '' },
-          operatorName: (x.owner_name || x.TenDangKyXe || '') as string,
-          isActive: true,
-          notes: (x.notes || x.GhiChu || '') as string,
+          operator: { id: null, name: (x.operator_name || '') as string, code: '' },
+          operatorName: (x.operator_name || '') as string,
+          isActive: x.is_active !== false,
+          notes: (x.notes || '') as string,
           source: 'legacy',
-          inspectionExpiryDate: (x.inspection_expiry || x.NgayHetHanKiemDinh || null) as string | null,
-          insuranceExpiryDate: (x.insurance_expiry || x.NgayHetHanBaoHiem || null) as string | null,
+          inspectionExpiryDate: (x.road_worthiness_expiry || null) as string | null,
+          insuranceExpiryDate: (x.insurance_expiry || null) as string | null,
           documents: {},
         });
 
@@ -163,104 +166,103 @@ class VehicleCacheService {
     }
 
     const allowedTypes = ['Buýt', 'Tuyến cố định'];
-    
-    // Load both badges and vehicles data for joining
-    const [badgeSnapshot, vehicleSnapshot] = await Promise.all([
-      firebaseDb.ref('datasheet/PHUHIEUXE').once('value'),
-      firebaseDb.ref('datasheet/Xe').once('value')
+
+    // Load both badges and vehicles data for joining from Supabase
+    const [badgeResult, vehicleResult] = await Promise.all([
+      firebase.from('vehicle_badges').select('*'),
+      firebase.from('vehicles').select('*')
     ]);
-    
-    const badgeData = badgeSnapshot.val();
-    const vehicleData = vehicleSnapshot.val();
-    
+
+    if (badgeResult.error) {
+      console.error('[VehicleCache] Error loading badge vehicles:', badgeResult.error);
+      return [];
+    }
+
+    const badgeData = badgeResult.data || [];
+    const vehicleData = vehicleResult.data || [];
+
     // Build vehicle lookup map by plate number (normalized)
     const vehicleByPlate = new Map<string, Record<string, unknown>>();
-    if (vehicleData) {
-      for (const [, v] of Object.entries(vehicleData)) {
-        const vehicle = v as Record<string, unknown>;
-        const plate = ((vehicle.plate_number || vehicle.BienSo || '') as string).replace(/[.\-\s]/g, '').toUpperCase();
-        if (plate) {
-          vehicleByPlate.set(plate, vehicle);
-        }
+    for (const v of vehicleData) {
+      const plate = ((v.plate_number || '') as string).replace(/[.\-\s]/g, '').toUpperCase();
+      if (plate) {
+        vehicleByPlate.set(plate, v as Record<string, unknown>);
       }
     }
-    
+
     const vehicles: BadgeVehicleData[] = [];
 
-    if (badgeData) {
-      for (const [key, badge] of Object.entries(badgeData)) {
-        const b = badge as Record<string, unknown>;
-        if (!b) continue;
-        
-        // Support both old field names and new field names from sync
-        const plateNumber = (b.license_plate_sheet || b.BienSoXe || '') as string;
-        if (!plateNumber) continue;
-        
-        const badgeType = (b.badge_type || b.LoaiPH || '') as string;
-        if (!allowedTypes.includes(badgeType)) continue;
+    for (const b of badgeData) {
+      if (!b) continue;
 
-        const badgeNumber = (b.badge_number || b.SoPhuHieu || '') as string;
-        const status = (b.status || b.TrangThai || '') as string;
-        const expiryDate = (b.expiry_date || b.NgayHetHan || null) as string | null;
-        
-        // Try to find matching vehicle for additional info
-        const normalizedPlate = plateNumber.replace(/[.\-\s]/g, '').toUpperCase();
-        const matchingVehicle = vehicleByPlate.get(normalizedPlate);
-        
-        // Get operator and seat count from vehicle if available
-        let operatorName = (b.operator_name || '') as string;
-        let seatCount = parseInt(String(b.seat_count || 0)) || 0;
-        let vehicleCategory = '';
-        let manufacturer = '';
-        let modelCode = '';
-        let manufactureYear: number | null = null;
-        let color = '';
-        let chassisNumber = '';
-        let engineNumber = '';
-        
-        if (matchingVehicle) {
-          operatorName = operatorName || (matchingVehicle.owner_name || matchingVehicle.TenDangKyXe || '') as string;
-          seatCount = seatCount || parseInt(String(matchingVehicle.seat_count || matchingVehicle.SoCho || 0)) || 0;
-          vehicleCategory = (matchingVehicle.vehicle_category || matchingVehicle.LoaiPhuongTien || '') as string;
-          manufacturer = (matchingVehicle.manufacturer || matchingVehicle.NhanHieu || '') as string;
-          modelCode = (matchingVehicle.model_code || matchingVehicle.SoLoai || '') as string;
-          manufactureYear = (matchingVehicle.manufacture_year || matchingVehicle.NamSanXuat)
-            ? parseInt(String(matchingVehicle.manufacture_year || matchingVehicle.NamSanXuat))
-            : null;
-          color = (matchingVehicle.color || matchingVehicle.MauSon || '') as string;
-          chassisNumber = (matchingVehicle.chassis_number || matchingVehicle.SoKhung || '') as string;
-          engineNumber = (matchingVehicle.engine_number || matchingVehicle.SoMay || '') as string;
-        }
-        
-        // If vehicle category contains "giường nằm", seatCount is actually bedCount
-        const hasBeds = isBedVehicle(vehicleCategory);
+      // Supabase uses snake_case field names
+      const plateNumber = (b.plate_number || '') as string;
+      if (!plateNumber) continue;
 
-        vehicles.push({
-          id: `badge_${key}`,
-          plateNumber,
-          vehicleType: { id: null, name: badgeType },
-          vehicleTypeName: badgeType,
-          vehicleCategory,
-          seatCapacity: hasBeds ? 0 : seatCount,
-          bedCapacity: hasBeds ? seatCount : 0,
-          manufacturer,
-          modelCode,
-          manufactureYear,
-          color,
-          chassisNumber,
-          engineNumber,
-          operatorId: null,
-          operator: { id: null, name: operatorName, code: '' },
-          operatorName,
-          isActive: status !== 'Thu hồi',
-          notes: `Phù hiệu: ${badgeNumber}`,
-          source: 'badge',
-          badgeNumber,
-          badgeType,
-          badgeExpiryDate: expiryDate,
-          documents: {},
-        });
+      const badgeType = (b.badge_type || '') as string;
+      if (!allowedTypes.includes(badgeType)) continue;
+
+      const badgeNumber = (b.badge_number || '') as string;
+      const status = (b.status || '') as string;
+      const expiryDate = (b.expiry_date || null) as string | null;
+
+      // Try to find matching vehicle for additional info
+      const normalizedPlate = plateNumber.replace(/[.\-\s]/g, '').toUpperCase();
+      const matchingVehicle = vehicleByPlate.get(normalizedPlate);
+
+      // Get operator and seat count from vehicle if available
+      let operatorName = '';
+      let seatCount = 0;
+      let vehicleCategory = '';
+      let manufacturer = '';
+      let modelCode = '';
+      let manufactureYear: number | null = null;
+      let color = '';
+      let chassisNumber = '';
+      let engineNumber = '';
+
+      if (matchingVehicle) {
+        operatorName = (matchingVehicle.operator_name || '') as string;
+        seatCount = parseInt(String(matchingVehicle.seat_count || matchingVehicle.seat_capacity || 0)) || 0;
+        vehicleCategory = (matchingVehicle.vehicle_category || '') as string;
+        manufacturer = (matchingVehicle.manufacturer || '') as string;
+        modelCode = (matchingVehicle.model_code || '') as string;
+        manufactureYear = matchingVehicle.manufacture_year
+          ? parseInt(String(matchingVehicle.manufacture_year))
+          : null;
+        color = (matchingVehicle.color || '') as string;
+        chassisNumber = (matchingVehicle.chassis_number || '') as string;
+        engineNumber = (matchingVehicle.engine_number || '') as string;
       }
+
+      // If vehicle category contains "giường nằm", seatCount is actually bedCount
+      const hasBeds = isBedVehicle(vehicleCategory);
+
+      vehicles.push({
+        id: `badge_${b.id}`,
+        plateNumber,
+        vehicleType: { id: null, name: badgeType },
+        vehicleTypeName: badgeType,
+        vehicleCategory,
+        seatCapacity: hasBeds ? 0 : seatCount,
+        bedCapacity: hasBeds ? seatCount : 0,
+        manufacturer,
+        modelCode,
+        manufactureYear,
+        color,
+        chassisNumber,
+        engineNumber,
+        operatorId: null,
+        operator: { id: null, name: operatorName, code: '' },
+        operatorName,
+        isActive: status !== 'Thu hồi',
+        notes: `Phù hiệu: ${badgeNumber}`,
+        source: 'badge',
+        badgeNumber,
+        badgeType,
+        badgeExpiryDate: expiryDate,
+        documents: {},
+      });
     }
 
     this.badgeCache = { data: vehicles, timestamp: Date.now() };
@@ -268,34 +270,41 @@ class VehicleCacheService {
   }
 
   async getLegacyVehicleById(key: string): Promise<LegacyVehicleData | null> {
-    const snapshot = await firebaseDb.ref(`datasheet/Xe/${key}`).once('value');
-    const data = snapshot.val();
-    if (!data) return null;
+    // Extract actual ID from legacy prefix
+    const actualId = key.replace('legacy_', '');
 
-    const vehicleCategory = data.vehicle_category || data.LoaiPhuongTien || '';
-    const seatCount = parseInt(data.seat_count || data.SoCho) || 0;
+    const { data, error } = await firebase
+      .from('vehicles')
+      .select('*')
+      .eq('id', actualId)
+      .single();
+
+    if (error || !data) return null;
+
+    const vehicleCategory = data.vehicle_category || '';
+    const seatCount = parseInt(data.seat_count || data.seat_capacity || 0) || 0;
     const hasBeds = isBedVehicle(vehicleCategory);
 
     return {
-      id: `legacy_${key}`,
-      plateNumber: data.plate_number || data.BienSo || '',
-      vehicleType: { id: null, name: data.vehicle_type || data.LoaiXe || '' },
-      vehicleTypeName: data.vehicle_type || data.LoaiXe || '',
+      id: `legacy_${data.id}`,
+      plateNumber: data.plate_number || '',
+      vehicleType: { id: null, name: data.vehicle_type || '' },
+      vehicleTypeName: data.vehicle_type || '',
       vehicleCategory,
       seatCapacity: hasBeds ? 0 : seatCount,
       bedCapacity: hasBeds ? seatCount : 0,
-      manufacturer: data.manufacturer || data.NhanHieu || '',
-      modelCode: data.model_code || data.SoLoai || '',
-      manufactureYear: (data.manufacture_year || data.NamSanXuat)
-        ? parseInt(data.manufacture_year || data.NamSanXuat)
+      manufacturer: data.manufacturer || '',
+      modelCode: data.model_code || '',
+      manufactureYear: data.manufacture_year
+        ? parseInt(data.manufacture_year)
         : null,
-      color: data.color || data.MauSon || '',
-      chassisNumber: data.chassis_number || data.SoKhung || '',
-      engineNumber: data.engine_number || data.SoMay || '',
+      color: data.color || '',
+      chassisNumber: data.chassis_number || '',
+      engineNumber: data.engine_number || '',
       operatorId: null,
-      operator: { id: null, name: data.owner_name || data.TenDangKyXe || '', code: '' },
-      operatorName: data.owner_name || data.TenDangKyXe || '',
-      isActive: true,
+      operator: { id: null, name: data.operator_name || '', code: '' },
+      operatorName: data.operator_name || '',
+      isActive: data.is_active !== false,
       notes: '',
       source: 'legacy',
       inspectionExpiryDate: null,
@@ -305,29 +314,34 @@ class VehicleCacheService {
   }
 
   async getBadgeVehicleById(key: string): Promise<BadgeVehicleData | null> {
-    const snapshot = await firebaseDb.ref(`datasheet/PHUHIEUXE/${key}`).once('value');
-    const data = snapshot.val();
-    if (!data) return null;
+    // Extract actual ID from badge prefix
+    const actualId = key.replace('badge_', '');
 
-    // Support both old and new field names
-    const plateNumber = data.license_plate_sheet || data.BienSoXe || '';
-    const badgeType = data.badge_type || data.LoaiPH || '';
-    const badgeNumber = data.badge_number || data.SoPhuHieu || '';
-    const status = data.status || data.TrangThai || '';
-    const expiryDate = data.expiry_date || data.NgayHetHan || null;
-    const operatorName = data.operator_name || '';
-    const seatCount = parseInt(String(data.seat_count || 0)) || 0;
-    const vehicleCategory = data.vehicle_category || '';
+    const { data, error } = await firebase
+      .from('vehicle_badges')
+      .select('*')
+      .eq('id', actualId)
+      .single();
+
+    if (error || !data) return null;
+
+    // Supabase uses snake_case field names
+    const plateNumber = data.plate_number || '';
+    const badgeType = data.badge_type || '';
+    const badgeNumber = data.badge_number || '';
+    const status = data.status || '';
+    const expiryDate = data.expiry_date || null;
+    const vehicleCategory = '';
     const hasBeds = isBedVehicle(vehicleCategory);
 
     return {
-      id: `badge_${key}`,
+      id: `badge_${data.id}`,
       plateNumber,
       vehicleType: { id: null, name: badgeType },
       vehicleTypeName: badgeType,
       vehicleCategory,
-      seatCapacity: hasBeds ? 0 : seatCount,
-      bedCapacity: hasBeds ? seatCount : 0,
+      seatCapacity: hasBeds ? 0 : 0,
+      bedCapacity: hasBeds ? 0 : 0,
       manufacturer: '',
       modelCode: '',
       manufactureYear: null,
@@ -335,8 +349,8 @@ class VehicleCacheService {
       chassisNumber: '',
       engineNumber: '',
       operatorId: null,
-      operator: { id: null, name: operatorName, code: '' },
-      operatorName,
+      operator: { id: null, name: '', code: '' },
+      operatorName: '',
       isActive: status !== 'Thu hồi',
       notes: `Phù hiệu: ${badgeNumber}`,
       source: 'badge',
@@ -348,11 +362,17 @@ class VehicleCacheService {
   }
 
   async getLegacyOperatorName(operatorId: string): Promise<string | null> {
+    // Extract actual vehicle ID
     const vehicleKey = operatorId.replace('legacy_op_', '').replace('legacy_', '');
-    const snapshot = await firebaseDb.ref(`datasheet/Xe/${vehicleKey}`).once('value');
-    const data = snapshot.val();
-    if (!data) return null;
-    return ((data.owner_name || data.TenDangKyXe || '') as string).trim();
+
+    const { data, error } = await firebase
+      .from('vehicles')
+      .select('operator_name')
+      .eq('id', vehicleKey)
+      .single();
+
+    if (error || !data) return null;
+    return ((data.operator_name || '') as string).trim();
   }
 
   filterLegacyByOperator(vehicles: LegacyVehicleData[], operatorName: string): LegacyVehicleData[] {

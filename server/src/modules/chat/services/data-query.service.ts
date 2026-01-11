@@ -1,3 +1,5 @@
+// TODO: Migrate to use ChatCacheService (see plan: data-query-consolidation)
+// This file still uses Firebase RTDB - deferred migration to separate plan
 import { firebaseDb } from '../../../config/database.js'
 import type { IntentResult, QueryResult } from '../types/chat.types.js'
 
