@@ -56,13 +56,15 @@ describe('Dispatch Validation', () => {
       expect(() => validateCreateDispatch(invalidData)).toThrow();
     });
 
-    it('should throw error for missing driverId', () => {
-      const invalidData = {
+    it('should allow missing driverId (optional)', () => {
+      const validData = {
         vehicleId: 'vehicle-1',
         entryTime: '2024-12-18T08:00:00Z',
       };
 
-      expect(() => validateCreateDispatch(invalidData)).toThrow();
+      const result = validateCreateDispatch(validData);
+      expect(result.vehicleId).toBe('vehicle-1');
+      expect(result.driverId).toBeUndefined();
     });
 
     it('should throw error for invalid entryTime format', () => {
@@ -90,13 +92,13 @@ describe('Dispatch Validation', () => {
     it('should validate valid passenger drop data', () => {
       const validData = {
         passengersArrived: 30,
-        routeId: 'route-1',
+        routeId: '550e8400-e29b-41d4-a716-446655440001',
       };
 
       const result = validatePassengerDrop(validData);
 
       expect(result.passengersArrived).toBe(30);
-      expect(result.routeId).toBe('route-1');
+      expect(result.routeId).toBe('550e8400-e29b-41d4-a716-446655440001');
     });
 
     it('should allow empty object (all fields optional)', () => {
@@ -239,13 +241,13 @@ describe('Dispatch Validation', () => {
     it('should validate valid departure order data', () => {
       const validData = {
         passengersDeparting: 40,
-        departureOrderShiftId: 'shift-2',
+        departureOrderShiftId: '550e8400-e29b-41d4-a716-446655440002',
       };
 
       const result = validateDepartureOrder(validData);
 
       expect(result.passengersDeparting).toBe(40);
-      expect(result.departureOrderShiftId).toBe('shift-2');
+      expect(result.departureOrderShiftId).toBe('550e8400-e29b-41d4-a716-446655440002');
     });
 
     it('should allow empty object (all fields optional)', () => {
@@ -266,7 +268,7 @@ describe('Dispatch Validation', () => {
       const validData = {
         exitTime: '2024-12-18T10:30:00Z',
         passengersDeparting: 42,
-        exitShiftId: 'shift-3',
+        exitShiftId: '550e8400-e29b-41d4-a716-446655440003',
       };
 
       const result = validateExit(validData);

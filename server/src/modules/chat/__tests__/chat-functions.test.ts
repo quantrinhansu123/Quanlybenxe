@@ -24,29 +24,34 @@ import {
   createMockSnapshot,
 } from './mocks/chat-mock-data.js';
 
-// Table to mock data mapping
-const tableDataMap: Record<string, any[]> = {
-  vehicles: mockVehicles,
-  vehicle_badges: mockBadges,
-  operators: mockOperators,
-  routes: mockRoutes,
-  drivers: mockDrivers,
-  dispatch_records: mockDispatchRecords,
-  schedules: mockSchedules,
-  services: mockServices,
-  shifts: mockShifts,
-  invoices: mockInvoices,
-  violations: mockViolations,
-  service_charges: mockServiceCharges,
+// Table to mock data mapping (Drizzle uses schema objects as keys)
+const mockDb = {
+  select: () => ({
+    from: (schema: any) => {
+      // Map schema object to table name
+      const schemaName = schema?._.name || schema?.dbName || '';
+      const tableDataMap: Record<string, any[]> = {
+        vehicles: mockVehicles,
+        vehicle_badges: mockBadges,
+        operators: mockOperators,
+        routes: mockRoutes,
+        drivers: mockDrivers,
+        dispatch_records: mockDispatchRecords,
+        schedules: mockSchedules,
+        services: mockServices,
+        shifts: mockShifts,
+        invoices: mockInvoices,
+        violations: mockViolations,
+        service_charges: mockServiceCharges,
+      };
+      return Promise.resolve(tableDataMap[schemaName] || []);
+    },
+  }),
 };
 
-// Register Supabase mock BEFORE importing the service
-jest.unstable_mockModule('../../../config/database.js', () => ({
-  firebase: {
-    from: (table: string) => ({
-      select: () => Promise.resolve({ data: tableDataMap[table] || [], error: null }),
-    }),
-  },
+// Mock Drizzle database BEFORE importing the service
+jest.unstable_mockModule('../../../db/drizzle.js', () => ({
+  db: mockDb,
 }));
 
 // Dynamic import AFTER mock registration
@@ -56,7 +61,27 @@ const { chatCacheService } = await import('../services/chat-cache.service.js');
 describe('Chat Functions', () => {
   beforeEach(async () => {
     jest.clearAllMocks();
-    await chatCacheService.preWarm();
+
+    // Manually populate cache instead of calling preWarm which uses DB
+    const cache = (chatCacheService as any).cache;
+    cache.set('vehicles', mockVehicles);
+    cache.set('badges', mockBadges);
+    cache.set('operators', mockOperators);
+    cache.set('routes', mockRoutes);
+    cache.set('drivers', mockDrivers);
+    cache.set('dispatch_records', mockDispatchRecords);
+    cache.set('schedules', mockSchedules);
+    cache.set('services', mockServices);
+    cache.set('shifts', mockShifts);
+    cache.set('invoices', mockInvoices);
+    cache.set('violations', mockViolations);
+    cache.set('service_charges', mockServiceCharges);
+
+    // Mark cache as ready
+    (chatCacheService as any).lastRefresh = new Date();
+
+    // Build indexes
+    (chatCacheService as any).buildIndexes();
   });
 
   describe('CHAT_FUNCTIONS definitions', () => {

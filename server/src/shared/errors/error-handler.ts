@@ -96,6 +96,54 @@ export function errorHandler(
     return
   }
 
+  // Handle PostgreSQL/Drizzle errors
+  if (err && typeof err === 'object') {
+    const pgError = err as any
+
+    // Check for postgres error codes (Postgres uses string codes like '23503')
+    if (pgError.code && typeof pgError.code === 'string') {
+      // Foreign key violation
+      if (pgError.code === '23503') {
+        res.status(400).json({
+          error: 'Referenced record does not exist',
+          code: ErrorCode.VALIDATION_ERROR,
+          details: pgError.detail || 'Foreign key constraint violation',
+        })
+        return
+      }
+
+      // Unique constraint violation (duplicate key)
+      if (pgError.code === '23505') {
+        res.status(409).json({
+          error: 'Record already exists',
+          code: ErrorCode.ALREADY_EXISTS,
+          details: pgError.detail || 'Unique constraint violation',
+        })
+        return
+      }
+
+      // Not null violation
+      if (pgError.code === '23502') {
+        res.status(400).json({
+          error: 'Required field is missing',
+          code: ErrorCode.VALIDATION_ERROR,
+          details: pgError.detail || 'Not null constraint violation',
+        })
+        return
+      }
+
+      // Check constraint violation
+      if (pgError.code === '23514') {
+        res.status(400).json({
+          error: 'Invalid field value',
+          code: ErrorCode.VALIDATION_ERROR,
+          details: pgError.detail || 'Check constraint violation',
+        })
+        return
+      }
+    }
+  }
+
   // Default to 500 Internal Server Error
   const response: ErrorResponse = {
     error: process.env.NODE_ENV === 'production'

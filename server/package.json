@@ -21,6 +21,7 @@
     "db:studio": "drizzle-kit studio",
     "db:test": "tsx src/scripts/test-drizzle-connection.ts",
     "db:validate": "tsx src/scripts/validate-data-consistency.ts",
+    "db:validate-integrity": "tsx src/scripts/validate-data-integrity.ts",
     "db:benchmark": "tsx src/scripts/benchmark.ts",
     "smoke-test": "tsx src/scripts/smoke-test.ts",
     "etl:analyze": "tsx src/db/migrations/etl/analyze-data.ts",
