@@ -26,15 +26,30 @@ import {
 } from './mocks/chat-mock-data.js';
 
 // Define typed mock functions at module scope
-const mockOnce = jest.fn<(path: string) => Promise<{ val: () => any; exists: () => boolean }>>();
 const mockGenerateResponse = jest.fn<(message: string, sessionId: string) => Promise<string>>();
 const mockClearHistory = jest.fn<(sessionId: string) => void>();
 
-// Register Firebase mock
+// Table to mock data mapping
+const tableDataMap: Record<string, any[]> = {
+  vehicles: mockVehicles,
+  vehicle_badges: mockBadges,
+  operators: mockOperators,
+  routes: mockRoutes,
+  drivers: mockDrivers,
+  dispatch_records: mockDispatchRecords,
+  schedules: mockSchedules,
+  services: mockServices,
+  shifts: mockShifts,
+  invoices: mockInvoices,
+  violations: mockViolations,
+  service_charges: mockServiceCharges,
+};
+
+// Register Supabase mock
 jest.unstable_mockModule('../../../config/database.js', () => ({
-  firebaseDb: {
-    ref: (path: string) => ({
-      once: () => mockOnce(path),
+  firebase: {
+    from: (table: string) => ({
+      select: () => Promise.resolve({ data: tableDataMap[table] || [], error: null }),
     }),
   },
 }));
@@ -51,28 +66,6 @@ jest.unstable_mockModule('../services/ai.service.js', () => ({
 // Dynamic import AFTER mock registration
 const { processMessage, clearHistory } = await import('../chat.controller.js');
 const { chatCacheService } = await import('../services/chat-cache.service.js');
-
-// Helper to setup collection mocks
-const setupCollectionMocks = () => {
-  mockOnce.mockImplementation((path: string) => {
-    const collectionMap: Record<string, any[]> = {
-      'datasheet/Xe': mockVehicles,
-      'datasheet/PHUHIEUXE': mockBadges,
-      'datasheet/DONVIVANTAI': mockOperators,
-      'datasheet/DANHMUCTUYENCODINH': mockRoutes,
-      'drivers': mockDrivers,
-      'dispatch_records': mockDispatchRecords,
-      'schedules': mockSchedules,
-      'services': mockServices,
-      'shifts': mockShifts,
-      'invoices': mockInvoices,
-      'violations': mockViolations,
-      'service_charges': mockServiceCharges,
-    };
-    const data = collectionMap[path] || [];
-    return Promise.resolve(createMockSnapshot(data));
-  });
-};
 
 // Helper to create mock request/response
 const createMockRequest = (body: any = {}, params: any = {}): Partial<Request> => ({
@@ -107,7 +100,6 @@ const createMockResponse = (): MockResponse => {
 describe('Chat Controller', () => {
   beforeEach(async () => {
     jest.clearAllMocks();
-    setupCollectionMocks();
     await chatCacheService.preWarm();
     mockGenerateResponse.mockResolvedValue('Test AI response');
   });

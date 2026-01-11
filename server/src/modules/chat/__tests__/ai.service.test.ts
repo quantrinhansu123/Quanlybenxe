@@ -28,7 +28,6 @@ import {
 const originalEnv = { ...process.env };
 
 // Define typed mock functions at module scope
-const mockOnce = jest.fn<(path: string) => Promise<{ val: () => any; exists: () => boolean }>>();
 const mockSendMessage = jest.fn<() => Promise<{
   response: {
     text: () => string;
@@ -42,14 +41,30 @@ const mockGetGenerativeModel = jest.fn(() => ({
   startChat: mockStartChat,
 }));
 
+// Table to mock data mapping
+const tableDataMap: Record<string, any[]> = {
+  vehicles: mockVehicles,
+  vehicle_badges: mockBadges,
+  operators: mockOperators,
+  routes: mockRoutes,
+  drivers: mockDrivers,
+  dispatch_records: mockDispatchRecords,
+  schedules: mockSchedules,
+  services: mockServices,
+  shifts: mockShifts,
+  invoices: mockInvoices,
+  violations: mockViolations,
+  service_charges: mockServiceCharges,
+};
+
 // Setup environment before mocking
 process.env.GEMINI_API_KEY = 'test-api-key';
 
-// Register Firebase mock
+// Register Supabase mock
 jest.unstable_mockModule('../../../config/database.js', () => ({
-  firebaseDb: {
-    ref: (path: string) => ({
-      once: () => mockOnce(path),
+  firebase: {
+    from: (table: string) => ({
+      select: () => Promise.resolve({ data: tableDataMap[table] || [], error: null }),
     }),
   },
 }));
@@ -72,33 +87,10 @@ jest.unstable_mockModule('@google/generative-ai', () => ({
 const { aiService } = await import('../services/ai.service.js');
 const { chatCacheService } = await import('../services/chat-cache.service.js');
 
-// Helper to setup collection mocks
-const setupCollectionMocks = () => {
-  mockOnce.mockImplementation((path: string) => {
-    const collectionMap: Record<string, any[]> = {
-      'datasheet/Xe': mockVehicles,
-      'datasheet/PHUHIEUXE': mockBadges,
-      'datasheet/DONVIVANTAI': mockOperators,
-      'datasheet/DANHMUCTUYENCODINH': mockRoutes,
-      'drivers': mockDrivers,
-      'dispatch_records': mockDispatchRecords,
-      'schedules': mockSchedules,
-      'services': mockServices,
-      'shifts': mockShifts,
-      'invoices': mockInvoices,
-      'violations': mockViolations,
-      'service_charges': mockServiceCharges,
-    };
-    const data = collectionMap[path] || [];
-    return Promise.resolve(createMockSnapshot(data));
-  });
-};
-
 describe('AIService', () => {
   beforeEach(async () => {
     jest.clearAllMocks();
     process.env.GEMINI_API_KEY = 'test-api-key';
-    setupCollectionMocks();
     await chatCacheService.preWarm();
 
     // Default mock response (no function calls)

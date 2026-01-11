@@ -102,6 +102,10 @@ function getDb(): Database {
 // Export database reference (lazy)
 export { db }
 
+/**
+ * @deprecated Legacy Firebase RTDB helper - will be removed after full migration
+ * Use firebase.from() instead for new code
+ */
 // Helper functions to work with Firebase Realtime Database
 export const firebaseDb = {
   ref: (path: string) => getDb().ref(path),

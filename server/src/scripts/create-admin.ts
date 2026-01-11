@@ -1,70 +1,66 @@
+/**
+ * Create Admin User Script
+ * Creates an admin user in Supabase PostgreSQL via Drizzle ORM
+ *
+ * Usage: npm run create-admin [email] [password] [name]
+ * Example: npm run create-admin admin@example.com admin123 "Administrator"
+ */
+import 'dotenv/config'
 import bcrypt from 'bcryptjs'
-import { firebaseDb } from '../config/database.js'
-import dotenv from 'dotenv'
-
-dotenv.config()
-
-// Helper function to generate Firebase-style ID
-function generateId(): string {
-  const timestamp = Date.now().toString(36)
-  const randomPart = Math.random().toString(36).substring(2, 15)
-  return `${timestamp}-${randomPart}`
-}
+import { db } from '../db/drizzle.js'
+import { users } from '../db/schema/users.js'
+import { eq } from 'drizzle-orm'
 
 async function createAdmin() {
-  const username = process.argv[2] || 'admin'
+  const email = process.argv[2] || 'admin@benxe.local'
   const password = process.argv[3] || 'admin123'
-  const fullName = process.argv[4] || 'Administrator'
+  const name = process.argv[4] || 'Administrator'
+
+  if (!db) {
+    console.error('❌ Database not initialized. Check DATABASE_URL in .env')
+    process.exit(1)
+  }
 
   try {
     // Hash password
     const passwordHash = await bcrypt.hash(password, 10)
 
-    // Get all users to check if username exists
-    const users = await firebaseDb.get('users')
-    
-    let existingUser: any = null
-    let existingUserId: string | null = null
-    
-    if (users) {
-      const usersArray = Object.keys(users).map(key => ({
-        id: key,
-        ...users[key]
-      }))
-      existingUser = usersArray.find((u: any) => u.username === username)
-      if (existingUser) {
-        existingUserId = existingUser.id
-      }
-    }
+    // Check if user exists
+    const existingUser = await db
+      .select()
+      .from(users)
+      .where(eq(users.email, email))
+      .limit(1)
 
-    if (existingUser) {
-      console.log(`User "${username}" already exists. Updating password...`)
-      await firebaseDb.update(`users/${existingUserId}`, {
-        password_hash: passwordHash,
-        updated_at: new Date().toISOString()
-      })
-      console.log(`✅ Password updated for user "${username}"`)
+    if (existingUser.length > 0) {
+      // Update existing user's password
+      console.log(`User "${email}" already exists. Updating password...`)
+      await db
+        .update(users)
+        .set({
+          passwordHash,
+          updatedAt: new Date(),
+        })
+        .where(eq(users.email, email))
+
+      console.log(`✅ Password updated for user "${email}"`)
     } else {
-      // Create new user
-      const userId = generateId()
-      const newUser = {
-        id: userId,
-        username,
-        password_hash: passwordHash,
-        full_name: fullName,
+      // Create new admin user
+      await db.insert(users).values({
+        email,
+        passwordHash,
+        name,
         role: 'admin',
-        is_active: true,
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString()
-      }
-      
-      await firebaseDb.set(`users/${userId}`, newUser)
+        isActive: true,
+        emailVerified: true,
+      })
+
       console.log(`✅ Admin user created successfully!`)
-      console.log(`   Username: ${username}`)
-      console.log(`   Full Name: ${fullName}`)
+      console.log(`   Email: ${email}`)
+      console.log(`   Name: ${name}`)
       console.log(`   Role: admin`)
     }
-    
+
     process.exit(0)
   } catch (error) {
     console.error('❌ Error creating admin user:', error)
@@ -73,4 +69,3 @@ async function createAdmin() {
 }
 
 createAdmin()
-

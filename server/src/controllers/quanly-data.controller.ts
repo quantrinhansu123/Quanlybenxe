@@ -1,5 +1,5 @@
 import { Request, Response } from 'express'
-import { firebaseDb } from '../config/database.js'
+import { firebase } from '../config/database.js'
 
 // Unified cache for all quanly data - pre-filtered for Buýt and Tuyến cố định
 interface QuanLyCache {
@@ -21,23 +21,6 @@ const normalizePlate = (plate: string): string => {
   return (plate || '').replace(/[.\-\s]/g, '').toUpperCase()
 }
 
-// Extract seat count from registration_info text
-const extractSeatCount = (registrationInfo: string): number => {
-  if (!registrationInfo) return 0
-  // Match patterns like "Số người cho phép chở (ngồi): 45 người" or "số chỗ ngồi: 16"
-  const patterns = [
-    /Số người cho phép chở[^:]*:\s*(\d+)/i,
-    /số chỗ ngồi[^:]*:\s*(\d+)/i,
-    /\(ngồi\):\s*(\d+)/i,
-    /chở được\s*(\d+)\s*người/i,
-  ]
-  for (const pattern of patterns) {
-    const match = registrationInfo.match(pattern)
-    if (match) return parseInt(match[1]) || 0
-  }
-  return 0
-}
-
 // Load all data in parallel and pre-filter
 async function loadQuanLyData(): Promise<QuanLyCache> {
   const now = Date.now()
@@ -55,195 +38,182 @@ async function loadQuanLyData(): Promise<QuanLyCache> {
   cacheLoading = (async () => {
     try {
       const startTime = Date.now()
-      
-      // Load all data in parallel from Firebase RTDB
-      const [badgeSnapshot, vehicleSnapshot, operatorSnapshot, routeSnapshot] = await Promise.all([
-        firebaseDb.ref('datasheet/PHUHIEUXE').once('value'),
-        firebaseDb.ref('datasheet/Xe').once('value'),
-        firebaseDb.ref('datasheet/DONVIVANTAI').once('value'),
-        firebaseDb.ref('datasheet/DANHMUCTUYENCODINH').once('value'),
+
+      // Load all data in parallel from Supabase
+      const [badgesResult, vehiclesResult, operatorsResult, routesResult] = await Promise.all([
+        firebase.from('vehicle_badges').select('*'),
+        firebase.from('vehicles').select('*'),
+        firebase.from('operators').select('*'),
+        firebase.from('routes').select('*'),
       ])
+
+      const badgeData = badgesResult.data || []
+      const vehicleData = vehiclesResult.data || []
+      const operatorData = operatorsResult.data || []
+      const routeData = routesResult.data || []
       
-      const badgeData = badgeSnapshot.val() || {}
-      const vehicleData = vehicleSnapshot.val() || {}
-      const operatorData = operatorSnapshot.val() || {}
-      const routeData = routeSnapshot.val() || {}
-      
-      // Build vehicle plate lookup
+      // Build vehicle plate lookup (Supabase data is array)
       const vehiclePlateMap = new Map<string, string>()
-      for (const [key, vehicle] of Object.entries(vehicleData)) {
+      for (const vehicle of vehicleData) {
         const v = vehicle as any
-        const plate = v.plate_number || v.BienSo || ''
-        if (plate) {
-          vehiclePlateMap.set(key, plate)
+        const plate = v.plate_number || ''
+        if (plate && v.id) {
+          vehiclePlateMap.set(v.id, plate)
+        }
+      }
+
+      // Build operator name lookup (Supabase data is array)
+      const operatorNameMap = new Map<string, string>()
+      for (const op of operatorData) {
+        const o = op as any
+        if (o.id) {
+          operatorNameMap.set(o.id, o.name || '')
         }
       }
       
-      // Build operator name lookup from DONVIVANTAI
-      const operatorNameMap = new Map<string, string>()
-      for (const [key, op] of Object.entries(operatorData)) {
-        const o = op as any
-        const operatorId = o.id || key
-        operatorNameMap.set(operatorId, o.name || '')
-      }
-      
-      // Filter badges by allowed types and build plate set + vehicle-operator mapping
+      // Filter badges by allowed types (Supabase data is array)
       const allowedPlates = new Set<string>()
       const operatorIdsWithBadges = new Set<string>()
       const vehicleOperatorMap = new Map<string, string>() // plate -> operator name
       const vehicleBadgeExpiryMap = new Map<string, string>() // plate -> badge expiry date
       const badges: any[] = []
-      
-      for (const [key, badge] of Object.entries(badgeData)) {
+
+      for (const badge of badgeData) {
         const b = badge as any
-        const badgeType = b.LoaiPH || b.badge_type || ''
-        
+        const badgeType = b.badge_type || ''
+
         if (!ALLOWED_BADGE_TYPES.includes(badgeType)) continue
-        
-        // Get plate number (resolve from vehicle_id if needed)
-        let plateNumber = b.BienSoXe || b.vehicle_id || ''
+
+        // Get plate number (from plate_number field or vehicle lookup)
+        let plateNumber = b.plate_number || ''
         const vehicleId = b.vehicle_id || ''
-        if (vehiclePlateMap.has(vehicleId)) {
+        if (!plateNumber && vehicleId && vehiclePlateMap.has(vehicleId)) {
           plateNumber = vehiclePlateMap.get(vehicleId)!
         }
-        
+
         if (plateNumber) {
           const normalizedPlate = normalizePlate(plateNumber)
           allowedPlates.add(normalizedPlate)
-          
-          // Map vehicle plate to operator name from badge's issuing authority
-          const issuingAuth = b.Ref_DonViCapPhuHieu || b.issuing_authority_ref || ''
-          if (issuingAuth && operatorNameMap.has(issuingAuth)) {
-            vehicleOperatorMap.set(normalizedPlate, operatorNameMap.get(issuingAuth)!)
+
+          // Map vehicle plate to operator name
+          const operatorId = b.operator_id || ''
+          if (operatorId && operatorNameMap.has(operatorId)) {
+            vehicleOperatorMap.set(normalizedPlate, operatorNameMap.get(operatorId)!)
           }
-          
+
           // Map vehicle plate to badge expiry date
-          const badgeExpiry = b.NgayHetHan || b.expiry_date || ''
+          const badgeExpiry = b.expiry_date || ''
           if (badgeExpiry) {
             vehicleBadgeExpiryMap.set(normalizedPlate, badgeExpiry)
           }
         }
-        
+
         // Track operator IDs
-        const issuingAuth = b.Ref_DonViCapPhuHieu || b.issuing_authority_ref || ''
-        if (issuingAuth) {
-          operatorIdsWithBadges.add(issuingAuth)
+        const operatorId = b.operator_id || ''
+        if (operatorId) {
+          operatorIdsWithBadges.add(operatorId)
         }
-        
+
         badges.push({
-          id: b.ID_PhuHieu || key,
-          badge_number: b.SoPhuHieu || b.badge_number || '',
+          id: b.id,
+          badge_number: b.badge_number || '',
           license_plate_sheet: plateNumber,
           badge_type: badgeType,
-          badge_color: b.MauPhuHieu || b.badge_color || '',
-          issue_date: b.NgayCap || b.issue_date || '',
-          expiry_date: b.NgayHetHan || b.expiry_date || '',
-          status: b.TrangThai || b.status || '',
-          file_code: b.MaHoSo || b.file_number || '',
-          issuing_authority_ref: issuingAuth,
-          route_id: b.Ref_Tuyen || b.route_ref || '',
-          vehicle_type: b.LoaiXe || b.vehicle_type || '',
+          badge_color: b.badge_color || '',
+          issue_date: b.issue_date || '',
+          expiry_date: b.expiry_date || '',
+          status: b.status || '',
+          file_code: b.file_code || '',
+          issuing_authority_ref: operatorId,
+          route_id: b.route_id || '',
+          vehicle_type: b.vehicle_type || '',
         })
       }
       
-      // Filter vehicles by allowed plates (from badges) - dedupe by normalized plate
-      // First pass: collect all matching vehicles grouped by plate
+      // Filter vehicles by allowed plates (Supabase data is array)
       const vehiclesByPlate = new Map<string, any[]>()
-      for (const [key, vehicle] of Object.entries(vehicleData)) {
+      for (const vehicle of vehicleData) {
         const v = vehicle as any
-        const plateNumber = v.plate_number || v.BienSo || ''
+        const plateNumber = v.plate_number || ''
         const normalizedPlate = normalizePlate(plateNumber)
-        
+
         if (!plateNumber || !allowedPlates.has(normalizedPlate)) continue
-        
+
         if (!vehiclesByPlate.has(normalizedPlate)) {
           vehiclesByPlate.set(normalizedPlate, [])
         }
-        vehiclesByPlate.get(normalizedPlate)!.push({ key, v, plateNumber })
+        vehiclesByPlate.get(normalizedPlate)!.push({ key: v.id, v, plateNumber })
       }
       
       // Second pass: for each plate, pick the entry with most data
       const vehicles: any[] = []
       for (const [normalizedPlate, entries] of vehiclesByPlate) {
-        // Sort by data completeness: prefer entries with owner_name, seat_count, etc.
+        // Sort by data completeness: prefer entries with operator_name, seat_count, etc.
         entries.sort((a, b) => {
-          const scoreA = (a.v.owner_name ? 2 : 0) + (a.v.seat_count ? 1 : 0) + (a.v.registration_info ? 1 : 0)
-          const scoreB = (b.v.owner_name ? 2 : 0) + (b.v.seat_count ? 1 : 0) + (b.v.registration_info ? 1 : 0)
+          const scoreA = (a.v.operator_name ? 2 : 0) + (a.v.seat_count ? 1 : 0)
+          const scoreB = (b.v.operator_name ? 2 : 0) + (b.v.seat_count ? 1 : 0)
           return scoreB - scoreA // Higher score first
         })
-        
+
         const { key, v, plateNumber } = entries[0]
-        
-        // Get seat capacity: prefer seat_count, then SoCho, fallback to parsing registration_info
-        let seatCapacity = typeof v.seat_count === 'number' ? v.seat_count : (parseInt(v.seat_count) || 0)
-        if (!seatCapacity && v.SoCho) {
-          // Parse "4 người" or "45" format
-          const soCho = String(v.SoCho)
-          const match = soCho.match(/(\d+)/)
-          if (match) seatCapacity = parseInt(match[1]) || 0
-        }
-        if (!seatCapacity && v.registration_info) {
-          seatCapacity = extractSeatCount(v.registration_info)
-        }
-        
-        // Get operator name: prefer from badge reference, fallback to vehicle owner_name
+
+        // Get seat capacity from seat_count field
+        const seatCapacity = v.seat_count || 0
+
+        // Get operator name: prefer from badge reference, fallback to vehicle operator_name
         const operatorFromBadge = vehicleOperatorMap.get(normalizedPlate) || ''
-        const operatorName = operatorFromBadge || v.owner_name || ''
-        
+        const operatorName = operatorFromBadge || v.operator_name || ''
+
         // Get badge expiry date for inspection display
         const badgeExpiryDate = vehicleBadgeExpiryMap.get(normalizedPlate) || ''
-        
+
         vehicles.push({
-          id: `legacy_${key}`,  // Add legacy_ prefix for Firebase RTDB vehicles
+          id: key,
           plateNumber: plateNumber,
           seatCapacity,
           operatorName,
-          vehicleType: v.vehicle_category || v.vehicle_type || '',
-          inspectionExpiryDate: badgeExpiryDate || v.inspection_expiry || '',
-          isActive: true,
-          source: 'google_sheets',
+          vehicleType: v.vehicle_type || '',
+          inspectionExpiryDate: badgeExpiryDate || v.road_worthiness_expiry || '',
+          isActive: v.is_active !== false,
+          source: v.source || 'supabase',
         })
       }
       
-      // Filter operators by badge issuing authority refs
+      // Filter operators by badge references (Supabase data is array)
       const operators: any[] = []
-      for (const [key, op] of Object.entries(operatorData)) {
+      for (const op of operatorData) {
         const o = op as any
-        const operatorId = o.id || key
-        
+        const operatorId = o.id
+
         // Include if operator has badges with allowed types
         if (!operatorIdsWithBadges.has(operatorId) && operatorIdsWithBadges.size > 0) {
           continue
         }
-        
-        let province = (o.province || '').trim()
-        province = province.replace(/^\s*→\s*"?/g, '').replace(/"$/g, '').trim()
-        if (province.includes('Tỉnh Tỉnh')) province = province.replace('Tỉnh Tỉnh', 'Tỉnh')
-        
+
         operators.push({
           id: operatorId,
           name: o.name || '',
-          province: province,
+          province: o.province || '',
           phone: o.phone || '',
           email: o.email || '',
           address: o.address || '',
-          representativeName: o.representative_name || '',
-          isActive: true,
-          source: 'google_sheets',
+          representativeName: o.representative || '',
+          isActive: o.is_active !== false,
+          source: o.source || 'supabase',
         })
       }
-      
-      // Parse routes
+
+      // Parse routes (Supabase data is array)
       const routes: any[] = []
-      for (const [key, route] of Object.entries(routeData)) {
+      for (const route of routeData) {
         const r = route as any
         routes.push({
-          id: key,
-          code: r.MaTuyen || r.route_code || '',
-          name: r.TenTuyen || r.route_name || '',
-          startPoint: r.DiemDi || r.start_point || '',
-          endPoint: r.DiemDen || r.end_point || '',
-          distance: r.CuLy || r.distance || '',
+          id: r.id,
+          code: r.route_code || '',
+          name: r.route_name || '',
+          startPoint: r.departure_station || '',
+          endPoint: r.arrival_station || '',
+          distance: r.distance_km || '',
         })
       }
       
@@ -254,8 +224,8 @@ async function loadQuanLyData(): Promise<QuanLyCache> {
       routes.sort((a, b) => a.code.localeCompare(b.code))
       
       const loadTime = Date.now() - startTime
-      console.log(`[QuanLyData] Loaded ${badges.length} badges, ${vehicles.length} vehicles, ${operators.length} operators, ${routes.length} routes in ${loadTime}ms`)
-      console.log(`[QuanLyData] Debug: ${allowedPlates.size} allowed plates from badges, ${Object.keys(vehicleData).length} total vehicles in datasheet`)
+      console.log(`[QuanLyData] Loaded ${badges.length} badges, ${vehicles.length} vehicles, ${operators.length} operators, ${routes.length} routes in ${loadTime}ms (source: Supabase)`)
+      console.log(`[QuanLyData] Debug: ${allowedPlates.size} allowed plates from badges, ${vehicleData.length} total vehicles in database`)
       console.log(`[QuanLyData] Debug: vehiclesByPlate unique plates = ${vehiclesByPlate.size}, final vehicles array = ${vehicles.length}`)
       
       // Log first 5 plates for debugging

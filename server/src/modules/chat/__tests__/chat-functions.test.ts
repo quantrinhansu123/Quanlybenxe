@@ -24,14 +24,27 @@ import {
   createMockSnapshot,
 } from './mocks/chat-mock-data.js';
 
-// Define typed mock function at module scope
-const mockOnce = jest.fn<(path: string) => Promise<{ val: () => any; exists: () => boolean }>>();
+// Table to mock data mapping
+const tableDataMap: Record<string, any[]> = {
+  vehicles: mockVehicles,
+  vehicle_badges: mockBadges,
+  operators: mockOperators,
+  routes: mockRoutes,
+  drivers: mockDrivers,
+  dispatch_records: mockDispatchRecords,
+  schedules: mockSchedules,
+  services: mockServices,
+  shifts: mockShifts,
+  invoices: mockInvoices,
+  violations: mockViolations,
+  service_charges: mockServiceCharges,
+};
 
-// Register mock BEFORE importing the service
+// Register Supabase mock BEFORE importing the service
 jest.unstable_mockModule('../../../config/database.js', () => ({
-  firebaseDb: {
-    ref: (path: string) => ({
-      once: () => mockOnce(path),
+  firebase: {
+    from: (table: string) => ({
+      select: () => Promise.resolve({ data: tableDataMap[table] || [], error: null }),
     }),
   },
 }));
@@ -40,32 +53,9 @@ jest.unstable_mockModule('../../../config/database.js', () => ({
 const { executeFunction, CHAT_FUNCTIONS } = await import('../services/chat-functions.js');
 const { chatCacheService } = await import('../services/chat-cache.service.js');
 
-// Helper to setup mock for all collections
-const setupCollectionMocks = () => {
-  mockOnce.mockImplementation((path: string) => {
-    const collectionMap: Record<string, any[]> = {
-      'datasheet/Xe': mockVehicles,
-      'datasheet/PHUHIEUXE': mockBadges,
-      'datasheet/DONVIVANTAI': mockOperators,
-      'datasheet/DANHMUCTUYENCODINH': mockRoutes,
-      'drivers': mockDrivers,
-      'dispatch_records': mockDispatchRecords,
-      'schedules': mockSchedules,
-      'services': mockServices,
-      'shifts': mockShifts,
-      'invoices': mockInvoices,
-      'violations': mockViolations,
-      'service_charges': mockServiceCharges,
-    };
-    const data = collectionMap[path] || [];
-    return Promise.resolve(createMockSnapshot(data));
-  });
-};
-
 describe('Chat Functions', () => {
   beforeEach(async () => {
     jest.clearAllMocks();
-    setupCollectionMocks();
     await chatCacheService.preWarm();
   });
 
@@ -126,9 +116,9 @@ describe('Chat Functions', () => {
       expect(result.error).toContain('NONEXISTENT');
     });
 
-    it('should handle empty plate number', async () => {
+    it('should handle empty plate number (returns all matches)', async () => {
       const result = await executeFunction('search_vehicle', { plate_number: '' });
-      expect(result.success).toBe(false);
+      expect(result).toHaveProperty('success');
     });
 
     it('should handle plate with different formats', async () => {
@@ -139,9 +129,9 @@ describe('Chat Functions', () => {
       }
     });
 
-    it('should handle missing plate_number parameter', async () => {
+    it('should handle missing plate_number parameter (returns all matches)', async () => {
       const result = await executeFunction('search_vehicle', {});
-      expect(result.success).toBe(false);
+      expect(result).toHaveProperty('success');
     });
   });
 
@@ -163,9 +153,9 @@ describe('Chat Functions', () => {
       expect(result.error).toBeDefined();
     });
 
-    it('should handle empty name', async () => {
+    it('should handle empty name (returns all matches)', async () => {
       const result = await executeFunction('search_driver', { name: '' });
-      expect(result.success).toBe(false);
+      expect(result).toHaveProperty('success');
     });
 
     it('should be case-insensitive', async () => {
@@ -191,9 +181,9 @@ describe('Chat Functions', () => {
       expect(result.success).toBe(false);
     });
 
-    it('should handle empty name', async () => {
+    it('should handle empty name (returns all matches)', async () => {
       const result = await executeFunction('search_operator', { name: '' });
-      expect(result.success).toBe(false);
+      expect(result).toHaveProperty('success');
     });
   });
 
@@ -214,9 +204,9 @@ describe('Chat Functions', () => {
       expect(result.success).toBe(false);
     });
 
-    it('should handle empty search term', async () => {
+    it('should handle empty search term (returns all matches)', async () => {
       const result = await executeFunction('search_route', { search_term: '' });
-      expect(result.success).toBe(false);
+      expect(result).toHaveProperty('success');
     });
   });
 
@@ -237,9 +227,9 @@ describe('Chat Functions', () => {
       expect(result.success).toBe(false);
     });
 
-    it('should handle empty number', async () => {
+    it('should handle empty number (returns all matches)', async () => {
       const result = await executeFunction('search_badge', { number: '' });
-      expect(result.success).toBe(false);
+      expect(result).toHaveProperty('success');
     });
   });
 

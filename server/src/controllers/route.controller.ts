@@ -1,5 +1,5 @@
 import { Request, Response } from 'express'
-import { firebase, firebaseDb } from '../config/database.js'
+import { firebase } from '../config/database.js'
 import { z } from 'zod'
 import { syncRouteChanges } from '../utils/denormalization-sync.js'
 
@@ -435,59 +435,64 @@ export const deleteRoute = async (req: Request, res: Response) => {
   }
 }
 
-// Get legacy routes from datasheet/DANHMUCTUYENCODINH
+// Get legacy routes from Supabase routes table
 export const getLegacyRoutes = async (req: Request, res: Response) => {
   try {
     const forceRefresh = req.query.refresh === 'true'
-    
+
     // Check cache
     if (!forceRefresh && legacyRoutesCache && Date.now() - legacyRoutesCache.timestamp < LEGACY_CACHE_TTL) {
       return res.json(legacyRoutesCache.data)
     }
 
-    const snapshot = await firebaseDb.ref('datasheet/DANHMUCTUYENCODINH').once('value')
-    const rawData = snapshot.val() || {}
+    // Get routes from Supabase
+    const { data: routesData, error } = await firebase
+      .from('routes')
+      .select('*')
+      .order('route_code', { ascending: true })
 
-    const routes = Object.entries(rawData).map(([key, value]: [string, any]) => ({
-      id: key,
-      routeCode: value.route_code || value.MaSoTuyen || '',
-      routeCodeOld: value.route_code_old || value.MaSoTuyen_Cu || '',
-      routeCodeFixed: value.route_code_fixed || value.MaSoTuyen_Fix || '',
-      routeClass: value.route_class || value.MaO || '',
-      routeType: value.route_type || value.PhanLoaiTuyen || '',
-      routePath: value.route_path || value.HanhTrinh || '',
-      
-      departureStation: value.departure_station || value.BenDi || '',
-      departureStationRef: value.departure_station_ref || value.BenDi_Ref || '',
-      departureProvince: value.departure_province || value.TinhDi || '',
-      departureProvinceOld: value.departure_province_old || value.TinhDi_Cu || '',
-      
-      arrivalStation: value.arrival_station || value.BenDen || '',
-      arrivalStationRef: value.arrival_station_ref || value.BenDen_Ref || '',
-      arrivalProvince: value.arrival_province || value.TinhDen || '',
-      arrivalProvinceOld: value.arrival_province_old || value.TinhDen_Cu || '',
-      
-      distanceKm: parseInt(value.distance_km || value.CuLyTuyen_km) || 0,
-      minIntervalMinutes: parseInt(value.min_interval_minutes || value.GianCachToiThieu_phut) || 0,
-      totalTripsMonth: parseInt(value.total_trips_month || value.TongChuyenThang) || 0,
-      tripsInOperation: parseInt(value.trips_in_operation || value.ChuyenDaKhaiThac) || 0,
-      remainingCapacity: parseInt(value.remaining_capacity || value.LuuLuongConLai) || 0,
-      
-      operationStatus: value.operation_status || value.TinhTrangKhaiThac || '',
-      calendarType: value.calendar_type || value.Kieulich || '',
-      
-      decisionNumber: value.decision_number || value.SoQuyetDinh || '',
-      decisionDate: value.decision_date || value.NgayBanHanh || '',
-      issuingAuthority: value.issuing_authority || value.DonViBanHanh || '',
-      
-      notes: value.notes || value.Ghichu || '',
-      filePath: value.file_path || value.File || '',
-      
-      _source: 'datasheet',
+    if (error) {
+      console.error('Error fetching legacy routes:', error)
+      return res.status(500).json({ error: 'Failed to fetch legacy routes' })
+    }
+
+    const routes = (routesData || []).map((route: any) => ({
+      id: route.id,
+      routeCode: route.route_code || '',
+      routeCodeOld: route.route_code_old || '',
+      routeCodeFixed: route.route_code_fixed || '',
+      routeClass: route.route_class || '',
+      routeType: route.route_type || '',
+      routePath: route.itinerary || '',
+
+      departureStation: route.departure_station || '',
+      departureStationRef: route.departure_station_ref || '',
+      departureProvince: route.departure_province || '',
+      departureProvinceOld: route.departure_province_old || '',
+
+      arrivalStation: route.arrival_station || '',
+      arrivalStationRef: route.arrival_station_ref || '',
+      arrivalProvince: route.arrival_province || '',
+      arrivalProvinceOld: route.arrival_province_old || '',
+
+      distanceKm: route.distance_km || 0,
+      minIntervalMinutes: route.min_interval_minutes || 0,
+      totalTripsMonth: route.total_trips_per_month || 0,
+      tripsInOperation: route.trips_operated || 0,
+      remainingCapacity: route.remaining_capacity || 0,
+
+      operationStatus: route.operation_status || '',
+      calendarType: route.calendar_type || '',
+
+      decisionNumber: route.decision_number || '',
+      decisionDate: route.decision_date || '',
+      issuingAuthority: route.issuing_authority || '',
+
+      notes: route.notes || '',
+      filePath: route.file_path || '',
+
+      _source: 'supabase',
     }))
-
-    // Sort by route code
-    routes.sort((a, b) => a.routeCode.localeCompare(b.routeCode))
 
     // Update cache
     legacyRoutesCache = { data: routes, timestamp: Date.now() }

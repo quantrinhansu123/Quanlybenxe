@@ -8,7 +8,7 @@
  * that entity to keep the denormalized data consistent.
  */
 
-import { firebase, firebaseDb } from '../config/database.js'
+import { firebase } from '../config/database.js'
 
 /**
  * Sync vehicle changes to all dispatch records that reference this vehicle
@@ -54,7 +54,7 @@ export async function syncVehicleChanges(vehicleId: string, changes: {
 
     await Promise.all(records.map(async (r: any) => {
       try {
-        await firebaseDb.update(`dispatch_records/${r.id}`, updates)
+        await firebase.from('dispatch_records').update(updates).eq('id', r.id)
         updated++
       } catch (err) {
         console.error(`Failed to sync vehicle change to dispatch record ${r.id}:`, err)
@@ -97,7 +97,7 @@ export async function syncDriverChanges(driverId: string, fullName: string): Pro
 
     await Promise.all(records.map(async (r: any) => {
       try {
-        await firebaseDb.update(`dispatch_records/${r.id}`, { driver_full_name: fullName })
+        await firebase.from('dispatch_records').update({ driver_full_name: fullName }).eq('id', r.id)
         updated++
       } catch (err) {
         console.error(`Failed to sync driver change to dispatch record ${r.id}:`, err)
@@ -160,7 +160,7 @@ export async function syncRouteChanges(routeId: string, changes: {
 
     await Promise.all(records.map(async (r: any) => {
       try {
-        await firebaseDb.update(`dispatch_records/${r.id}`, updates)
+        await firebase.from('dispatch_records').update(updates).eq('id', r.id)
         updated++
       } catch (err) {
         console.error(`Failed to sync route change to dispatch record ${r.id}:`, err)
