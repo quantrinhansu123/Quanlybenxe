@@ -16,17 +16,30 @@ export const vehicles = pgTable('vehicles', {
   operatorId: uuid('operator_id').references(() => operators.id),
   vehicleTypeId: uuid('vehicle_type_id').references(() => vehicleTypes.id),
   // Vehicle details
-  seatCount: integer('seat_count'),
+  seatCapacity: integer('seat_capacity'),
+  bedCapacity: integer('bed_capacity'),
   brand: varchar('brand', { length: 100 }),
   model: varchar('model', { length: 100 }),
-  yearOfManufacture: integer('year_of_manufacture'),
+  manufactureYear: integer('manufacture_year'),
   color: varchar('color', { length: 50 }),
   chassisNumber: varchar('chassis_number', { length: 50 }),
   engineNumber: varchar('engine_number', { length: 50 }),
+  imageUrl: varchar('image_url', { length: 500 }),
   // Document expiry dates
-  registrationExpiry: date('registration_expiry'),
-  insuranceExpiry: date('insurance_expiry'),
-  roadWorthinessExpiry: date('road_worthiness_expiry'),
+  insuranceExpiryDate: date('insurance_expiry_date'),
+  inspectionExpiryDate: date('inspection_expiry_date'),
+  // Cargo dimensions
+  cargoLength: integer('cargo_length'),
+  cargoWidth: integer('cargo_width'),
+  cargoHeight: integer('cargo_height'),
+  // GPS info
+  gpsProvider: varchar('gps_provider', { length: 100 }),
+  gpsUsername: varchar('gps_username', { length: 100 }),
+  gpsPassword: varchar('gps_password', { length: 100 }),
+  // Location
+  province: varchar('province', { length: 100 }),
+  // Notes
+  notes: varchar('notes', { length: 500 }),
   // Status
   isActive: boolean('is_active').default(true).notNull(),
   operationalStatus: varchar('operational_status', { length: 50 }).default('active'),

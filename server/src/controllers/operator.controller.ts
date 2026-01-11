@@ -1,7 +1,7 @@
 import { Request, Response } from 'express'
-import { firebase } from '../config/database.js'
 import { db } from '../db/drizzle.js'
 import { operators } from '../db/schema/operators.js'
+import { vehicleBadges } from '../db/schema/vehicle-badges.js'
 import { eq, desc } from 'drizzle-orm'
 import { z } from 'zod'
 
@@ -84,23 +84,22 @@ export const getLegacyOperators = async (req: Request, res: Response) => {
     // Allowed badge types
     const allowedBadgeTypes = ['Buýt', 'Tuyến cố định']
 
-    // Load badges and operators data in parallel from Supabase
-    const [badgesResult, operatorsResult] = await Promise.all([
-      firebase.from('vehicle_badges').select('operator_id, badge_type'),
-      firebase.from('operators').select('*')
-    ])
+    if (!db) throw new Error('Database not initialized')
 
-    const badgeData = badgesResult.data || []
-    const operatorData = operatorsResult.data || []
+    // Load badges and operators data in parallel using Drizzle ORM
+    const [badgeData, operatorData] = await Promise.all([
+      db.select({ operatorId: vehicleBadges.operatorId, badgeType: vehicleBadges.badgeType }).from(vehicleBadges),
+      db.select().from(operators)
+    ])
 
     // Find unique operator IDs from badges with allowed types
     const operatorIdsWithBadges = new Set<string>()
     for (const badge of badgeData) {
-      const badgeType = badge.badge_type || ''
+      const badgeType = badge.badgeType || ''
       if (!allowedBadgeTypes.includes(badgeType)) continue
 
-      if (badge.operator_id) {
-        operatorIdsWithBadges.add(badge.operator_id)
+      if (badge.operatorId) {
+        operatorIdsWithBadges.add(badge.operatorId)
       }
     }
 
@@ -125,12 +124,12 @@ export const getLegacyOperators = async (req: Request, res: Response) => {
         fullAddress: op.address || '',
         phone: op.phone || '',
         email: op.email || '',
-        taxCode: op.tax_code || '',
-        businessLicense: op.business_license || '',
+        taxCode: op.taxCode || '',
+        businessLicense: op.businessLicense || '',
         representativeName: op.representative || '',
         businessType: '',
         registrationProvince: '',
-        isActive: op.is_active !== false,
+        isActive: op.isActive !== false,
         source: op.source || 'supabase',
       })
     }
@@ -321,14 +320,16 @@ export const deleteOperator = async (req: Request, res: Response) => {
 }
 
 /**
- * Update operator in Supabase (unified data source)
+ * Update operator using Drizzle ORM (unified data source)
  */
 export const updateLegacyOperator = async (req: Request, res: Response) => {
   try {
+    if (!db) throw new Error('Database not initialized')
+
     const { id } = req.params
     const updates = req.body
 
-    // Build update data for Supabase (snake_case)
+    // Build update data (Drizzle uses camelCase from schema)
     const updateData: any = {}
     if (updates.name !== undefined) updateData.name = updates.name
     if (updates.phone !== undefined) updateData.phone = updates.phone
@@ -337,18 +338,17 @@ export const updateLegacyOperator = async (req: Request, res: Response) => {
     if (updates.province !== undefined) updateData.province = updates.province
     if (updates.district !== undefined) updateData.district = updates.district
     if (updates.representativeName !== undefined) updateData.representative = updates.representativeName
-    if (updates.taxCode !== undefined) updateData.tax_code = updates.taxCode
-    if (updates.businessLicense !== undefined) updateData.business_license = updates.businessLicense
+    if (updates.taxCode !== undefined) updateData.taxCode = updates.taxCode
+    if (updates.businessLicense !== undefined) updateData.businessLicense = updates.businessLicense
 
-    // Update operator in Supabase
-    const { data, error } = await firebase
-      .from('operators')
-      .update(updateData)
-      .eq('id', id)
-      .select()
-      .single()
+    // Update operator using Drizzle ORM
+    const [data] = await db
+      .update(operators)
+      .set(updateData)
+      .where(eq(operators.id, id))
+      .returning()
 
-    if (error || !data) {
+    if (!data) {
       return res.status(404).json({ error: 'Operator not found' })
     }
 
@@ -364,10 +364,10 @@ export const updateLegacyOperator = async (req: Request, res: Response) => {
       province: data.province || '',
       district: data.district || '',
       representativeName: data.representative || '',
-      taxCode: data.tax_code || '',
-      businessLicense: data.business_license || '',
+      taxCode: data.taxCode || '',
+      businessLicense: data.businessLicense || '',
       businessType: '',
-      isActive: data.is_active !== false,
+      isActive: data.isActive !== false,
       source: data.source || 'supabase',
     })
   } catch (error: any) {
@@ -377,21 +377,16 @@ export const updateLegacyOperator = async (req: Request, res: Response) => {
 }
 
 /**
- * Delete operator from Supabase (unified data source)
+ * Delete operator using Drizzle ORM (unified data source)
  */
 export const deleteLegacyOperator = async (req: Request, res: Response) => {
   try {
+    if (!db) throw new Error('Database not initialized')
+
     const { id } = req.params
 
-    // Delete from Supabase
-    const { error } = await firebase
-      .from('operators')
-      .delete()
-      .eq('id', id)
-
-    if (error) {
-      return res.status(404).json({ error: 'Operator not found' })
-    }
+    // Delete using Drizzle ORM
+    await db.delete(operators).where(eq(operators.id, id))
 
     // Invalidate cache
     legacyOperatorsCache = null

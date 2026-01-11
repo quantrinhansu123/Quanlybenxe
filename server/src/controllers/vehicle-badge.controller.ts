@@ -1,5 +1,7 @@
 import { Request, Response } from 'express'
-import { firebase } from '../config/database.js'
+import { db } from '../db/drizzle.js'
+import { vehicleBadges, vehicles, dispatchRecords } from '../db/schema/index.js'
+import { eq, ne, ilike, and } from 'drizzle-orm'
 
 // In-memory cache for vehicle badges (refresh every 30 minutes for production)
 let badgesCache: any[] | null = null
@@ -10,19 +12,22 @@ let cacheLoading: Promise<any[]> | null = null // Prevent multiple simultaneous 
 // Helper function to get active dispatch vehicle plates (vehicles currently in operation)
 const getActiveDispatchPlates = async (): Promise<Set<string>> => {
   try {
+    if (!db) throw new Error('Database not initialized')
+
     // Get all dispatch records that are NOT departed (still in process)
-    const { data: activeRecords } = await firebase
-      .from('dispatch_records')
-      .select('vehicle_plate_number, current_status')
-      .neq('current_status', 'departed')
+    const activeRecords = await db
+      .select({
+        vehiclePlateNumber: dispatchRecords.vehiclePlateNumber,
+        status: dispatchRecords.status
+      })
+      .from(dispatchRecords)
+      .where(ne(dispatchRecords.status, 'departed'))
 
     const activePlates = new Set<string>()
-    if (activeRecords) {
-      for (const record of activeRecords) {
-        if (record.vehicle_plate_number) {
-          // Normalize plate number for comparison
-          activePlates.add(record.vehicle_plate_number.replace(/[.\-\s]/g, '').toUpperCase())
-        }
+    for (const record of activeRecords) {
+      if (record.vehiclePlateNumber) {
+        // Normalize plate number for comparison
+        activePlates.add(record.vehiclePlateNumber.replace(/[.\-\s]/g, '').toUpperCase())
       }
     }
     return activePlates
@@ -94,23 +99,29 @@ const loadVehiclePlates = async (): Promise<Map<string, string>> => {
     return vehiclePlateCache
   }
 
-  const { data, error } = await firebase.from('vehicles').select('id, plate_number')
-  if (error) {
+  try {
+    if (!db) throw new Error('Database not initialized')
+
+    const data = await db
+      .select({
+        id: vehicles.id,
+        plateNumber: vehicles.plateNumber
+      })
+      .from(vehicles)
+
+    vehiclePlateCache = new Map()
+    for (const vehicle of data) {
+      if (vehicle.plateNumber) {
+        vehiclePlateCache.set(vehicle.id, vehicle.plateNumber)
+      }
+    }
+
+    vehiclePlateCacheTime = Date.now()
+    return vehiclePlateCache
+  } catch (error) {
     console.error('Error loading vehicle plates:', error)
     return new Map()
   }
-
-  vehiclePlateCache = new Map()
-  if (data) {
-    for (const vehicle of data) {
-      if (vehicle.plate_number) {
-        vehiclePlateCache.set(vehicle.id, vehicle.plate_number)
-      }
-    }
-  }
-
-  vehiclePlateCacheTime = Date.now()
-  return vehiclePlateCache
 }
 
 // Helper to load and cache badges with deduplication
@@ -130,20 +141,13 @@ const loadBadgesFromDB = async (): Promise<any[]> => {
   // Start loading
   const loadPromise = (async (): Promise<any[]> => {
     try {
-      // Load from Supabase
-      const [badgesResult, vehiclePlates] = await Promise.all([
-        firebase.from('vehicle_badges').select('*'),
+      if (!db) throw new Error('Database not initialized')
+
+      // Load from Drizzle
+      const [badgeData, vehiclePlates] = await Promise.all([
+        db.select().from(vehicleBadges),
         loadVehiclePlates()
       ])
-
-      if (badgesResult.error) {
-        console.error('Error loading badges:', badgesResult.error)
-        badgesCache = []
-        badgesCacheTime = Date.now()
-        return []
-      }
-
-      const badgeData = badgesResult.data || []
 
       // Convert and cache
       const mappedBadges = badgeData.map((badge: any) => {
@@ -181,6 +185,8 @@ export const invalidateBadgesCache = () => {
 
 export const getAllVehicleBadges = async (req: Request, res: Response): Promise<void> => {
   try {
+    if (!db) throw new Error('Database not initialized')
+
     const { status, badgeType, badgeColor, vehicleId, routeId, page, limit } = req.query
 
     // Load from cache
@@ -224,19 +230,20 @@ export const getAllVehicleBadges = async (req: Request, res: Response): Promise<
 
 export const getVehicleBadgeById = async (req: Request, res: Response): Promise<void> => {
   try {
+    if (!db) throw new Error('Database not initialized')
+
     const { id } = req.params
 
     // Get active dispatch plates to compute operational_status
     const activePlates = await getActiveDispatchPlates()
 
-    // Get data from Supabase
-    const { data, error } = await firebase
-      .from('vehicle_badges')
-      .select('*')
-      .eq('id', id)
-      .single()
+    // Get data from Drizzle
+    const [data] = await db
+      .select()
+      .from(vehicleBadges)
+      .where(eq(vehicleBadges.id, id))
 
-    if (error || !data) {
+    if (!data) {
       res.status(404).json({ error: 'Vehicle badge not found' })
       return
     }
@@ -254,6 +261,8 @@ export const getVehicleBadgeById = async (req: Request, res: Response): Promise<
 
 export const getVehicleBadgeByPlateNumber = async (req: Request, res: Response): Promise<void> => {
   try {
+    if (!db) throw new Error('Database not initialized')
+
     const { plateNumber } = req.params
 
     if (!plateNumber) {
@@ -264,15 +273,16 @@ export const getVehicleBadgeByPlateNumber = async (req: Request, res: Response):
     // Get active dispatch plates to compute operational_status
     const activePlates = await getActiveDispatchPlates()
 
-    // Get data from Supabase - search by plate_number
-    const { data, error } = await firebase
-      .from('vehicle_badges')
-      .select('*')
-      .ilike('plate_number', `%${plateNumber}%`)
+    // Get data from Drizzle - search by plate_number
+    const results = await db
+      .select()
+      .from(vehicleBadges)
+      .where(ilike(vehicleBadges.plateNumber, `%${plateNumber}%`))
       .limit(1)
-      .single()
 
-    if (error || !data) {
+    const data = results[0]
+
+    if (!data) {
       res.status(404).json({ error: 'Vehicle badge not found for this plate number' })
       return
     }
@@ -291,19 +301,16 @@ export const getVehicleBadgeByPlateNumber = async (req: Request, res: Response):
 // Create a new vehicle badge
 export const createVehicleBadge = async (req: Request, res: Response): Promise<void> => {
   try {
+    if (!db) throw new Error('Database not initialized')
+
     const {
       badge_number,
       license_plate_sheet,
       badge_type,
-      badge_color,
       issue_date,
       expiry_date,
       status,
-      file_code,
-      issue_type,
       bus_route_ref,
-      vehicle_type,
-      notes,
     } = req.body
 
     // Validate required fields
@@ -313,44 +320,33 @@ export const createVehicleBadge = async (req: Request, res: Response): Promise<v
     }
 
     // Check for duplicate badge number
-    const { data: existingBadge } = await firebase
-      .from('vehicle_badges')
-      .select('id')
-      .eq('badge_number', badge_number)
-      .limit(1)
-      .single()
+    if (!db) throw new Error('Database not initialized')
 
-    if (existingBadge) {
+    const existingBadges = await db
+      .select({ id: vehicleBadges.id })
+      .from(vehicleBadges)
+      .where(eq(vehicleBadges.badgeNumber, badge_number))
+      .limit(1)
+
+    if (existingBadges.length > 0) {
       res.status(400).json({ error: 'Số phù hiệu đã tồn tại' })
       return
     }
 
-    // Create new badge in Supabase
-    const { data, error } = await firebase
-      .from('vehicle_badges')
-      .insert({
-        badge_number: badge_number,
-        plate_number: license_plate_sheet,
-        badge_type: badge_type || null,
-        badge_color: badge_color || null,
-        issue_date: issue_date || null,
-        expiry_date: expiry_date || null,
+    // Create new badge in Drizzle
+    const [data] = await db
+      .insert(vehicleBadges)
+      .values({
+        badgeNumber: badge_number,
+        plateNumber: license_plate_sheet,
+        badgeType: badge_type || null,
+        issueDate: issue_date || null,
+        expiryDate: expiry_date || null,
         status: status || 'active',
-        file_code: file_code || null,
-        issue_type: issue_type || null,
-        bus_route_ref: bus_route_ref || null,
-        vehicle_type: vehicle_type || null,
-        notes: notes || null,
+        routeCode: bus_route_ref || null,
         source: 'manual',
       })
-      .select()
-      .single()
-
-    if (error) {
-      console.error('Error creating badge:', error)
-      res.status(500).json({ error: 'Failed to create vehicle badge' })
-      return
-    }
+      .returning()
 
     // Invalidate cache
     invalidateBadgesCache()
@@ -371,33 +367,33 @@ export const createVehicleBadge = async (req: Request, res: Response): Promise<v
 // Update an existing vehicle badge
 export const updateVehicleBadge = async (req: Request, res: Response): Promise<void> => {
   try {
+    if (!db) throw new Error('Database not initialized')
+
     const { id } = req.params
     const {
       badge_number,
       license_plate_sheet,
       badge_type,
-      badge_color,
       issue_date,
       expiry_date,
       status,
-      file_code,
-      issue_type,
       bus_route_ref,
-      vehicle_type,
-      notes,
     } = req.body
 
     // Check for duplicate badge number (excluding current badge)
     if (badge_number) {
-      const { data: duplicateBadge } = await firebase
-        .from('vehicle_badges')
-        .select('id')
-        .eq('badge_number', badge_number)
-        .neq('id', id)
-        .limit(1)
-        .single()
+      if (!db) throw new Error('Database not initialized')
 
-      if (duplicateBadge) {
+      const duplicateBadges = await db
+        .select({ id: vehicleBadges.id })
+        .from(vehicleBadges)
+        .where(and(
+          eq(vehicleBadges.badgeNumber, badge_number),
+          ne(vehicleBadges.id, id)
+        ))
+        .limit(1)
+
+      if (duplicateBadges.length > 0) {
         res.status(400).json({ error: 'Số phù hiệu đã tồn tại' })
         return
       }
@@ -405,28 +401,26 @@ export const updateVehicleBadge = async (req: Request, res: Response): Promise<v
 
     // Build update data
     const updateData: any = {}
-    if (badge_number !== undefined) updateData.badge_number = badge_number
-    if (license_plate_sheet !== undefined) updateData.plate_number = license_plate_sheet
-    if (badge_type !== undefined) updateData.badge_type = badge_type
-    if (badge_color !== undefined) updateData.badge_color = badge_color
-    if (issue_date !== undefined) updateData.issue_date = issue_date
-    if (expiry_date !== undefined) updateData.expiry_date = expiry_date
+    if (badge_number !== undefined) updateData.badgeNumber = badge_number
+    if (license_plate_sheet !== undefined) updateData.plateNumber = license_plate_sheet
+    if (badge_type !== undefined) updateData.badgeType = badge_type
+    if (issue_date !== undefined) updateData.issueDate = issue_date
+    if (expiry_date !== undefined) updateData.expiryDate = expiry_date
     if (status !== undefined) updateData.status = status
-    if (file_code !== undefined) updateData.file_code = file_code
-    if (issue_type !== undefined) updateData.issue_type = issue_type
-    if (bus_route_ref !== undefined) updateData.bus_route_ref = bus_route_ref
-    if (vehicle_type !== undefined) updateData.vehicle_type = vehicle_type
-    if (notes !== undefined) updateData.notes = notes
+    if (bus_route_ref !== undefined) updateData.routeCode = bus_route_ref
 
-    // Update in Supabase
-    const { data, error } = await firebase
-      .from('vehicle_badges')
-      .update(updateData)
-      .eq('id', id)
-      .select()
-      .single()
+    // Update in Drizzle
+    if (!db) throw new Error('Database not initialized')
 
-    if (error || !data) {
+    const results = await db
+      .update(vehicleBadges)
+      .set(updateData)
+      .where(eq(vehicleBadges.id, id))
+      .returning()
+
+    const data = results[0]
+
+    if (!data) {
       res.status(404).json({ error: 'Vehicle badge not found' })
       return
     }
@@ -450,18 +444,14 @@ export const updateVehicleBadge = async (req: Request, res: Response): Promise<v
 // Delete a vehicle badge
 export const deleteVehicleBadge = async (req: Request, res: Response): Promise<void> => {
   try {
+    if (!db) throw new Error('Database not initialized')
+
     const { id } = req.params
 
-    // Delete from Supabase
-    const { error } = await firebase
-      .from('vehicle_badges')
-      .delete()
-      .eq('id', id)
-
-    if (error) {
-      res.status(404).json({ error: 'Vehicle badge not found' })
-      return
-    }
+    // Delete from Drizzle
+    await db
+      .delete(vehicleBadges)
+      .where(eq(vehicleBadges.id, id))
 
     // Invalidate cache
     invalidateBadgesCache()
@@ -478,20 +468,10 @@ export const deleteVehicleBadge = async (req: Request, res: Response): Promise<v
 
 export const getVehicleBadgeStats = async (_req: Request, res: Response): Promise<void> => {
   try {
-    // Get data from Supabase
-    const { data: badges, error } = await firebase
-      .from('vehicle_badges')
-      .select('*')
+    if (!db) throw new Error('Database not initialized')
 
-    if (error || !badges) {
-      res.json({
-        total: 0,
-        active: 0,
-        expired: 0,
-        expiringSoon: 0,
-      })
-      return
-    }
+    // Get data from Drizzle
+    const badges = await db.select().from(vehicleBadges)
 
     // Calculate stats
     const totalCount = badges.length
@@ -503,8 +483,8 @@ export const getVehicleBadgeStats = async (_req: Request, res: Response): Promis
     thirtyDaysFromNow.setDate(thirtyDaysFromNow.getDate() + 30)
 
     const expiringSoonCount = badges.filter((b: any) => {
-      if (b.status !== 'active' || !b.expiry_date) return false
-      const expiryDate = new Date(b.expiry_date)
+      if (b.status !== 'active' || !b.expiryDate) return false
+      const expiryDate = new Date(b.expiryDate)
       return expiryDate <= thirtyDaysFromNow && expiryDate >= new Date()
     }).length
 
@@ -516,7 +496,7 @@ export const getVehicleBadgeStats = async (_req: Request, res: Response): Promis
     })
   } catch (error) {
     console.error('Error fetching vehicle badge stats:', error)
-    res.status(500).json({ 
+    res.status(500).json({
       error: 'Failed to fetch vehicle badge statistics',
       details: error instanceof Error ? error.message : 'Unknown error'
     })

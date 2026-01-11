@@ -1,6 +1,8 @@
 import { Request, Response } from 'express'
 import { AuthRequest } from '../middleware/auth.js'
-import { firebase } from '../config/database.js'
+import { db } from '../db/drizzle.js'
+import { vehicles, vehicleDocuments, operators, vehicleTypes, auditLogs, users } from '../db/schema/index.js'
+import { eq, inArray, and, desc } from 'drizzle-orm'
 import { z } from 'zod'
 import { syncVehicleChanges } from '../utils/denormalization-sync.js'
 import { cachedData } from '../services/cached-data.service.js'
@@ -76,6 +78,8 @@ const vehicleSchema = z.object({
 
 export const getAllVehicles = async (req: Request, res: Response) => {
   try {
+    if (!db) throw new Error('Database not initialized')
+
     const { operatorId, isActive } = req.query
     const activeOnly = isActive !== 'all' && isActive !== 'false'
 
@@ -99,25 +103,24 @@ export const getAllVehicles = async (req: Request, res: Response) => {
     ])
 
     // Fetch documents
+    if (!db) throw new Error('Database not initialized')
+
     const vehicleIds = vehicles.map((v: any) => v.id)
-    const { data: documents } = await firebase
-      .from('vehicle_documents')
-      .select('*')
-      .in('vehicle_id', vehicleIds)
+    const documents = await db.select().from(vehicleDocuments).where(inArray(vehicleDocuments.vehicleId, vehicleIds))
 
     const vehiclesWithDocs = vehicles.map((vehicle: any) => {
-      const vehicleDocs = documents?.filter((doc: any) => doc.vehicle_id === vehicle.id) || []
+      const vehicleDocs = documents?.filter((doc: any) => doc.vehicleId === vehicle.id) || []
       const docsMap: any = {}
       const today = new Date().toISOString().split('T')[0]
       vehicleDocs.forEach((doc: any) => {
-        docsMap[doc.document_type] = {
-          number: doc.document_number,
-          issueDate: doc.issue_date,
-          expiryDate: doc.expiry_date,
-          issuingAuthority: doc.issuing_authority,
-          documentUrl: doc.document_url,
+        docsMap[doc.documentType] = {
+          number: doc.documentNumber,
+          issueDate: doc.issueDate,
+          expiryDate: doc.expiryDate,
+          issuingAuthority: doc.issuingAuthority,
+          documentUrl: doc.documentUrl,
           notes: doc.notes,
-          isValid: doc.expiry_date >= today,
+          isValid: doc.expiryDate >= today,
         }
       })
 
@@ -180,87 +183,83 @@ export const getAllVehicles = async (req: Request, res: Response) => {
 
 export const getVehicleById = async (req: Request, res: Response) => {
   try {
+    if (!db) throw new Error('Database not initialized')
+
     const { id } = req.params
 
-    const { data: vehicle, error: vehicleError } = await firebase
-      .from('vehicles')
-      .select('*')
-      .eq('id', id)
-      .single()
+    const [vehicle] = await db.select().from(vehicles).where(eq(vehicles.id, id))
 
-    if (vehicleError) throw vehicleError
     if (!vehicle) {
       return res.status(404).json({ error: 'Vehicle not found' })
     }
 
     // Fetch operator and vehicle_type for manual join
+    if (!db) throw new Error('Database not initialized')
+
     let operator = null
     let vehicleType = null
-    
-    if (vehicle.operator_id) {
-      const { data: op } = await firebase.from('operators').select('*').eq('id', vehicle.operator_id).single()
+
+    if (vehicle.operatorId) {
+      const [op] = await db.select().from(operators).where(eq(operators.id, vehicle.operatorId))
       operator = op
     }
-    if (vehicle.vehicle_type_id) {
-      const { data: vt } = await firebase.from('vehicle_types').select('*').eq('id', vehicle.vehicle_type_id).single()
+    if (vehicle.vehicleTypeId) {
+      const [vt] = await db.select().from(vehicleTypes).where(eq(vehicleTypes.id, vehicle.vehicleTypeId))
       vehicleType = vt
     }
 
-    const { data: documents } = await firebase
-      .from('vehicle_documents')
-      .select('*')
-      .eq('vehicle_id', id)
+    const documents = await db.select().from(vehicleDocuments).where(eq(vehicleDocuments.vehicleId, id))
 
     const docsMap: any = {}
     const today = new Date().toISOString().split('T')[0]
     documents?.forEach((doc: any) => {
-      docsMap[doc.document_type] = {
-        number: doc.document_number,
-        issueDate: doc.issue_date,
-        expiryDate: doc.expiry_date,
-        issuingAuthority: doc.issuing_authority,
-        documentUrl: doc.document_url,
+      docsMap[doc.documentType] = {
+        number: doc.documentNumber,
+        issueDate: doc.issueDate,
+        expiryDate: doc.expiryDate,
+        issuingAuthority: doc.issuingAuthority,
+        documentUrl: doc.documentUrl,
         notes: doc.notes,
-        isValid: doc.expiry_date >= today,
+        isValid: doc.expiryDate >= today,
       }
     })
 
     return res.json({
       id: vehicle.id,
-      plateNumber: vehicle.plate_number,
-      vehicleTypeId: vehicle.vehicle_type_id,
+      plateNumber: vehicle.plateNumber,
+      vehicleTypeId: vehicle.vehicleTypeId,
       vehicleType: vehicleType ? {
         id: vehicleType.id,
         name: vehicleType.name,
       } : undefined,
-      operatorId: vehicle.operator_id,
+      operatorId: vehicle.operatorId,
       operator: operator ? {
         id: operator.id,
         name: operator.name,
         code: operator.code,
       } : undefined,
-      seatCapacity: vehicle.seat_capacity,
-      bedCapacity: vehicle.bed_capacity,
-      manufactureYear: vehicle.manufacture_year,
-      chassisNumber: vehicle.chassis_number,
-      engineNumber: vehicle.engine_number,
+      seatCapacity: vehicle.seatCapacity,
+      bedCapacity: vehicle.bedCapacity,
+      manufactureYear: vehicle.manufactureYear,
+      chassisNumber: vehicle.chassisNumber,
+      engineNumber: vehicle.engineNumber,
       color: vehicle.color,
-      imageUrl: vehicle.image_url,
+      imageUrl: vehicle.imageUrl,
 
-      insuranceExpiryDate: vehicle.insurance_expiry_date,
-      inspectionExpiryDate: vehicle.inspection_expiry_date,
+      insuranceExpiryDate: vehicle.insuranceExpiryDate,
+      inspectionExpiryDate: vehicle.inspectionExpiryDate,
 
-      cargoLength: vehicle.cargo_length,
-      cargoWidth: vehicle.cargo_width,
-      cargoHeight: vehicle.cargo_height,
+      cargoLength: vehicle.cargoLength,
+      cargoWidth: vehicle.cargoWidth,
+      cargoHeight: vehicle.cargoHeight,
 
-      gpsProvider: vehicle.gps_provider,
-      gpsUsername: vehicle.gps_username,
-      gpsPassword: vehicle.gps_password,
+      gpsProvider: vehicle.gpsProvider,
+      gpsUsername: vehicle.gpsUsername,
+      gpsPassword: vehicle.gpsPassword,
 
       province: vehicle.province,
 
-      isActive: vehicle.is_active,
+      isActive: vehicle.isActive,
       notes: vehicle.notes,
       documents: {
         registration: docsMap.registration || undefined,
@@ -269,8 +268,8 @@ export const getVehicleById = async (req: Request, res: Response) => {
         operation_permit: docsMap.operation_permit || undefined,
         emblem: docsMap.emblem || undefined,
       },
-      createdAt: vehicle.created_at,
-      updatedAt: vehicle.updated_at,
+      createdAt: vehicle.createdAt,
+      updatedAt: vehicle.updatedAt,
     })
   } catch (error: any) {
     if (error.name === 'ZodError') {
@@ -282,61 +281,59 @@ export const getVehicleById = async (req: Request, res: Response) => {
 
 export const createVehicle = async (req: Request, res: Response) => {
   try {
+    if (!db) throw new Error('Database not initialized')
+
     const validated = vehicleSchema.parse(req.body)
-    const { 
+    const {
       plateNumber, vehicleTypeId, operatorId, seatCapacity, bedCapacity,
       chassisNumber, engineNumber, imageUrl,
       insuranceExpiryDate, inspectionExpiryDate,
       cargoLength, cargoWidth, cargoHeight,
       gpsProvider, gpsUsername, gpsPassword,
       province,
-      notes, documents 
+      notes, documents
     } = validated
 
     // Insert vehicle
-    const { data: vehicle, error: vehicleError } = await firebase
-      .from('vehicles')
-      .insert({
-        plate_number: plateNumber,
-        vehicle_type_id: vehicleTypeId || null,
-        operator_id: operatorId || null,
-        seat_capacity: seatCapacity,
-        bed_capacity: bedCapacity || 0,
-        chassis_number: chassisNumber || null,
-        engine_number: engineNumber || null,
-        image_url: imageUrl || null,
-        
-        insurance_expiry_date: insuranceExpiryDate || null,
-        inspection_expiry_date: inspectionExpiryDate || null,
-        
-        cargo_length: cargoLength || null,
-        cargo_width: cargoWidth || null,
-        cargo_height: cargoHeight || null,
-        
-        gps_provider: gpsProvider || null,
-        gps_username: gpsUsername || null,
-        gps_password: gpsPassword || null,
-        
-        province: province || null,
+    const [vehicle] = await db.insert(vehicles).values({
+      plateNumber,
+      vehicleTypeId: vehicleTypeId || null,
+      operatorId: operatorId || null,
+      seatCapacity,
+      bedCapacity: bedCapacity || 0,
+      chassisNumber: chassisNumber || null,
+      engineNumber: engineNumber || null,
+      imageUrl: imageUrl || null,
 
-        notes: notes || null,
-        is_active: true,
-      })
-      .select('*')
-      .single()
+      insuranceExpiryDate: insuranceExpiryDate || null,
+      inspectionExpiryDate: inspectionExpiryDate || null,
 
-    if (vehicleError) throw vehicleError
+      cargoLength: cargoLength || null,
+      cargoWidth: cargoWidth || null,
+      cargoHeight: cargoHeight || null,
+
+      gpsProvider: gpsProvider || null,
+      gpsUsername: gpsUsername || null,
+      gpsPassword: gpsPassword || null,
+
+      province: province || null,
+
+      notes: notes || null,
+      isActive: true,
+    }).returning()
 
     // Fetch operator and vehicle_type for manual join
+    if (!db) throw new Error('Database not initialized')
+
     let operator = null
     let vehicleType = null
-    
-    if (vehicle.operator_id) {
-      const { data: op } = await firebase.from('operators').select('*').eq('id', vehicle.operator_id).single()
+
+    if (vehicle.operatorId) {
+      const [op] = await db.select().from(operators).where(eq(operators.id, vehicle.operatorId))
       operator = op
     }
-    if (vehicle.vehicle_type_id) {
-      const { data: vt } = await firebase.from('vehicle_types').select('*').eq('id', vehicle.vehicle_type_id).single()
+    if (vehicle.vehicleTypeId) {
+      const [vt] = await db.select().from(vehicleTypes).where(eq(vehicleTypes.id, vehicle.vehicleTypeId))
       vehicleType = vt
     }
 
@@ -346,42 +343,35 @@ export const createVehicle = async (req: Request, res: Response) => {
       const documentsToInsert = documentTypes
         .filter((type) => documents[type])
         .map((type) => ({
-          vehicle_id: vehicle.id,
-          document_type: type,
-          document_number: documents[type]!.number,
-          issue_date: documents[type]!.issueDate,
-          expiry_date: documents[type]!.expiryDate,
-          issuing_authority: documents[type]!.issuingAuthority || null,
-          document_url: documents[type]!.documentUrl || null,
+          vehicleId: vehicle.id,
+          documentType: type,
+          documentNumber: documents[type]!.number,
+          issueDate: documents[type]!.issueDate,
+          expiryDate: documents[type]!.expiryDate,
+          issuingAuthority: documents[type]!.issuingAuthority || null,
+          documentUrl: documents[type]!.documentUrl || null,
           notes: documents[type]!.notes || null,
         }))
 
       if (documentsToInsert.length > 0) {
-        const { error: docsError } = await firebase
-          .from('vehicle_documents')
-          .insert(documentsToInsert)
-
-        if (docsError) throw docsError
+        await db.insert(vehicleDocuments).values(documentsToInsert)
       }
     }
 
     // Fetch the complete vehicle with documents
-    const { data: allDocs } = await firebase
-      .from('vehicle_documents')
-      .select('*')
-      .eq('vehicle_id', vehicle.id)
+    const allDocs = await db.select().from(vehicleDocuments).where(eq(vehicleDocuments.vehicleId, vehicle.id))
 
     const docsMap: any = {}
     const today = new Date().toISOString().split('T')[0]
     allDocs?.forEach((doc: any) => {
-      docsMap[doc.document_type] = {
-        number: doc.document_number,
-        issueDate: doc.issue_date,
-        expiryDate: doc.expiry_date,
-        issuingAuthority: doc.issuing_authority,
-        documentUrl: doc.document_url,
+      docsMap[doc.documentType] = {
+        number: doc.documentNumber,
+        issueDate: doc.issueDate,
+        expiryDate: doc.expiryDate,
+        issuingAuthority: doc.issuingAuthority,
+        documentUrl: doc.documentUrl,
         notes: doc.notes,
-        isValid: doc.expiry_date >= today,
+        isValid: doc.expiryDate >= today,
       }
     })
 
@@ -390,37 +380,37 @@ export const createVehicle = async (req: Request, res: Response) => {
 
     return res.status(201).json({
       id: vehicle.id,
-      plateNumber: vehicle.plate_number,
-      vehicleTypeId: vehicle.vehicle_type_id,
+      plateNumber: vehicle.plateNumber,
+      vehicleTypeId: vehicle.vehicleTypeId,
       vehicleType: vehicleType ? {
         id: vehicleType.id,
         name: vehicleType.name,
       } : undefined,
-      operatorId: vehicle.operator_id,
+      operatorId: vehicle.operatorId,
       operator: operator ? {
         id: operator.id,
         name: operator.name,
         code: operator.code,
       } : undefined,
-      seatCapacity: vehicle.seat_capacity,
-      bedCapacity: vehicle.bed_capacity,
-      chassisNumber: vehicle.chassis_number,
-      engineNumber: vehicle.engine_number,
-      
-      insuranceExpiryDate: vehicle.insurance_expiry_date,
-      inspectionExpiryDate: vehicle.inspection_expiry_date,
-      
-      cargoLength: vehicle.cargo_length,
-      cargoWidth: vehicle.cargo_width,
-      cargoHeight: vehicle.cargo_height,
-      
-      gpsProvider: vehicle.gps_provider,
-      gpsUsername: vehicle.gps_username,
-      gpsPassword: vehicle.gps_password,
-      
+      seatCapacity: vehicle.seatCapacity,
+      bedCapacity: vehicle.bedCapacity,
+      chassisNumber: vehicle.chassisNumber,
+      engineNumber: vehicle.engineNumber,
+
+      insuranceExpiryDate: vehicle.insuranceExpiryDate,
+      inspectionExpiryDate: vehicle.inspectionExpiryDate,
+
+      cargoLength: vehicle.cargoLength,
+      cargoWidth: vehicle.cargoWidth,
+      cargoHeight: vehicle.cargoHeight,
+
+      gpsProvider: vehicle.gpsProvider,
+      gpsUsername: vehicle.gpsUsername,
+      gpsPassword: vehicle.gpsPassword,
+
       province: vehicle.province,
 
-      isActive: vehicle.is_active,
+      isActive: vehicle.isActive,
       notes: vehicle.notes,
       documents: {
         registration: docsMap.registration || undefined,
@@ -429,8 +419,8 @@ export const createVehicle = async (req: Request, res: Response) => {
         operation_permit: docsMap.operation_permit || undefined,
         emblem: docsMap.emblem || undefined,
       },
-      createdAt: vehicle.created_at,
-      updatedAt: vehicle.updated_at,
+      createdAt: vehicle.createdAt,
+      updatedAt: vehicle.updatedAt,
     })
   } catch (error: any) {
     if (error.code === '23505') {
@@ -445,142 +435,124 @@ export const createVehicle = async (req: Request, res: Response) => {
 
 export const updateVehicle = async (req: AuthRequest, res: Response) => {
   try {
+    if (!db) throw new Error('Database not initialized')
+
     const { id } = req.params
     const userId = req.user?.id
     const validated = vehicleSchema.partial().parse(req.body)
 
     // Update vehicle
     const updateData: any = {}
-    if (validated.plateNumber) updateData.plate_number = validated.plateNumber
+    if (validated.plateNumber) updateData.plateNumber = validated.plateNumber
     // Allow updating vehicleTypeId even if it's empty to clear the value
     if (validated.vehicleTypeId !== undefined) {
-      updateData.vehicle_type_id = validated.vehicleTypeId || null
+      updateData.vehicleTypeId = validated.vehicleTypeId || null
     }
     // Allow updating operatorId - handle both empty string and undefined
     // Empty string from frontend means clear the operator
     if ('operatorId' in req.body) {
       // Field was explicitly sent (even if empty), so update it
       const operatorId = req.body.operatorId
-      updateData.operator_id = (operatorId && operatorId.trim() !== '') ? operatorId : null
+      updateData.operatorId = (operatorId && operatorId.trim() !== '') ? operatorId : null
     } else if (validated.operatorId !== undefined) {
       // Validated and present in request
-      updateData.operator_id = validated.operatorId || null
+      updateData.operatorId = validated.operatorId || null
     }
-    if (validated.seatCapacity) updateData.seat_capacity = validated.seatCapacity
-    if (validated.bedCapacity !== undefined) updateData.bed_capacity = validated.bedCapacity || 0
-    if (validated.chassisNumber !== undefined) updateData.chassis_number = validated.chassisNumber || null
-    if (validated.engineNumber !== undefined) updateData.engine_number = validated.engineNumber || null
-    if (validated.imageUrl !== undefined) updateData.image_url = validated.imageUrl || null
-    
-    if (validated.insuranceExpiryDate !== undefined) updateData.insurance_expiry_date = validated.insuranceExpiryDate || null
-    if (validated.inspectionExpiryDate !== undefined) updateData.inspection_expiry_date = validated.inspectionExpiryDate || null
-    
-    if (validated.cargoLength !== undefined) updateData.cargo_length = validated.cargoLength || null
-    if (validated.cargoWidth !== undefined) updateData.cargo_width = validated.cargoWidth || null
-    if (validated.cargoHeight !== undefined) updateData.cargo_height = validated.cargoHeight || null
-    
-    if (validated.gpsProvider !== undefined) updateData.gps_provider = validated.gpsProvider || null
-    if (validated.gpsUsername !== undefined) updateData.gps_username = validated.gpsUsername || null
-    if (validated.gpsPassword !== undefined) updateData.gps_password = validated.gpsPassword || null
-    
+    if (validated.seatCapacity) updateData.seatCapacity = validated.seatCapacity
+    if (validated.bedCapacity !== undefined) updateData.bedCapacity = validated.bedCapacity || 0
+    if (validated.chassisNumber !== undefined) updateData.chassisNumber = validated.chassisNumber || null
+    if (validated.engineNumber !== undefined) updateData.engineNumber = validated.engineNumber || null
+    if (validated.imageUrl !== undefined) updateData.imageUrl = validated.imageUrl || null
+
+    if (validated.insuranceExpiryDate !== undefined) updateData.insuranceExpiryDate = validated.insuranceExpiryDate || null
+    if (validated.inspectionExpiryDate !== undefined) updateData.inspectionExpiryDate = validated.inspectionExpiryDate || null
+
+    if (validated.cargoLength !== undefined) updateData.cargoLength = validated.cargoLength || null
+    if (validated.cargoWidth !== undefined) updateData.cargoWidth = validated.cargoWidth || null
+    if (validated.cargoHeight !== undefined) updateData.cargoHeight = validated.cargoHeight || null
+
+    if (validated.gpsProvider !== undefined) updateData.gpsProvider = validated.gpsProvider || null
+    if (validated.gpsUsername !== undefined) updateData.gpsUsername = validated.gpsUsername || null
+    if (validated.gpsPassword !== undefined) updateData.gpsPassword = validated.gpsPassword || null
+
     if (validated.province !== undefined) updateData.province = validated.province || null
 
     if (validated.notes !== undefined) updateData.notes = validated.notes || null
 
     if (Object.keys(updateData).length > 0) {
-      const { error: vehicleError } = await firebase
-        .from('vehicles')
-        .update(updateData)
-        .eq('id', id)
-
-      if (vehicleError) throw vehicleError
+      await db.update(vehicles).set(updateData).where(eq(vehicles.id, id))
     }
 
     // Update documents if provided
     if (validated.documents) {
       const documentTypes = ['registration', 'inspection', 'insurance', 'operation_permit', 'emblem'] as const
-      
+
       for (const type of documentTypes) {
         if (validated.documents[type]) {
           const doc = validated.documents[type]!
-          
+
           // Check if document already exists
-          const { data: existingDoc } = await firebase
-            .from('vehicle_documents')
-            .select('id')
-            .eq('vehicle_id', id)
-            .eq('document_type', type)
-            .single()
+          const [existingDoc] = await db.select().from(vehicleDocuments)
+            .where(and(eq(vehicleDocuments.vehicleId, id), eq(vehicleDocuments.documentType, type)))
 
           if (existingDoc) {
             // Update existing document
-            const { error: updateError } = await firebase
-              .from('vehicle_documents')
-              .update({
-                document_number: doc.number,
-                issue_date: doc.issueDate,
-                expiry_date: doc.expiryDate,
-                issuing_authority: doc.issuingAuthority || null,
-                document_url: doc.documentUrl || null,
-                notes: doc.notes || null,
-                updated_by: userId || null,
-                updated_at: new Date().toISOString()
-              })
-              .eq('id', existingDoc.id)
-
-            if (updateError) throw updateError
+            await db.update(vehicleDocuments).set({
+              documentNumber: doc.number,
+              issueDate: doc.issueDate,
+              expiryDate: doc.expiryDate,
+              issuingAuthority: doc.issuingAuthority || null,
+              documentUrl: doc.documentUrl || null,
+              notes: doc.notes || null,
+              updatedBy: userId || null,
+              updatedAt: new Date(),
+            }).where(eq(vehicleDocuments.id, existingDoc.id))
           } else {
             // Insert new document
-            const { error: insertError } = await firebase
-              .from('vehicle_documents')
-              .insert({
-                vehicle_id: id,
-                document_type: type,
-                document_number: doc.number,
-                issue_date: doc.issueDate,
-                expiry_date: doc.expiryDate,
-                issuing_authority: doc.issuingAuthority || null,
-                document_url: doc.documentUrl || null,
-                notes: doc.notes || null,
-                updated_by: userId || null,
-              })
-
-            if (insertError) throw insertError
+            await db.insert(vehicleDocuments).values({
+              vehicleId: id,
+              documentType: type,
+              documentNumber: doc.number,
+              issueDate: doc.issueDate,
+              expiryDate: doc.expiryDate,
+              issuingAuthority: doc.issuingAuthority || null,
+              documentUrl: doc.documentUrl || null,
+              notes: doc.notes || null,
+              updatedBy: userId || null,
+            })
           }
         }
       }
     }
 
     // Fetch updated vehicle
-    const { data: vehicle } = await firebase
-      .from('vehicles')
-      .select('*')
-      .eq('id', id)
-      .single()
+    const [vehicle] = await db.select().from(vehicles).where(eq(vehicles.id, id))
 
     if (!vehicle) {
       return res.status(404).json({ error: 'Vehicle not found after update' })
     }
 
     // Fetch operator and vehicle_type for manual join
+    if (!db) throw new Error('Database not initialized')
+
     let operator = null
     let vehicleType = null
-    
-    if (vehicle.operator_id) {
-      const { data: op } = await firebase.from('operators').select('*').eq('id', vehicle.operator_id).single()
+
+    if (vehicle.operatorId) {
+      const [op] = await db.select().from(operators).where(eq(operators.id, vehicle.operatorId))
       operator = op
     }
-    if (vehicle.vehicle_type_id) {
-      const { data: vt } = await firebase.from('vehicle_types').select('*').eq('id', vehicle.vehicle_type_id).single()
+    if (vehicle.vehicleTypeId) {
+      const [vt] = await db.select().from(vehicleTypes).where(eq(vehicleTypes.id, vehicle.vehicleTypeId))
       vehicleType = vt
     }
 
     // Sync denormalized data to dispatch_records if plate_number or operator changed
-    if (updateData.plate_number || updateData.operator_id !== undefined) {
+    if (updateData.plateNumber || updateData.operatorId !== undefined) {
       // Run sync in background (non-blocking)
       syncVehicleChanges(id, {
-        plateNumber: vehicle.plate_number,
-        operatorId: vehicle.operator_id,
+        plateNumber: vehicle.plateNumber,
+        operatorId: vehicle.operatorId,
         operatorName: operator?.name || null,
         operatorCode: operator?.code || null,
       }).catch((err) => {
@@ -591,61 +563,58 @@ export const updateVehicle = async (req: AuthRequest, res: Response) => {
     // Invalidate vehicle cache after update
     cachedData.invalidateVehicles()
 
-    const { data: documents } = await firebase
-      .from('vehicle_documents')
-      .select('*')
-      .eq('vehicle_id', id)
+    const documents = await db.select().from(vehicleDocuments).where(eq(vehicleDocuments.vehicleId, id))
 
     const docsMap: any = {}
     const today = new Date().toISOString().split('T')[0]
     documents?.forEach((doc: any) => {
-      docsMap[doc.document_type] = {
-        number: doc.document_number,
-        issueDate: doc.issue_date,
-        expiryDate: doc.expiry_date,
-        issuingAuthority: doc.issuing_authority,
-        documentUrl: doc.document_url,
+      docsMap[doc.documentType] = {
+        number: doc.documentNumber,
+        issueDate: doc.issueDate,
+        expiryDate: doc.expiryDate,
+        issuingAuthority: doc.issuingAuthority,
+        documentUrl: doc.documentUrl,
         notes: doc.notes,
-        isValid: doc.expiry_date >= today,
+        isValid: doc.expiryDate >= today,
       }
     })
 
     return res.json({
       id: vehicle.id,
-      plateNumber: vehicle.plate_number,
-      vehicleTypeId: vehicle.vehicle_type_id,
+      plateNumber: vehicle.plateNumber,
+      vehicleTypeId: vehicle.vehicleTypeId,
       vehicleType: vehicleType ? {
         id: vehicleType.id,
         name: vehicleType.name,
       } : undefined,
-      operatorId: vehicle.operator_id,
+      operatorId: vehicle.operatorId,
       operator: operator ? {
         id: operator.id,
         name: operator.name,
         code: operator.code,
       } : undefined,
-      seatCapacity: vehicle.seat_capacity,
-      bedCapacity: vehicle.bed_capacity,
-      manufactureYear: vehicle.manufacture_year,
-      chassisNumber: vehicle.chassis_number,
-      engineNumber: vehicle.engine_number,
+      seatCapacity: vehicle.seatCapacity,
+      bedCapacity: vehicle.bedCapacity,
+      manufactureYear: vehicle.manufactureYear,
+      chassisNumber: vehicle.chassisNumber,
+      engineNumber: vehicle.engineNumber,
       color: vehicle.color,
-      imageUrl: vehicle.image_url,
-      
-      insuranceExpiryDate: vehicle.insurance_expiry_date,
-      inspectionExpiryDate: vehicle.inspection_expiry_date,
-      
-      cargoLength: vehicle.cargo_length,
-      cargoWidth: vehicle.cargo_width,
-      cargoHeight: vehicle.cargo_height,
-      
-      gpsProvider: vehicle.gps_provider,
-      gpsUsername: vehicle.gps_username,
-      gpsPassword: vehicle.gps_password,
-      
+      imageUrl: vehicle.imageUrl,
+
+      insuranceExpiryDate: vehicle.insuranceExpiryDate,
+      inspectionExpiryDate: vehicle.inspectionExpiryDate,
+
+      cargoLength: vehicle.cargoLength,
+      cargoWidth: vehicle.cargoWidth,
+      cargoHeight: vehicle.cargoHeight,
+
+      gpsProvider: vehicle.gpsProvider,
+      gpsUsername: vehicle.gpsUsername,
+      gpsPassword: vehicle.gpsPassword,
+
       province: vehicle.province,
 
-      isActive: vehicle.is_active,
+      isActive: vehicle.isActive,
       notes: vehicle.notes,
       documents: {
         registration: docsMap.registration || undefined,
@@ -654,8 +623,8 @@ export const updateVehicle = async (req: AuthRequest, res: Response) => {
         operation_permit: docsMap.operation_permit || undefined,
         emblem: docsMap.emblem || undefined,
       },
-      createdAt: vehicle.created_at,
-      updatedAt: vehicle.updated_at,
+      createdAt: vehicle.createdAt,
+      updatedAt: vehicle.updatedAt,
     })
   } catch (error: any) {
     if (error.name === 'ZodError') {
@@ -667,6 +636,8 @@ export const updateVehicle = async (req: AuthRequest, res: Response) => {
 
 export const getVehicleDocumentAuditLogs = async (req: Request, res: Response) => {
   try {
+    if (!db) throw new Error('Database not initialized')
+
     const { id: vehicleId } = req.params
 
     if (!vehicleId) {
@@ -674,37 +645,39 @@ export const getVehicleDocumentAuditLogs = async (req: Request, res: Response) =
     }
 
     // Lấy tất cả vehicle_documents của xe này
-    const { data: vehicleDocs, error: docsError } = await firebase
-      .from('vehicle_documents')
-      .select('id')
-      .eq('vehicle_id', vehicleId)
+    const vehicleDocs = await db.select({ id: vehicleDocuments.id })
+      .from(vehicleDocuments)
+      .where(eq(vehicleDocuments.vehicleId, vehicleId))
 
-    if (docsError) throw docsError
-
-    const docIds = vehicleDocs?.map((doc: any) => doc.id) || []
+    const docIds = vehicleDocs.map(doc => doc.id)
 
     if (docIds.length === 0) {
       return res.json([])
     }
 
-    // Lấy audit logs cho các documents này
-    const { data: auditLogs, error: auditError } = await firebase
-      .from('audit_logs')
-      .select(`
-        *,
-        users:user_id(id, full_name, username)
-      `)
-      .eq('table_name', 'vehicle_documents')
-      .in('record_id', docIds)
-      .order('created_at', { ascending: false })
+    // Lấy audit logs cho các documents này - với manual join
+    const logs = await db.select().from(auditLogs)
+      .where(and(
+        eq(auditLogs.tableName, 'vehicle_documents'),
+        inArray(auditLogs.recordId, docIds)
+      ))
+      .orderBy(desc(auditLogs.createdAt))
 
-    if (auditError) throw auditError
+    // Fetch users for names
+    const userIds = [...new Set(logs.map(log => log.userId).filter(Boolean))]
+    const usersData = userIds.length > 0
+      ? await db.select().from(users).where(inArray(users.id, userIds as string[]))
+      : []
+
+    const userMap = new Map(
+      usersData.map(u => [u.id, u.name || u.email || 'Không xác định'])
+    )
 
     // Format response
     // Convert timestamp to Vietnam timezone (UTC+7) for display
-    const formattedLogs = auditLogs?.map((log: any) => {
-      let createdAt = log.created_at
-      
+    const formattedLogs = logs.map((log) => {
+      let createdAt = log.createdAt?.toISOString() || ''
+
       // If timestamp is UTC (ends with Z), convert to Vietnam time (add +07:00)
       if (createdAt && typeof createdAt === 'string') {
         if (createdAt.endsWith('Z')) {
@@ -723,18 +696,18 @@ export const getVehicleDocumentAuditLogs = async (req: Request, res: Response) =
           createdAt = createdAt.endsWith('+07:00') ? createdAt : `${createdAt}+07:00`
         }
       }
-      
+
       return {
         id: log.id,
-        userId: log.user_id,
-        userName: log.users?.full_name || log.users?.username || 'Không xác định',
+        userId: log.userId,
+        userName: log.userId ? (userMap.get(log.userId) || 'Không xác định') : 'Không xác định',
         action: log.action,
-        recordId: log.record_id,
-        oldValues: log.old_values,
-        newValues: log.new_values,
+        recordId: log.recordId,
+        oldValues: log.oldValues,
+        newValues: log.newValues,
         createdAt,
       }
-    }) || []
+    })
 
     return res.json(formattedLogs)
   } catch (error: any) {
@@ -748,65 +721,64 @@ export const getVehicleDocumentAuditLogs = async (req: Request, res: Response) =
  */
 export const getAllDocumentAuditLogs = async (_req: Request, res: Response) => {
   try {
+    if (!db) throw new Error('Database not initialized')
+
     // Get all audit logs for vehicle_documents in one query
-    const { data: auditLogs, error: auditError } = await firebase
-      .from('audit_logs')
-      .select('*')
-      .eq('table_name', 'vehicle_documents')
-      .order('created_at', { ascending: false })
+    const logs = await db.select().from(auditLogs)
+      .where(eq(auditLogs.tableName, 'vehicle_documents'))
+      .orderBy(desc(auditLogs.createdAt))
       .limit(500)
 
-    if (auditError) throw auditError
-
-    if (!auditLogs || auditLogs.length === 0) {
+    if (!logs || logs.length === 0) {
       return res.json([])
     }
 
     // Get unique vehicle_document IDs
-    const docIds = [...new Set(auditLogs.map((log: any) => log.record_id))]
+    const docIds = [...new Set(logs.map(log => log.recordId))]
 
     // Fetch vehicle_documents to get vehicle_id
-    const { data: vehicleDocs } = await firebase
-      .from('vehicle_documents')
-      .select('id, vehicle_id')
-      .in('id', docIds)
+    const vehicleDocs = await db.select({
+      id: vehicleDocuments.id,
+      vehicleId: vehicleDocuments.vehicleId
+    }).from(vehicleDocuments).where(inArray(vehicleDocuments.id, docIds))
 
     const docToVehicleMap = new Map(
-      (vehicleDocs || []).map((doc: any) => [doc.id, doc.vehicle_id])
+      vehicleDocs.map(doc => [doc.id, doc.vehicleId])
     )
 
     // Get unique vehicle IDs
     const vehicleIds = [...new Set(
-      (vehicleDocs || []).map((doc: any) => doc.vehicle_id).filter(Boolean)
+      vehicleDocs.map(doc => doc.vehicleId).filter(Boolean)
     )]
 
     // Fetch vehicles to get plate numbers
-    const { data: vehicles } = await firebase
-      .from('vehicles')
-      .select('id, plate_number')
-      .in('id', vehicleIds)
+    const vehiclesData = vehicleIds.length > 0
+      ? await db.select({
+          id: vehicles.id,
+          plateNumber: vehicles.plateNumber
+        }).from(vehicles).where(inArray(vehicles.id, vehicleIds as string[]))
+      : []
 
     const vehicleMap = new Map(
-      (vehicles || []).map((v: any) => [v.id, v.plate_number])
+      vehiclesData.map(v => [v.id, v.plateNumber])
     )
 
     // Fetch users for names
-    const userIds = [...new Set(auditLogs.map((log: any) => log.user_id).filter(Boolean))]
-    const { data: users } = await firebase
-      .from('users')
-      .select('id, full_name, username')
-      .in('id', userIds)
+    const userIds = [...new Set(logs.map(log => log.userId).filter(Boolean))]
+    const usersData = userIds.length > 0
+      ? await db.select().from(users).where(inArray(users.id, userIds as string[]))
+      : []
 
     const userMap = new Map(
-      (users || []).map((u: any) => [u.id, u.full_name || u.username || 'Không xác định'])
+      usersData.map(u => [u.id, u.name || u.email || 'Không xác định'])
     )
 
     // Format response
-    const formattedLogs = auditLogs.map((log: any) => {
-      const vehicleId = docToVehicleMap.get(log.record_id)
+    const formattedLogs = logs.map((log) => {
+      const vehicleId = docToVehicleMap.get(log.recordId)
       const plateNumber = vehicleId ? vehicleMap.get(vehicleId) : null
 
-      let createdAt = log.created_at
+      let createdAt = log.createdAt?.toISOString() || ''
       if (createdAt && typeof createdAt === 'string' && createdAt.endsWith('Z')) {
         const utcDate = new Date(createdAt)
         const vietnamDate = new Date(utcDate.getTime() + 7 * 60 * 60 * 1000)
@@ -815,12 +787,12 @@ export const getAllDocumentAuditLogs = async (_req: Request, res: Response) => {
 
       return {
         id: log.id,
-        userId: log.user_id,
-        userName: userMap.get(log.user_id) || 'Không xác định',
+        userId: log.userId,
+        userName: log.userId ? (userMap.get(log.userId) || 'Không xác định') : 'Không xác định',
         action: log.action,
-        recordId: log.record_id,
-        oldValues: log.old_values,
-        newValues: log.new_values,
+        recordId: log.recordId,
+        oldValues: log.oldValues,
+        newValues: log.newValues,
         createdAt,
         vehiclePlateNumber: plateNumber || '-',
       }
@@ -835,17 +807,16 @@ export const getAllDocumentAuditLogs = async (_req: Request, res: Response) => {
 
 export const deleteVehicle = async (req: Request, res: Response) => {
   try {
+    if (!db) throw new Error('Database not initialized')
+
     const { id } = req.params
 
     // Soft delete: set is_active to false instead of deleting
-    const { data, error } = await firebase
-      .from('vehicles')
-      .update({ is_active: false })
-      .eq('id', id)
-      .select()
-      .single()
+    const [data] = await db.update(vehicles)
+      .set({ isActive: false })
+      .where(eq(vehicles.id, id))
+      .returning()
 
-    if (error) throw error
     if (!data) {
       return res.status(404).json({ error: 'Vehicle not found' })
     }
@@ -855,7 +826,7 @@ export const deleteVehicle = async (req: Request, res: Response) => {
 
     return res.json({
       id: data.id,
-      isActive: data.is_active,
+      isActive: data.isActive,
       message: 'Vehicle deleted successfully'
     })
   } catch (error: any) {
@@ -871,6 +842,8 @@ export const deleteVehicle = async (req: Request, res: Response) => {
  */
 export const lookupVehicleByPlate = async (req: Request, res: Response) => {
   try {
+    if (!db) throw new Error('Database not initialized')
+
     const { plate } = req.params
     if (!plate) {
       return res.status(400).json({ error: 'Plate number is required' })

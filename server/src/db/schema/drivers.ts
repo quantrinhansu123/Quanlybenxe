@@ -10,7 +10,7 @@ export const drivers = pgTable('drivers', {
   id: uuid('id').primaryKey().defaultRandom(),
   firebaseId: varchar('firebase_id', { length: 100 }).unique(),
   // Core fields
-  name: varchar('name', { length: 255 }).notNull(),
+  fullName: varchar('full_name', { length: 255 }).notNull(),
   phone: varchar('phone', { length: 20 }),
   idNumber: varchar('id_number', { length: 20 }),
   // Foreign key
@@ -18,10 +18,13 @@ export const drivers = pgTable('drivers', {
   // License info
   licenseNumber: varchar('license_number', { length: 50 }),
   licenseClass: varchar('license_class', { length: 10 }),
-  licenseExpiry: date('license_expiry'),
+  licenseExpiryDate: date('license_expiry_date'),
   // Other info
   dateOfBirth: date('date_of_birth'),
   address: varchar('address', { length: 500 }),
+  province: varchar('province', { length: 100 }),
+  district: varchar('district', { length: 100 }),
+  imageUrl: varchar('image_url'),
   // Status
   isActive: boolean('is_active').default(true).notNull(),
   // Denormalized fields
@@ -35,7 +38,7 @@ export const drivers = pgTable('drivers', {
 }, (table) => ({
   operatorIdx: index('drivers_operator_idx').on(table.operatorId),
   activeIdx: index('drivers_active_idx').on(table.isActive),
-  nameIdx: index('drivers_name_idx').on(table.name),
+  nameIdx: index('drivers_name_idx').on(table.fullName),
 }))
 
 export const driversRelations = relations(drivers, ({ one }) => ({

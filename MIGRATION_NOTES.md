@@ -9,9 +9,9 @@
 
 | Phase | Description | Status |
 |-------|-------------|--------|
-| Phase 1 | Supabase client setup | ✅ Complete |
+| Phase 1 | Supabase client setup + ETL scripts | ✅ Complete |
 | Phase 2 | Cache services migration | ✅ Complete |
-| Phase 3 | Drizzle ORM migration | ✅ Complete |
+| Phase 3 | Drizzle ORM migration (All controllers) | ✅ Complete |
 | Dashboard | Dashboard service | ✅ Complete |
 
 ---
@@ -22,13 +22,15 @@
 
 | Controller | Status | Notes |
 |------------|--------|-------|
-| `operator.controller.ts` | ✅ Done | Full CRUD migrated |
+| `operator.controller.ts` | ✅ Done | Full CRUD migrated, legacy operators handled |
 | `shift.controller.ts` | ✅ Done | Soft delete implemented |
 | `auth.controller.ts` | ✅ Done | Email-based auth |
 | `dispatch.controller.ts` | ✅ Done | Full workflow migrated |
-| `vehicle.controller.ts` | ✅ Done | Drizzle repository |
-| `driver.controller.ts` | ✅ Done | Drizzle repository |
+| `vehicle.controller.ts` | ✅ Done | Drizzle repository, legacy migrations |
+| `vehicle-badge.controller.ts` | ✅ Done | All CRUD migrated to Drizzle |
+| `driver.controller.ts` | ✅ Done | Drizzle repository, fleet module |
 | `dashboard.controller.ts` | ✅ Done | 5 queries, camelCase |
+| `quanly-data.controller.ts` | ✅ Done | Data aggregation migrated |
 
 ### ✅ Cache Services - Complete
 
@@ -36,6 +38,12 @@
 |---------|--------|--------|-----|
 | `ChatCacheService` | ✅ Done | 12 tables | 5 min |
 | `VehicleCacheService` | ✅ Done | 2 tables | 30 min |
+
+### ✅ Utilities - Complete
+
+| Utility | Status | Notes |
+|---------|--------|-------|
+| `denormalization-sync.ts` | ✅ Done | Batch updates with Drizzle |
 
 ---
 
@@ -128,17 +136,18 @@ async findById(id: string): Promise<T | null> {
 
 ---
 
-## Next Steps (Post-Migration)
+## Next Steps (Post-Phase 3)
 
 ### P0 - Critical
-1. [ ] Fix 496 `any` types in backend
-2. [ ] Kick-off Phase 5 testing
-3. [ ] Remove 226 console.log in frontend
+1. [ ] Phase 4: Storage migration (Cloudinary → Supabase Storage)
+2. [ ] Phase 5: Testing & validation infrastructure
+3. [ ] Fix 496 `any` types in backend
+4. [ ] Remove 226 console.log in frontend
 
 ### P1 - High
-4. [ ] Add rate limiting
-5. [ ] Implement cache invalidation
-6. [ ] Increase test coverage to 80%
+5. [ ] Add rate limiting
+6. [ ] Implement cache invalidation
+7. [ ] Increase test coverage to 80%
 
 ### P2 - Medium (Future)
 7. [ ] Create locations.ts schema

@@ -1,5 +1,5 @@
 /**
- * Denormalization Sync Utilities for Firebase RTDB
+ * Denormalization Sync Utilities for Drizzle ORM
  *
  * These functions handle propagating changes from source entities (vehicles, drivers, routes)
  * to the denormalized fields in dispatch_records.
@@ -8,7 +8,9 @@
  * that entity to keep the denormalized data consistent.
  */
 
-import { firebase } from '../config/database.js'
+import { db } from '../db/drizzle.js'
+import { dispatchRecords, vehicles } from '../db/schema/index.js'
+import { eq, inArray } from 'drizzle-orm'
 
 /**
  * Sync vehicle changes to all dispatch records that reference this vehicle
@@ -27,43 +29,41 @@ export async function syncVehicleChanges(vehicleId: string, changes: {
   operatorCode?: string | null
 }): Promise<{ updated: number; failed: number }> {
   try {
-    // Find all dispatch records for this vehicle
-    const { data: records } = await firebase
-      .from('dispatch_records')
-      .select('id')
-      .eq('vehicle_id', vehicleId)
+    if (!db) throw new Error('Database not initialized')
 
-    if (!records || records.length === 0) {
+    // Find all dispatch records for this vehicle
+    const records = await db.select({ id: dispatchRecords.id })
+      .from(dispatchRecords)
+      .where(eq(dispatchRecords.vehicleId, vehicleId))
+
+    if (records.length === 0) {
       return { updated: 0, failed: 0 }
     }
 
     // Build update object
     const updates: Record<string, any> = {}
-    if (changes.plateNumber !== undefined) updates.vehicle_plate_number = changes.plateNumber
-    if (changes.operatorId !== undefined) updates.vehicle_operator_id = changes.operatorId
-    if (changes.operatorName !== undefined) updates.vehicle_operator_name = changes.operatorName
-    if (changes.operatorCode !== undefined) updates.vehicle_operator_code = changes.operatorCode
+    if (changes.plateNumber !== undefined) updates.vehiclePlateNumber = changes.plateNumber
+    if (changes.operatorId !== undefined) updates.vehicleOperatorId = changes.operatorId
+    if (changes.operatorName !== undefined) updates.vehicleOperatorName = changes.operatorName
+    if (changes.operatorCode !== undefined) updates.vehicleOperatorCode = changes.operatorCode
 
     if (Object.keys(updates).length === 0) {
       return { updated: 0, failed: 0 }
     }
 
-    // Batch update all affected records
-    let updated = 0
-    let failed = 0
+    // Batch update all affected records with single query
+    try {
+      const recordIds = records.map(r => r.id)
+      await db.update(dispatchRecords)
+        .set(updates)
+        .where(inArray(dispatchRecords.id, recordIds))
 
-    await Promise.all(records.map(async (r: any) => {
-      try {
-        await firebase.from('dispatch_records').update(updates).eq('id', r.id)
-        updated++
-      } catch (err) {
-        console.error(`Failed to sync vehicle change to dispatch record ${r.id}:`, err)
-        failed++
-      }
-    }))
-
-    console.log(`[Denorm Sync] Vehicle ${vehicleId}: Updated ${updated} dispatch records (${failed} failed)`)
-    return { updated, failed }
+      console.log(`[Denorm Sync] Vehicle ${vehicleId}: Updated ${records.length} dispatch records`)
+      return { updated: records.length, failed: 0 }
+    } catch (err) {
+      console.error(`Failed to sync vehicle changes to dispatch records:`, err)
+      return { updated: 0, failed: records.length }
+    }
   } catch (error) {
     console.error(`[Denorm Sync] Failed to sync vehicle changes for ${vehicleId}:`, error)
     return { updated: 0, failed: 0 }
@@ -81,32 +81,30 @@ export async function syncVehicleChanges(vehicleId: string, changes: {
  */
 export async function syncDriverChanges(driverId: string, fullName: string): Promise<{ updated: number; failed: number }> {
   try {
-    // Find all dispatch records for this driver
-    const { data: records } = await firebase
-      .from('dispatch_records')
-      .select('id')
-      .eq('driver_id', driverId)
+    if (!db) throw new Error('Database not initialized')
 
-    if (!records || records.length === 0) {
+    // Find all dispatch records for this driver
+    const records = await db.select({ id: dispatchRecords.id })
+      .from(dispatchRecords)
+      .where(eq(dispatchRecords.driverId, driverId))
+
+    if (records.length === 0) {
       return { updated: 0, failed: 0 }
     }
 
-    // Batch update all affected records
-    let updated = 0
-    let failed = 0
+    // Batch update all affected records with single query
+    try {
+      const recordIds = records.map(r => r.id)
+      await db.update(dispatchRecords)
+        .set({ driverFullName: fullName })
+        .where(inArray(dispatchRecords.id, recordIds))
 
-    await Promise.all(records.map(async (r: any) => {
-      try {
-        await firebase.from('dispatch_records').update({ driver_full_name: fullName }).eq('id', r.id)
-        updated++
-      } catch (err) {
-        console.error(`Failed to sync driver change to dispatch record ${r.id}:`, err)
-        failed++
-      }
-    }))
-
-    console.log(`[Denorm Sync] Driver ${driverId}: Updated ${updated} dispatch records (${failed} failed)`)
-    return { updated, failed }
+      console.log(`[Denorm Sync] Driver ${driverId}: Updated ${records.length} dispatch records`)
+      return { updated: records.length, failed: 0 }
+    } catch (err) {
+      console.error(`Failed to sync driver changes to dispatch records:`, err)
+      return { updated: 0, failed: records.length }
+    }
   } catch (error) {
     console.error(`[Denorm Sync] Failed to sync driver changes for ${driverId}:`, error)
     return { updated: 0, failed: 0 }
@@ -132,44 +130,42 @@ export async function syncRouteChanges(routeId: string, changes: {
   destinationCode?: string | null
 }): Promise<{ updated: number; failed: number }> {
   try {
-    // Find all dispatch records for this route
-    const { data: records } = await firebase
-      .from('dispatch_records')
-      .select('id')
-      .eq('route_id', routeId)
+    if (!db) throw new Error('Database not initialized')
 
-    if (!records || records.length === 0) {
+    // Find all dispatch records for this route
+    const records = await db.select({ id: dispatchRecords.id })
+      .from(dispatchRecords)
+      .where(eq(dispatchRecords.routeId, routeId))
+
+    if (records.length === 0) {
       return { updated: 0, failed: 0 }
     }
 
     // Build update object
     const updates: Record<string, any> = {}
-    if (changes.routeName !== undefined) updates.route_name = changes.routeName
-    if (changes.routeType !== undefined) updates.route_type = changes.routeType
-    if (changes.destinationId !== undefined) updates.route_destination_id = changes.destinationId
-    if (changes.destinationName !== undefined) updates.route_destination_name = changes.destinationName
-    if (changes.destinationCode !== undefined) updates.route_destination_code = changes.destinationCode
+    if (changes.routeName !== undefined) updates.routeName = changes.routeName
+    if (changes.routeType !== undefined) updates.routeType = changes.routeType
+    if (changes.destinationId !== undefined) updates.routeDestinationId = changes.destinationId
+    if (changes.destinationName !== undefined) updates.routeDestinationName = changes.destinationName
+    if (changes.destinationCode !== undefined) updates.routeDestinationCode = changes.destinationCode
 
     if (Object.keys(updates).length === 0) {
       return { updated: 0, failed: 0 }
     }
 
-    // Batch update all affected records
-    let updated = 0
-    let failed = 0
+    // Batch update all affected records with single query
+    try {
+      const recordIds = records.map(r => r.id)
+      await db.update(dispatchRecords)
+        .set(updates)
+        .where(inArray(dispatchRecords.id, recordIds))
 
-    await Promise.all(records.map(async (r: any) => {
-      try {
-        await firebase.from('dispatch_records').update(updates).eq('id', r.id)
-        updated++
-      } catch (err) {
-        console.error(`Failed to sync route change to dispatch record ${r.id}:`, err)
-        failed++
-      }
-    }))
-
-    console.log(`[Denorm Sync] Route ${routeId}: Updated ${updated} dispatch records (${failed} failed)`)
-    return { updated, failed }
+      console.log(`[Denorm Sync] Route ${routeId}: Updated ${records.length} dispatch records`)
+      return { updated: records.length, failed: 0 }
+    } catch (err) {
+      console.error(`Failed to sync route changes to dispatch records:`, err)
+      return { updated: 0, failed: records.length }
+    }
   } catch (error) {
     console.error(`[Denorm Sync] Failed to sync route changes for ${routeId}:`, error)
     return { updated: 0, failed: 0 }
@@ -192,13 +188,14 @@ export async function syncOperatorChanges(operatorId: string, changes: {
   code?: string
 }): Promise<{ vehiclesUpdated: number; dispatchUpdated: number; failed: number }> {
   try {
-    // Find all vehicles with this operator
-    const { data: vehicles } = await firebase
-      .from('vehicles')
-      .select('id')
-      .eq('operator_id', operatorId)
+    if (!db) throw new Error('Database not initialized')
 
-    if (!vehicles || vehicles.length === 0) {
+    // Find all vehicles with this operator
+    const vehicleRecords = await db.select({ id: vehicles.id })
+      .from(vehicles)
+      .where(eq(vehicles.operatorId, operatorId))
+
+    if (vehicleRecords.length === 0) {
       return { vehiclesUpdated: 0, dispatchUpdated: 0, failed: 0 }
     }
 
@@ -206,7 +203,7 @@ export async function syncOperatorChanges(operatorId: string, changes: {
     let failed = 0
 
     // For each vehicle, sync the operator changes to their dispatch records
-    await Promise.all(vehicles.map(async (v: any) => {
+    await Promise.all(vehicleRecords.map(async (v) => {
       const result = await syncVehicleChanges(v.id, {
         operatorName: changes.name,
         operatorCode: changes.code,
@@ -215,8 +212,8 @@ export async function syncOperatorChanges(operatorId: string, changes: {
       failed += result.failed
     }))
 
-    console.log(`[Denorm Sync] Operator ${operatorId}: Affected ${vehicles.length} vehicles, ${dispatchUpdated} dispatch records (${failed} failed)`)
-    return { vehiclesUpdated: vehicles.length, dispatchUpdated, failed }
+    console.log(`[Denorm Sync] Operator ${operatorId}: Affected ${vehicleRecords.length} vehicles, ${dispatchUpdated} dispatch records (${failed} failed)`)
+    return { vehiclesUpdated: vehicleRecords.length, dispatchUpdated, failed }
   } catch (error) {
     console.error(`[Denorm Sync] Failed to sync operator changes for ${operatorId}:`, error)
     return { vehiclesUpdated: 0, dispatchUpdated: 0, failed: 0 }
@@ -227,45 +224,18 @@ export async function syncOperatorChanges(operatorId: string, changes: {
  * Sync destination (location) changes to all routes that reference this location,
  * then cascade to all dispatch records
  *
- * Call this when:
- * - Location name changes
- * - Location code changes
+ * @deprecated Routes schema does not have destinationId - this function is a no-op.
+ * Routes use text fields (arrivalStation, departureStation) instead of foreign keys.
  *
  * @param locationId - The ID of the location that changed
  * @param changes - The fields that changed
  */
-export async function syncDestinationChanges(locationId: string, changes: {
+export async function syncDestinationChanges(_locationId: string, _changes: {
   name?: string
   code?: string
 }): Promise<{ routesUpdated: number; dispatchUpdated: number; failed: number }> {
-  try {
-    // Find all routes with this destination
-    const { data: routes } = await firebase
-      .from('routes')
-      .select('id')
-      .eq('destination_id', locationId)
-
-    if (!routes || routes.length === 0) {
-      return { routesUpdated: 0, dispatchUpdated: 0, failed: 0 }
-    }
-
-    let dispatchUpdated = 0
-    let failed = 0
-
-    // For each route, sync the destination changes to their dispatch records
-    await Promise.all(routes.map(async (r: any) => {
-      const result = await syncRouteChanges(r.id, {
-        destinationName: changes.name,
-        destinationCode: changes.code,
-      })
-      dispatchUpdated += result.updated
-      failed += result.failed
-    }))
-
-    console.log(`[Denorm Sync] Destination ${locationId}: Affected ${routes.length} routes, ${dispatchUpdated} dispatch records (${failed} failed)`)
-    return { routesUpdated: routes.length, dispatchUpdated, failed }
-  } catch (error) {
-    console.error(`[Denorm Sync] Failed to sync destination changes for ${locationId}:`, error)
-    return { routesUpdated: 0, dispatchUpdated: 0, failed: 0 }
-  }
+  // Routes schema does not have destinationId foreign key
+  // This function is deprecated and returns no-op result
+  console.warn('[Denorm Sync] syncDestinationChanges is deprecated - routes use text fields instead of FK')
+  return { routesUpdated: 0, dispatchUpdated: 0, failed: 0 }
 }
