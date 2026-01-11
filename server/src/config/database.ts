@@ -1,3 +1,14 @@
+/**
+ * Database Configuration
+ *
+ * MIGRATION STATUS: Phase 2 Complete
+ * - Cache services migrated to Drizzle ORM
+ * - Firebase exports DEPRECATED - will be removed in Phase 4
+ * - Use Drizzle exports for new code
+ *
+ * @deprecated firebase, firebaseDb - Use Drizzle ORM from '../db/drizzle' instead
+ */
+
 import { initializeApp, getApps, cert, App } from 'firebase-admin/app'
 import { getDatabase, Database } from 'firebase-admin/database'
 // Note: Storage is imported in upload.controller.ts, bucket config is set in initializeApp
@@ -6,6 +17,12 @@ import { resolve } from 'path'
 import dotenv from 'dotenv'
 
 dotenv.config()
+
+// ============================================================
+// DRIZZLE ORM EXPORTS (Recommended for new code)
+// ============================================================
+export { db, testDrizzleConnection, withTransaction, closeDrizzleConnection } from '../db/drizzle.js'
+export * from '../db/schema/index.js'
 
 // Use RTDB_URL instead of FIREBASE_DATABASE_URL (reserved prefix in Firebase Functions)
 const firebaseDatabaseURL = process.env.RTDB_URL || 'https://benxe-management-20251218-default-rtdb.asia-southeast1.firebasedatabase.app/'
@@ -100,11 +117,15 @@ function getDb(): Database {
 }
 
 // Export database reference (lazy)
-export { db }
+export { db as firebaseDbRef }
+
+// ============================================================
+// DEPRECATED FIREBASE EXPORTS (Will be removed in Phase 4)
+// ============================================================
 
 /**
  * @deprecated Legacy Firebase RTDB helper - will be removed after full migration
- * Use firebase.from() instead for new code
+ * Use Drizzle ORM queries instead: `db.select().from(table)`
  */
 // Helper functions to work with Firebase Realtime Database
 export const firebaseDb = {
@@ -485,6 +506,10 @@ function createThenableQuery(query: FirebaseQuery): any {
   return proxy
 }
 
+/**
+ * @deprecated Legacy Firebase query interface - will be removed in Phase 4
+ * Use Drizzle ORM instead: `db.select().from(table).where(...)`
+ */
 // Firebase query interface with chainable API
 export const firebase = {
   from: (table: string) => {

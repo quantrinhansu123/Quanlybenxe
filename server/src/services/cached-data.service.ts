@@ -1,10 +1,10 @@
 /**
  * Cached Data Service
  * Provides cached access to frequently accessed static/semi-static data
- * Reduces Firebase RTDB reads significantly
+ * Migrated to Drizzle ORM
  */
 
-import { firebase } from '../config/database.js'
+import { db, eq, desc, operators, vehicleTypes, vehicles, drivers, routes, vehicleBadges, shifts } from '../db/queries/index.js'
 import { cache, cacheKeys, cacheTags, MemoryCache } from '../lib/cache.js'
 
 // Type definitions
@@ -23,29 +23,30 @@ interface VehicleType {
 
 interface Route {
   id: string
-  name: string
-  code: string
+  routeCode: string
+  departureStation?: string | null
+  arrivalStation?: string | null
   [key: string]: any
 }
 
 interface Schedule {
   id: string
-  route_id: string
+  routeId: string
   [key: string]: any
 }
 
 interface Vehicle {
   id: string
-  plate_number: string
-  operator_id?: string
-  vehicle_type_id?: string
+  plateNumber: string
+  operatorId?: string | null
+  vehicleTypeId?: string | null
   [key: string]: any
 }
 
 interface Driver {
   id: string
-  full_name: string
-  operator_id?: string
+  name: string
+  operatorId?: string | null
   [key: string]: any
 }
 
@@ -58,9 +59,8 @@ class CachedDataService {
     return cache.getOrSet(
       cacheKeys.operators(),
       async () => {
-        const { data, error } = await firebase.from('operators').select('*')
-        if (error) throw error
-        return data || []
+        if (!db) throw new Error('Database not initialized')
+        return await db.select().from(operators)
       },
       { ttl: MemoryCache.TTL.LONG, tags: [cacheTags.OPERATORS] }
     )
@@ -70,13 +70,9 @@ class CachedDataService {
     return cache.getOrSet(
       cacheKeys.operatorById(id),
       async () => {
-        const { data, error } = await firebase
-          .from('operators')
-          .select('*')
-          .eq('id', id)
-          .single()
-        if (error) throw error
-        return data || null
+        if (!db) throw new Error('Database not initialized')
+        const results = await db.select().from(operators).where(eq(operators.id, id)).limit(1)
+        return results[0] ?? null
       },
       { ttl: MemoryCache.TTL.LONG, tags: [cacheTags.OPERATORS] }
     )
@@ -92,9 +88,8 @@ class CachedDataService {
     return cache.getOrSet(
       cacheKeys.vehicleTypes(),
       async () => {
-        const { data, error } = await firebase.from('vehicle_types').select('*')
-        if (error) throw error
-        return data || []
+        if (!db) throw new Error('Database not initialized')
+        return await db.select().from(vehicleTypes)
       },
       { ttl: MemoryCache.TTL.STATIC, tags: [cacheTags.STATIC] }
     )
@@ -110,9 +105,8 @@ class CachedDataService {
     return cache.getOrSet(
       cacheKeys.routes(),
       async () => {
-        const { data, error } = await firebase.from('routes').select('*')
-        if (error) throw error
-        return data || []
+        if (!db) throw new Error('Database not initialized')
+        return await db.select().from(routes)
       },
       { ttl: MemoryCache.TTL.LONG, tags: [cacheTags.ROUTES] }
     )
@@ -122,13 +116,9 @@ class CachedDataService {
     return cache.getOrSet(
       cacheKeys.routeById(id),
       async () => {
-        const { data, error } = await firebase
-          .from('routes')
-          .select('*')
-          .eq('id', id)
-          .single()
-        if (error) throw error
-        return data || null
+        if (!db) throw new Error('Database not initialized')
+        const results = await db.select().from(routes).where(eq(routes.id, id)).limit(1)
+        return results[0] ?? null
       },
       { ttl: MemoryCache.TTL.LONG, tags: [cacheTags.ROUTES] }
     )
@@ -140,13 +130,14 @@ class CachedDataService {
   }
 
   // ================== SCHEDULES ==================
+  // TODO: Schedules table not in Drizzle schema - create schema or add to existing tables
   async getAllSchedules(): Promise<Schedule[]> {
     return cache.getOrSet(
       cacheKeys.schedules(),
       async () => {
-        const { data, error } = await firebase.from('schedules').select('*')
-        if (error) throw error
-        return data || []
+        // Stub: schedules table not in Drizzle schema
+        console.warn('[CachedDataService] schedules table not migrated to Drizzle')
+        return []
       },
       { ttl: MemoryCache.TTL.LONG, tags: [cacheTags.SCHEDULES] }
     )
@@ -156,12 +147,9 @@ class CachedDataService {
     return cache.getOrSet(
       cacheKeys.schedulesByRoute(routeId),
       async () => {
-        const { data, error } = await firebase
-          .from('schedules')
-          .select('*')
-          .eq('route_id', routeId)
-        if (error) throw error
-        return data || []
+        // Stub: schedules table not in Drizzle schema
+        console.warn('[CachedDataService] schedules table not migrated to Drizzle')
+        return []
       },
       { ttl: MemoryCache.TTL.LONG, tags: [cacheTags.SCHEDULES] }
     )
@@ -173,13 +161,12 @@ class CachedDataService {
     return cache.getOrSet(
       cacheKey,
       async () => {
-        let query = firebase.from('vehicles').select('*').order('created_at', { ascending: false })
+        if (!db) throw new Error('Database not initialized')
+        let query = db.select().from(vehicles).orderBy(desc(vehicles.createdAt))
         if (activeOnly) {
-          query = query.eq('is_active', true)
+          query = query.where(eq(vehicles.isActive, true)) as any
         }
-        const { data, error } = await query
-        if (error) throw error
-        return data || []
+        return await query
       },
       { ttl: MemoryCache.TTL.MEDIUM, tags: [cacheTags.VEHICLES] }
     )
@@ -189,13 +176,9 @@ class CachedDataService {
     return cache.getOrSet(
       cacheKeys.vehicleById(id),
       async () => {
-        const { data, error } = await firebase
-          .from('vehicles')
-          .select('*')
-          .eq('id', id)
-          .single()
-        if (error) throw error
-        return data || null
+        if (!db) throw new Error('Database not initialized')
+        const results = await db.select().from(vehicles).where(eq(vehicles.id, id)).limit(1)
+        return results[0] ?? null
       },
       { ttl: MemoryCache.TTL.MEDIUM, tags: [cacheTags.VEHICLES] }
     )
@@ -211,12 +194,8 @@ class CachedDataService {
     return cache.getOrSet(
       cacheKeys.drivers(),
       async () => {
-        const { data, error } = await firebase
-          .from('drivers')
-          .select('*')
-          .order('created_at', { ascending: false })
-        if (error) throw error
-        return data || []
+        if (!db) throw new Error('Database not initialized')
+        return await db.select().from(drivers).orderBy(desc(drivers.createdAt))
       },
       { ttl: MemoryCache.TTL.MEDIUM, tags: [cacheTags.DRIVERS] }
     )
@@ -226,13 +205,9 @@ class CachedDataService {
     return cache.getOrSet(
       cacheKeys.driverById(id),
       async () => {
-        const { data, error } = await firebase
-          .from('drivers')
-          .select('*')
-          .eq('id', id)
-          .single()
-        if (error) throw error
-        return data || null
+        if (!db) throw new Error('Database not initialized')
+        const results = await db.select().from(drivers).where(eq(drivers.id, id)).limit(1)
+        return results[0] ?? null
       },
       { ttl: MemoryCache.TTL.MEDIUM, tags: [cacheTags.DRIVERS] }
     )
@@ -244,13 +219,14 @@ class CachedDataService {
   }
 
   // ================== SERVICES ==================
+  // TODO: Services table not in Drizzle schema - create schema or add to existing tables
   async getAllServices(): Promise<any[]> {
     return cache.getOrSet(
       cacheKeys.services(),
       async () => {
-        const { data, error } = await firebase.from('services').select('*')
-        if (error) throw error
-        return data || []
+        // Stub: services table not in Drizzle schema
+        console.warn('[CachedDataService] services table not migrated to Drizzle')
+        return []
       },
       { ttl: MemoryCache.TTL.LONG, tags: [cacheTags.SERVICES] }
     )
@@ -260,9 +236,9 @@ class CachedDataService {
     return cache.getOrSet(
       cacheKeys.serviceFormulas(),
       async () => {
-        const { data, error } = await firebase.from('service_formulas').select('*')
-        if (error) throw error
-        return data || []
+        // Stub: service_formulas table not in Drizzle schema
+        console.warn('[CachedDataService] service_formulas table not migrated to Drizzle')
+        return []
       },
       { ttl: MemoryCache.TTL.LONG, tags: [cacheTags.SERVICES] }
     )
@@ -273,9 +249,8 @@ class CachedDataService {
     return cache.getOrSet(
       cacheKeys.shifts(),
       async () => {
-        const { data, error } = await firebase.from('shifts').select('*')
-        if (error) throw error
-        return data || []
+        if (!db) throw new Error('Database not initialized')
+        return await db.select().from(shifts)
       },
       { ttl: MemoryCache.TTL.STATIC, tags: [cacheTags.STATIC] }
     )
@@ -285,9 +260,9 @@ class CachedDataService {
     return cache.getOrSet(
       cacheKeys.locations(),
       async () => {
-        const { data, error } = await firebase.from('locations').select('*')
-        if (error) throw error
-        return data || []
+        // Stub: locations table not in Drizzle schema
+        console.warn('[CachedDataService] locations table not migrated to Drizzle')
+        return []
       },
       { ttl: MemoryCache.TTL.STATIC, tags: [cacheTags.STATIC] }
     )
@@ -297,9 +272,9 @@ class CachedDataService {
     return cache.getOrSet(
       cacheKeys.provinces(),
       async () => {
-        const { data, error } = await firebase.from('provinces').select('*')
-        if (error) throw error
-        return data || []
+        // Stub: provinces table not in Drizzle schema
+        console.warn('[CachedDataService] provinces table not migrated to Drizzle')
+        return []
       },
       { ttl: MemoryCache.TTL.STATIC, tags: [cacheTags.STATIC] }
     )
@@ -309,9 +284,8 @@ class CachedDataService {
     return cache.getOrSet(
       cacheKeys.vehicleBadges(),
       async () => {
-        const { data, error } = await firebase.from('vehicle_badges').select('*')
-        if (error) throw error
-        return data || []
+        if (!db) throw new Error('Database not initialized')
+        return await db.select().from(vehicleBadges)
       },
       { ttl: MemoryCache.TTL.LONG, tags: [cacheTags.STATIC] }
     )

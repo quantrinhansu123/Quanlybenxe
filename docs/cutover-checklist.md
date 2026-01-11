@@ -2,15 +2,43 @@
 
 ## Firebase to Supabase Migration - Production Cutover
 
-**Status**: ✅ COMPLETED
-**Migration Date**: 2026-01-11
+**Status**: ✅ PHASE 1 COMPLETE - ETL SCRIPTS READY
+**Migration Date**: TBD (Execute after Phase 5 Testing)
 **Last Updated**: 2026-01-11
 
-> **Migration Complete:** Firebase→Supabase migration finished. Cache services and dashboard migrated to Drizzle ORM.
+> **Phase 1 Complete:** ETL scripts created. Data quality analysis, batch import, validation, rollback ready.
+> **Next:** Execute `npm run etl:migrate` after Phase 5 testing.
 
 ---
 
-## Pre-Cutover (T-2 hours) ✅ DONE
+## Phase 1: ETL Scripts ✅ COMPLETE
+
+### ETL Scripts Created
+- [x] analyze-data.ts - Data quality analysis
+- [x] etl-helpers.ts - Batch processing, FK validation, logging
+- [x] export-firebase.ts - Export Firebase data to JSON
+- [x] migrate-all.ts - Orchestrate full migration
+- [x] validate-migration.ts - Post-migration validation
+- [x] rollback.ts - Rollback capability
+- [x] import-vehicles.ts
+- [x] import-drivers.ts
+- [x] import-dispatch-records.ts
+- [x] import-vehicle-badges.ts
+- [x] import-routes.ts
+- [x] import-users.ts
+- [x] import-vehicle-types.ts
+- [x] import-invoices.ts
+
+### NPM Scripts Added
+- [x] `npm run etl:analyze` - Analyze exported data quality
+- [x] `npm run etl:export` - Export Firebase data
+- [x] `npm run etl:migrate` - Execute migration
+- [x] `npm run etl:validate` - Validate migration
+- [x] `npm run etl:rollback` - Rollback if needed
+
+---
+
+## Pre-Cutover (T-2 hours)
 
 ### Data Verification
 - [ ] Final Firebase backup exported: `npm run etl:export`

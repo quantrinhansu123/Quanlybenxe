@@ -1,20 +1,42 @@
-import { firebase } from '../../../config/database.js'
+import { db } from '../../../db/drizzle.js'
+import {
+  operators,
+  vehicles,
+  vehicleBadges,
+  routes,
+  drivers,
+  shifts,
+  invoices,
+  dispatchRecords
+} from '../../../db/schema/index.js'
 
-// Supabase table names (matching existing schema)
-const TABLES = {
-  vehicles: 'vehicles',
-  badges: 'vehicle_badges',
-  operators: 'operators',
-  routes: 'routes',
-  drivers: 'drivers',
-  dispatch_records: 'dispatch_records',
-  schedules: 'schedules',
-  services: 'services',
-  shifts: 'shifts',
-  invoices: 'invoices',
-  violations: 'violations',
-  service_charges: 'service_charges'
+// Cache key to Drizzle schema mapping
+const SCHEMA_MAP: Record<string, any> = {
+  vehicles,
+  badges: vehicleBadges,
+  operators,
+  routes,
+  drivers,
+  dispatch_records: dispatchRecords,
+  shifts,
+  invoices
 }
+
+// All cache keys (including stubs for tables without schema)
+const CACHE_KEYS = [
+  'vehicles',
+  'badges',
+  'operators',
+  'routes',
+  'drivers',
+  'dispatch_records',
+  'schedules', // stub
+  'services', // stub
+  'shifts',
+  'invoices',
+  'violations', // stub
+  'service_charges' // stub
+] as const
 
 interface CacheStats {
   vehicles: number
@@ -45,21 +67,26 @@ class ChatCacheService {
     if (this.isWarming) return
     this.isWarming = true
 
-    console.log('[ChatCache] Pre-warming cache from Supabase...')
+    console.log('[ChatCache] Pre-warming cache from Drizzle...')
     const startTime = Date.now()
 
     try {
-      const loadPromises = Object.entries(TABLES).map(async ([key, table]) => {
+      const loadPromises = CACHE_KEYS.map(async (key) => {
         try {
-          const { data, error } = await firebase.from(table).select('*')
-          if (error) {
-            console.warn(`[ChatCache] Error loading ${key}:`, error.message)
+          const schema = SCHEMA_MAP[key]
+
+          if (schema) {
+            // Load from Drizzle
+            if (!db) throw new Error('Database not initialized')
+            const items = await db.select().from(schema)
+            this.cache.set(key, items)
+            return { key, count: items.length }
+          } else {
+            // Stub for tables without Drizzle schema
+            console.warn(`[ChatCache] ${key}: No Drizzle schema yet, using empty array`)
             this.cache.set(key, [])
             return { key, count: 0 }
           }
-          const items = data || []
-          this.cache.set(key, items)
-          return { key, count: items.length }
         } catch (error) {
           console.warn(`[ChatCache] Failed to load ${key}:`, error)
           this.cache.set(key, [])
