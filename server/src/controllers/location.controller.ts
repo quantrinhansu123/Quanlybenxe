@@ -1,5 +1,7 @@
 import { Request, Response } from 'express'
-import { firebase } from '../config/database.js'
+import { db } from '../db/drizzle.js'
+import { locations } from '../db/schema/index.js'
+import { eq, asc } from 'drizzle-orm'
 import { z } from 'zod'
 
 const locationSchema = z.object({
@@ -15,36 +17,39 @@ const locationSchema = z.object({
 
 export const getAllLocations = async (req: Request, res: Response) => {
   try {
+    if (!db) throw new Error('Database not initialized')
+
     const { isActive } = req.query
 
-    let query = firebase
-      .from('locations')
-      .select('*')
-      .order('name', { ascending: true })
-
+    let data
     if (isActive !== undefined) {
-      query = query.eq('is_active', isActive === 'true')
+      data = await db
+        .select()
+        .from(locations)
+        .where(eq(locations.isActive, isActive === 'true'))
+        .orderBy(asc(locations.name))
+    } else {
+      data = await db
+        .select()
+        .from(locations)
+        .orderBy(asc(locations.name))
     }
 
-    const { data, error } = await query
-
-    if (error) throw error
-
-    const locations = data.map((loc: any) => ({
+    const result = data.map((loc) => ({
       id: loc.id,
       name: loc.name,
       code: loc.code,
-      stationType: loc.station_type,
+      stationType: loc.stationType,
       phone: loc.phone,
       email: loc.email,
       address: loc.address,
       latitude: loc.latitude ? parseFloat(loc.latitude) : null,
       longitude: loc.longitude ? parseFloat(loc.longitude) : null,
-      isActive: loc.is_active,
-      createdAt: loc.created_at,
+      isActive: loc.isActive,
+      createdAt: loc.createdAt,
     }))
 
-    return res.json(locations)
+    return res.json(result)
   } catch (error) {
     console.error('Error fetching locations:', error)
     return res.status(500).json({ error: 'Failed to fetch locations' })
@@ -53,31 +58,33 @@ export const getAllLocations = async (req: Request, res: Response) => {
 
 export const getLocationById = async (req: Request, res: Response) => {
   try {
+    if (!db) throw new Error('Database not initialized')
+
     const { id } = req.params
 
-    const { data, error } = await firebase
-      .from('locations')
-      .select('*')
-      .eq('id', id)
-      .single()
+    const data = await db
+      .select()
+      .from(locations)
+      .where(eq(locations.id, id))
 
-    if (error) throw error
-    if (!data) {
+    if (!data || data.length === 0) {
       return res.status(404).json({ error: 'Location not found' })
     }
 
+    const location = data[0]
+
     return res.json({
-      id: data.id,
-      name: data.name,
-      code: data.code,
-      stationType: data.station_type,
-      phone: data.phone,
-      email: data.email,
-      address: data.address,
-      latitude: data.latitude ? parseFloat(data.latitude) : null,
-      longitude: data.longitude ? parseFloat(data.longitude) : null,
-      isActive: data.is_active,
-      createdAt: data.created_at,
+      id: location.id,
+      name: location.name,
+      code: location.code,
+      stationType: location.stationType,
+      phone: location.phone,
+      email: location.email,
+      address: location.address,
+      latitude: location.latitude ? parseFloat(location.latitude) : null,
+      longitude: location.longitude ? parseFloat(location.longitude) : null,
+      isActive: location.isActive,
+      createdAt: location.createdAt,
     })
   } catch (error) {
     console.error('Error fetching location:', error)
@@ -87,40 +94,39 @@ export const getLocationById = async (req: Request, res: Response) => {
 
 export const createLocation = async (req: Request, res: Response) => {
   try {
+    if (!db) throw new Error('Database not initialized')
+
     const validated = locationSchema.parse(req.body)
 
-    const { data, error } = await firebase
-      .from('locations')
-      .insert({
+    const data = await db
+      .insert(locations)
+      .values({
         name: validated.name,
         code: validated.code,
-        station_type: validated.stationType || null,
+        stationType: validated.stationType || null,
         phone: validated.phone || null,
         email: validated.email || null,
         address: validated.address || null,
-        latitude: validated.latitude || null,
-        longitude: validated.longitude || null,
-        is_active: true,
+        latitude: validated.latitude?.toString() || null,
+        longitude: validated.longitude?.toString() || null,
+        isActive: true,
       })
-      .select()
-      .single()
+      .returning()
 
-    if (error) throw error
+    const newLocation = data[0]
 
     return res.status(201).json({
-      id: data.id,
-      name: data.name,
-      code: data.code,
-      stationType: data.station_type,
-      phone: data.phone,
-      email: data.email,
-      province: data.province,
-      district: data.district,
-      address: data.address,
-      latitude: data.latitude ? parseFloat(data.latitude) : null,
-      longitude: data.longitude ? parseFloat(data.longitude) : null,
-      isActive: data.is_active,
-      createdAt: data.created_at,
+      id: newLocation.id,
+      name: newLocation.name,
+      code: newLocation.code,
+      stationType: newLocation.stationType,
+      phone: newLocation.phone,
+      email: newLocation.email,
+      address: newLocation.address,
+      latitude: newLocation.latitude ? parseFloat(newLocation.latitude) : null,
+      longitude: newLocation.longitude ? parseFloat(newLocation.longitude) : null,
+      isActive: newLocation.isActive,
+      createdAt: newLocation.createdAt,
     })
   } catch (error: any) {
     console.error('Error creating location:', error)
@@ -136,43 +142,45 @@ export const createLocation = async (req: Request, res: Response) => {
 
 export const updateLocation = async (req: Request, res: Response) => {
   try {
+    if (!db) throw new Error('Database not initialized')
+
     const { id } = req.params
     const validated = locationSchema.partial().parse(req.body)
 
     const updateData: any = {}
     if (validated.name) updateData.name = validated.name
     if (validated.code) updateData.code = validated.code
-    if (validated.stationType !== undefined) updateData.station_type = validated.stationType || null
+    if (validated.stationType !== undefined) updateData.stationType = validated.stationType || null
     if (validated.phone !== undefined) updateData.phone = validated.phone || null
     if (validated.email !== undefined) updateData.email = validated.email || null
     if (validated.address !== undefined) updateData.address = validated.address || null
-    if (validated.latitude !== undefined) updateData.latitude = validated.latitude || null
-    if (validated.longitude !== undefined) updateData.longitude = validated.longitude || null
+    if (validated.latitude !== undefined) updateData.latitude = validated.latitude?.toString() || null
+    if (validated.longitude !== undefined) updateData.longitude = validated.longitude?.toString() || null
 
-    const { data, error } = await firebase
-      .from('locations')
-      .update(updateData)
-      .eq('id', id)
-      .select()
-      .single()
+    const data = await db
+      .update(locations)
+      .set(updateData)
+      .where(eq(locations.id, id))
+      .returning()
 
-    if (error) throw error
-    if (!data) {
+    if (!data || data.length === 0) {
       return res.status(404).json({ error: 'Location not found' })
     }
 
+    const updatedLocation = data[0]
+
     return res.json({
-      id: data.id,
-      name: data.name,
-      code: data.code,
-      stationType: data.station_type,
-      phone: data.phone,
-      email: data.email,
-      address: data.address,
-      latitude: data.latitude ? parseFloat(data.latitude) : null,
-      longitude: data.longitude ? parseFloat(data.longitude) : null,
-      isActive: data.is_active,
-      createdAt: data.created_at,
+      id: updatedLocation.id,
+      name: updatedLocation.name,
+      code: updatedLocation.code,
+      stationType: updatedLocation.stationType,
+      phone: updatedLocation.phone,
+      email: updatedLocation.email,
+      address: updatedLocation.address,
+      latitude: updatedLocation.latitude ? parseFloat(updatedLocation.latitude) : null,
+      longitude: updatedLocation.longitude ? parseFloat(updatedLocation.longitude) : null,
+      isActive: updatedLocation.isActive,
+      createdAt: updatedLocation.createdAt,
     })
   } catch (error: any) {
     console.error('Error updating location:', error)
@@ -185,14 +193,13 @@ export const updateLocation = async (req: Request, res: Response) => {
 
 export const deleteLocation = async (req: Request, res: Response) => {
   try {
+    if (!db) throw new Error('Database not initialized')
+
     const { id } = req.params
 
-    const { error } = await firebase
-      .from('locations')
-      .delete()
-      .eq('id', id)
-
-    if (error) throw error
+    await db
+      .delete(locations)
+      .where(eq(locations.id, id))
 
     return res.status(204).send()
   } catch (error) {

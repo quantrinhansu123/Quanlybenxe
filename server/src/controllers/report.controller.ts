@@ -1,43 +1,57 @@
 import { Request, Response } from 'express'
-import { firebase } from '../config/database.js'
+import { db } from '../db/drizzle.js'
+import { invoices, operators } from '../db/schema/index.js'
+import { eq, and, gte, lte, desc } from 'drizzle-orm'
 import * as reportRepository from '../modules/report/report.repository.js'
 
 export const getInvoices = async (req: Request, res: Response) => {
+  if (!db) {
+    return res.status(500).json({ error: 'Database not initialized' })
+  }
+
   try {
     const { startDate, endDate, operatorId, paymentStatus } = req.query
 
-    let query = firebase
-      .from('invoices')
-      .select(`
-        *,
-        operators:operator_id(id, name, code)
-      `)
-      .gte('issue_date', startDate as string)
-      .lte('issue_date', endDate as string)
-      .order('issue_date', { ascending: false })
+    const conditions = [
+      gte(invoices.invoiceDate, new Date(startDate as string)),
+      lte(invoices.invoiceDate, new Date(endDate as string)),
+    ]
 
     if (operatorId) {
-      query = query.eq('operator_id', operatorId as string)
+      conditions.push(eq(invoices.operatorId, operatorId as string))
     }
     if (paymentStatus) {
-      query = query.eq('payment_status', paymentStatus as string)
+      conditions.push(eq(invoices.paymentStatus, paymentStatus as string))
     }
 
-    const { data, error } = await query
+    const results = await db
+      .select({
+        id: invoices.id,
+        invoiceNumber: invoices.invoiceNumber,
+        dispatchId: invoices.dispatchRecordId,
+        totalAmount: invoices.totalAmount,
+        invoiceDate: invoices.invoiceDate,
+        paymentStatus: invoices.paymentStatus,
+        operatorId: invoices.operatorId,
+        operatorName: operators.name,
+        operatorCode: operators.code,
+      })
+      .from(invoices)
+      .leftJoin(operators, eq(invoices.operatorId, operators.id))
+      .where(and(...conditions))
+      .orderBy(desc(invoices.invoiceDate))
 
-    if (error) throw error
-
-    const invoices = data.map((invoice: any) => ({
+    const invoiceList = results.map((invoice) => ({
       id: invoice.id,
-      invoiceNumber: invoice.invoice_number,
-      dispatchId: invoice.dispatch_record_id,
-      operatorName: invoice.operators?.name || '',
-      amount: parseFloat(invoice.total_amount) || 0,
-      issueDate: invoice.issue_date,
-      status: invoice.payment_status,
+      invoiceNumber: invoice.invoiceNumber,
+      dispatchId: invoice.dispatchId,
+      operatorName: invoice.operatorName || '',
+      amount: parseFloat(invoice.totalAmount || '0') || 0,
+      issueDate: invoice.invoiceDate,
+      status: invoice.paymentStatus,
     }))
 
-    return res.json(invoices)
+    return res.json(invoiceList)
   } catch (error) {
     console.error('Error fetching invoices:', error)
     return res.status(500).json({ error: 'Failed to fetch invoices' })
@@ -45,6 +59,10 @@ export const getInvoices = async (req: Request, res: Response) => {
 }
 
 export const getVehicleLogs = async (req: Request, res: Response) => {
+  if (!db) {
+    return res.status(500).json({ error: 'Database not initialized' })
+  }
+
   try {
     const { startDate, endDate, vehicleId } = req.query
 
@@ -66,6 +84,10 @@ export const getVehicleLogs = async (req: Request, res: Response) => {
 }
 
 export const getStationActivity = async (req: Request, res: Response) => {
+  if (!db) {
+    return res.status(500).json({ error: 'Database not initialized' })
+  }
+
   try {
     const { startDate, endDate } = req.query
 
@@ -86,6 +108,10 @@ export const getStationActivity = async (req: Request, res: Response) => {
 }
 
 export const getInvalidVehicles = async (req: Request, res: Response) => {
+  if (!db) {
+    return res.status(500).json({ error: 'Database not initialized' })
+  }
+
   try {
     const { startDate, endDate } = req.query
 
@@ -106,6 +132,10 @@ export const getInvalidVehicles = async (req: Request, res: Response) => {
 }
 
 export const getRevenue = async (req: Request, res: Response) => {
+  if (!db) {
+    return res.status(500).json({ error: 'Database not initialized' })
+  }
+
   try {
     const { startDate, endDate, operatorId } = req.query
 
@@ -127,6 +157,10 @@ export const getRevenue = async (req: Request, res: Response) => {
 }
 
 export const exportExcel = async (req: Request, res: Response) => {
+  if (!db) {
+    return res.status(500).json({ error: 'Database not initialized' })
+  }
+
   try {
     const { type: _type } = req.params
     const { startDate: _startDate, endDate: _endDate } = req.query

@@ -1,10 +1,26 @@
-// TODO: Migrate to use ChatCacheService (see plan: data-query-consolidation)
-// This file still uses Firebase RTDB - deferred migration to separate plan
-import { firebaseDb } from '../../../config/database.js'
+/**
+ * Data Query Service - Migrated to Drizzle ORM
+ * Handles chat module data queries using PostgreSQL
+ */
+import { db } from '../../../db/drizzle.js'
+import {
+  dispatchRecords,
+  vehicles,
+  drivers,
+  operators,
+  routes,
+  vehicleBadges,
+  schedules
+} from '../../../db/schema/index.js'
+import { eq, and, ilike, sql, gte, count, lt } from 'drizzle-orm'
 import type { IntentResult, QueryResult } from '../types/chat.types.js'
 
 export class DataQueryService {
   async execute(intent: IntentResult): Promise<QueryResult> {
+    if (!db) {
+      return { success: false, error: 'Database connection not available', source: 'none' }
+    }
+
     const { type, extractedParams } = intent
 
     switch (type) {
@@ -27,50 +43,38 @@ export class DataQueryService {
     }
   }
 
-  // Query xe + phù hiệu + datasheet/Xe theo biển số
+  // Query xe + phù hiệu theo biển số
   async queryVehicleComplete(plateNumber: string, listAll: boolean = false): Promise<QueryResult> {
-    try {
-      const results: any = {
-        vehicles: [],
-        badges: [],
-        legacyVehicles: []
-      }
+    if (!db) {
+      return { success: false, error: 'Database connection not available', source: 'vehicles' }
+    }
 
+    try {
       // If listAll mode, return summary
       if (listAll || !plateNumber) {
-        const [vehiclesSnap, badgesSnap, xeSnap] = await Promise.all([
-          firebaseDb.ref('vehicles').once('value'),
-          firebaseDb.ref('vehicle_badges').once('value'),
-          firebaseDb.ref('datasheet/Xe').once('value')
+        const [vehicleCount, badgeCount] = await Promise.all([
+          db.select({ count: count() }).from(vehicles).then(r => r[0]?.count || 0),
+          db.select({ count: count() }).from(vehicleBadges).then(r => r[0]?.count || 0)
         ])
 
-        const vehicleCount = vehiclesSnap.numChildren()
-        const badgeCount = badgesSnap.numChildren()
-        const legacyCount = xeSnap.numChildren()
-
         // Get sample plates
-        const samplePlates: string[] = []
-        const vehiclesData = vehiclesSnap.val()
-        if (vehiclesData) {
-          let count = 0
-          for (const v of Object.values(vehiclesData)) {
-            const plate = (v as any).plate_number || (v as any).plateNumber
-            if (plate && count < 5) {
-              samplePlates.push(plate)
-              count++
-            }
-          }
-        }
+        const sampleVehicles = await db
+          .select({ plateNumber: vehicles.plateNumber })
+          .from(vehicles)
+          .where(eq(vehicles.isActive, true))
+          .limit(5)
+
+        const samplePlates = sampleVehicles.map(v => v.plateNumber)
 
         return {
           success: true,
           data: {
             summary: true,
-            vehicleCount,
-            badgeCount,
-            legacyCount,
+            vehicleCount: Number(vehicleCount),
+            badgeCount: Number(badgeCount),
+            legacyCount: 0,
             samplePlates,
-            message: `Hệ thống có ${vehicleCount} xe đăng ký, ${badgeCount} phù hiệu, ${legacyCount} xe từ dữ liệu cũ. Hãy nhập biển số cụ thể để tra cứu (VD: xe 98H07480)`
+            message: `Hệ thống có ${vehicleCount} xe đăng ký, ${badgeCount} phù hiệu. Hãy nhập biển số cụ thể để tra cứu (VD: xe 98H07480)`
           },
           source: 'vehicles'
         }
@@ -78,63 +82,47 @@ export class DataQueryService {
 
       const searchPlate = plateNumber.toUpperCase()
 
-      // 1. Search in vehicles collection
-      const vehiclesSnap = await firebaseDb.ref('vehicles').once('value')
-      const vehiclesData = vehiclesSnap.val()
-
-      if (vehiclesData) {
-        for (const [key, vehicle] of Object.entries(vehiclesData)) {
-          const v = vehicle as any
-          const plate = (v.plate_number || v.plateNumber || '').toUpperCase()
-          if (plate.includes(searchPlate)) {
-            // Get operator info
-            let operatorName = ''
-            if (v.operator_id || v.operatorId) {
-              const opSnap = await firebaseDb.ref(`operators/${v.operator_id || v.operatorId}`).once('value')
-              const opData = opSnap.val()
-              operatorName = opData?.name || ''
-            }
-            results.vehicles.push({ ...v, id: key, operatorName })
-          }
-        }
-      }
+      // 1. Search in vehicles collection with operator info
+      const vehicleResults = await db
+        .select({
+          id: vehicles.id,
+          plateNumber: vehicles.plateNumber,
+          operatorId: vehicles.operatorId,
+          operatorName: vehicles.operatorName,
+          operatorCode: vehicles.operatorCode,
+          seatCapacity: vehicles.seatCapacity,
+          bedCapacity: vehicles.bedCapacity,
+          brand: vehicles.brand,
+          model: vehicles.model,
+          manufactureYear: vehicles.manufactureYear,
+          color: vehicles.color,
+          chassisNumber: vehicles.chassisNumber,
+          engineNumber: vehicles.engineNumber,
+          imageUrl: vehicles.imageUrl,
+          insuranceExpiryDate: vehicles.insuranceExpiryDate,
+          inspectionExpiryDate: vehicles.inspectionExpiryDate,
+          gpsProvider: vehicles.gpsProvider,
+          province: vehicles.province,
+          isActive: vehicles.isActive,
+          operationalStatus: vehicles.operationalStatus,
+          notes: vehicles.notes,
+        })
+        .from(vehicles)
+        .where(ilike(vehicles.plateNumber, `%${searchPlate}%`))
 
       // 2. Search in vehicle_badges
-      const badgesSnap = await firebaseDb.ref('vehicle_badges').once('value')
-      const badgesData = badgesSnap.val()
-
-      if (badgesData) {
-        for (const [key, badge] of Object.entries(badgesData)) {
-          const b = badge as any
-          const plate = (b.BienSoXe || b.plate_number || '').toUpperCase()
-          if (plate.includes(searchPlate)) {
-            results.badges.push({ ...b, id: key })
-          }
-        }
-      }
-
-      // 3. Search in datasheet/Xe (legacy data)
-      const xeSnap = await firebaseDb.ref('datasheet/Xe').once('value')
-      const xeData = xeSnap.val()
-
-      if (xeData) {
-        for (const [key, xe] of Object.entries(xeData)) {
-          const x = xe as any
-          if (!x) continue
-          const plate = (x.plate_number || x.BienSo || '').toUpperCase()
-          if (plate.includes(searchPlate)) {
-            results.legacyVehicles.push({ ...x, id: key })
-          }
-        }
-      }
+      const badgeResults = await db
+        .select()
+        .from(vehicleBadges)
+        .where(ilike(vehicleBadges.plateNumber, `%${searchPlate}%`))
 
       // Check if any results found
-      const totalFound = results.vehicles.length + results.badges.length + results.legacyVehicles.length
+      const totalFound = vehicleResults.length + badgeResults.length
       if (totalFound === 0) {
-        return { 
-          success: false, 
-          error: `Không tìm thấy xe với biển số "${plateNumber}". Hãy kiểm tra lại biển số hoặc thử tìm kiếm khác.`, 
-          source: 'vehicles' 
+        return {
+          success: false,
+          error: `Không tìm thấy xe với biển số "${plateNumber}". Hãy kiểm tra lại biển số hoặc thử tìm kiếm khác.`,
+          source: 'vehicles'
         }
       }
 
@@ -142,7 +130,9 @@ export class DataQueryService {
         success: true,
         data: {
           plateNumber,
-          ...results,
+          vehicles: vehicleResults,
+          badges: badgeResults,
+          legacyVehicles: [],
           totalFound
         },
         source: 'vehicles+badges'
@@ -159,27 +149,23 @@ export class DataQueryService {
   }
 
   async queryDriver(searchTerm: string): Promise<QueryResult> {
+    if (!db) {
+      return { success: false, error: 'Database connection not available', source: 'drivers' }
+    }
+
     if (!searchTerm) {
       return { success: false, error: 'Không có thông tin tìm kiếm', source: 'drivers' }
     }
 
     try {
-      const driversSnap = await firebaseDb.ref('drivers').once('value')
-      const driversData = driversSnap.val()
-      const results: any[] = []
+      const searchLower = searchTerm.toLowerCase()
 
-      if (driversData) {
-        const searchLower = searchTerm.toLowerCase()
-        for (const [key, driver] of Object.entries(driversData)) {
-          const d = driver as any
-          const fullName = (d.full_name || d.fullName || '').toLowerCase()
-          const licenseNumber = (d.license_number || d.licenseNumber || '').toLowerCase()
-
-          if (fullName.includes(searchLower) || licenseNumber.includes(searchLower)) {
-            results.push({ ...d, id: key })
-          }
-        }
-      }
+      const results = await db
+        .select()
+        .from(drivers)
+        .where(
+          sql`LOWER(${drivers.fullName}) LIKE ${`%${searchLower}%`} OR LOWER(${drivers.licenseNumber}) LIKE ${`%${searchLower}%`}`
+        )
 
       if (results.length > 0) {
         return { success: true, data: results, source: 'drivers' }
@@ -192,52 +178,30 @@ export class DataQueryService {
   }
 
   async queryRoute(searchTerm: string, _destination?: string): Promise<QueryResult> {
+    if (!db) {
+      return { success: false, error: 'Database connection not available', source: 'routes' }
+    }
+
     if (!searchTerm) {
       return { success: false, error: 'Không có thông tin tuyến', source: 'routes' }
     }
 
     try {
+      const searchLower = searchTerm.toLowerCase()
+
       // Search in routes collection
-      const routesSnap = await firebaseDb.ref('routes').once('value')
-      const routesData = routesSnap.val()
-      const results: any[] = []
-
-      if (routesData) {
-        const searchLower = searchTerm.toLowerCase()
-        for (const [key, route] of Object.entries(routesData)) {
-          const r = route as any
-          const routeName = (r.route_name || r.routeName || '').toLowerCase()
-          const routeCode = (r.route_code || r.routeCode || '').toLowerCase()
-
-          if (routeName.includes(searchLower) || routeCode.includes(searchLower)) {
-            results.push({ ...r, id: key })
-          }
-        }
-      }
-
-      // Also search in datasheet/DANHMUCTUYENCODINH
-      const danhMucSnap = await firebaseDb.ref('datasheet/DANHMUCTUYENCODINH').once('value')
-      const danhMucData = danhMucSnap.val()
-
-      if (danhMucData) {
-        const searchLower = searchTerm.toLowerCase()
-        for (const [key, tuyen] of Object.entries(danhMucData)) {
-          const t = tuyen as any
-          if (!t) continue
-          const routeCode = (t.route_code || t.MaSoTuyen || '').toLowerCase()
-          const departureSt = (t.departure_station || t.BenDi || '').toLowerCase()
-          const arrivalSt = (t.arrival_station || t.BenDen || '').toLowerCase()
-
-          if (routeCode.includes(searchLower) ||
-              departureSt.includes(searchLower) ||
-              arrivalSt.includes(searchLower)) {
-            results.push({ ...t, id: key, source: 'legacy' })
-          }
-        }
-      }
+      const results = await db
+        .select()
+        .from(routes)
+        .where(
+          sql`LOWER(${routes.routeCode}) LIKE ${`%${searchLower}%`}
+           OR LOWER(${routes.departureStation}) LIKE ${`%${searchLower}%`}
+           OR LOWER(${routes.arrivalStation}) LIKE ${`%${searchLower}%`}`
+        )
+        .limit(10)
 
       if (results.length > 0) {
-        return { success: true, data: results.slice(0, 10), source: 'routes' }
+        return { success: true, data: results, source: 'routes' }
       }
 
       return { success: false, error: `Không tìm thấy tuyến "${searchTerm}"`, source: 'routes' }
@@ -247,18 +211,20 @@ export class DataQueryService {
   }
 
   async querySchedule(_searchTerm: string): Promise<QueryResult> {
-    try {
-      const schedulesSnap = await firebaseDb.ref('schedules').once('value')
-      const schedulesData = schedulesSnap.val()
+    if (!db) {
+      return { success: false, error: 'Database connection not available', source: 'schedules' }
+    }
 
-      if (!schedulesData) {
+    try {
+      const results = await db
+        .select()
+        .from(schedules)
+        .where(eq(schedules.isActive, true))
+        .limit(20)
+
+      if (results.length === 0) {
         return { success: false, error: 'Chưa có lịch trình nào', source: 'schedules' }
       }
-
-      const results = Object.entries(schedulesData)
-        .map(([key, schedule]) => ({ ...(schedule as any), id: key }))
-        .filter((s: any) => s.is_active !== false)
-        .slice(0, 20)
 
       return { success: true, data: results, source: 'schedules' }
     } catch (error: any) {
@@ -267,30 +233,52 @@ export class DataQueryService {
   }
 
   async queryDispatchStats(_period: string): Promise<QueryResult> {
+    if (!db) {
+      return { success: false, error: 'Database connection not available', source: 'dispatch_records' }
+    }
+
     try {
-      const today = new Date().toISOString().split('T')[0]
-      const dispatchSnap = await firebaseDb.ref('dispatch_records').once('value')
-      const dispatchData = dispatchSnap.val()
+      const today = new Date()
+      today.setHours(0, 0, 0, 0)
 
-      if (!dispatchData) {
-        return { success: true, data: { totalToday: 0, entered: 0, exited: 0 }, source: 'dispatch_records' }
-      }
+      const tomorrow = new Date(today)
+      tomorrow.setDate(tomorrow.getDate() + 1)
 
-      let entered = 0
-      let exited = 0
+      // Count entries and exits for today
+      const [enteredResult, exitedResult] = await Promise.all([
+        db
+          .select({ count: count() })
+          .from(dispatchRecords)
+          .where(
+            and(
+              gte(dispatchRecords.entryTime, today),
+              lt(dispatchRecords.entryTime, tomorrow)
+            )
+          )
+          .then(r => r[0]?.count || 0),
+        db
+          .select({ count: count() })
+          .from(dispatchRecords)
+          .where(
+            and(
+              gte(dispatchRecords.exitTime, today),
+              lt(dispatchRecords.exitTime, tomorrow)
+            )
+          )
+          .then(r => r[0]?.count || 0)
+      ])
 
-      for (const [_key, record] of Object.entries(dispatchData)) {
-        const r = record as any
-        const entryDate = (r.entry_time || r.entryTime || '').split('T')[0]
-        const exitDate = (r.exit_time || r.exitTime || '').split('T')[0]
-
-        if (entryDate === today) entered++
-        if (exitDate === today) exited++
-      }
+      const entered = Number(enteredResult)
+      const exited = Number(exitedResult)
 
       return {
         success: true,
-        data: { date: today, totalToday: entered, entered, exited },
+        data: {
+          date: today.toISOString().split('T')[0],
+          totalToday: entered,
+          entered,
+          exited
+        },
         source: 'dispatch_records'
       }
     } catch (error: any) {
@@ -299,25 +287,28 @@ export class DataQueryService {
   }
 
   async queryBadge(badgeNumber: string): Promise<QueryResult> {
+    if (!db) {
+      return { success: false, error: 'Database connection not available', source: 'vehicle_badges' }
+    }
+
     if (!badgeNumber) {
       return { success: false, error: 'Không có số phù hiệu', source: 'vehicle_badges' }
     }
 
     try {
-      const badgesSnap = await firebaseDb.ref('vehicle_badges').once('value')
-      const badgesData = badgesSnap.val()
+      const searchUpper = badgeNumber.toUpperCase()
 
-      if (badgesData) {
-        const searchUpper = badgeNumber.toUpperCase()
-        for (const [key, badge] of Object.entries(badgesData)) {
-          const b = badge as any
-          const number = (b.SoPhuHieu || b.badge_number || '').toUpperCase()
-          const plate = (b.BienSoXe || b.plate_number || '').toUpperCase()
+      const result = await db
+        .select()
+        .from(vehicleBadges)
+        .where(
+          sql`UPPER(${vehicleBadges.badgeNumber}) LIKE ${`%${searchUpper}%`}
+           OR UPPER(${vehicleBadges.plateNumber}) LIKE ${`%${searchUpper}%`}`
+        )
+        .limit(1)
 
-          if (number.includes(searchUpper) || plate.includes(searchUpper)) {
-            return { success: true, data: { ...b, id: key }, source: 'vehicle_badges' }
-          }
-        }
+      if (result.length > 0) {
+        return { success: true, data: result[0], source: 'vehicle_badges' }
       }
 
       return { success: false, error: `Không tìm thấy phù hiệu "${badgeNumber}"`, source: 'vehicle_badges' }
@@ -327,27 +318,23 @@ export class DataQueryService {
   }
 
   async queryOperator(searchTerm: string): Promise<QueryResult> {
+    if (!db) {
+      return { success: false, error: 'Database connection not available', source: 'operators' }
+    }
+
     if (!searchTerm) {
       return { success: false, error: 'Không có thông tin đơn vị', source: 'operators' }
     }
 
     try {
-      const operatorsSnap = await firebaseDb.ref('operators').once('value')
-      const operatorsData = operatorsSnap.val()
-      const results: any[] = []
+      const searchLower = searchTerm.toLowerCase()
 
-      if (operatorsData) {
-        const searchLower = searchTerm.toLowerCase()
-        for (const [key, operator] of Object.entries(operatorsData)) {
-          const o = operator as any
-          const name = (o.name || '').toLowerCase()
-          const code = (o.code || '').toLowerCase()
-
-          if (name.includes(searchLower) || code.includes(searchLower)) {
-            results.push({ ...o, id: key })
-          }
-        }
-      }
+      const results = await db
+        .select()
+        .from(operators)
+        .where(
+          sql`LOWER(${operators.name}) LIKE ${`%${searchLower}%`} OR LOWER(${operators.code}) LIKE ${`%${searchLower}%`}`
+        )
 
       if (results.length > 0) {
         return { success: true, data: results, source: 'operators' }
@@ -360,6 +347,10 @@ export class DataQueryService {
   }
 
   async getContextForAI(message: string): Promise<any> {
+    if (!db) {
+      return {}
+    }
+
     const context: any = {}
 
     // Extract potential vehicle reference
@@ -373,16 +364,16 @@ export class DataQueryService {
 
     // Get general stats
     try {
-      const [vehiclesSnap, driversSnap, operatorsSnap] = await Promise.all([
-        firebaseDb.ref('vehicles').once('value'),
-        firebaseDb.ref('drivers').once('value'),
-        firebaseDb.ref('operators').once('value')
+      const [vehicleCount, driverCount, operatorCount] = await Promise.all([
+        db.select({ count: count() }).from(vehicles).then(r => r[0]?.count || 0),
+        db.select({ count: count() }).from(drivers).then(r => r[0]?.count || 0),
+        db.select({ count: count() }).from(operators).then(r => r[0]?.count || 0)
       ])
 
       context.stats = {
-        totalVehicles: vehiclesSnap.numChildren(),
-        totalDrivers: driversSnap.numChildren(),
-        totalOperators: operatorsSnap.numChildren()
+        totalVehicles: Number(vehicleCount),
+        totalDrivers: Number(driverCount),
+        totalOperators: Number(operatorCount)
       }
     } catch {
       // Ignore stats errors

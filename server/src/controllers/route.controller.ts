@@ -1,7 +1,8 @@
 import { Request, Response } from 'express'
-import { firebase } from '../config/database.js'
+import { db } from '../db/drizzle.js'
+import { routes } from '../db/schema/index.js'
+import { eq, asc, and } from 'drizzle-orm'
 import { z } from 'zod'
-import { syncRouteChanges } from '../utils/denormalization-sync.js'
 
 // Cache for legacy routes
 let legacyRoutesCache: { data: any[]; timestamp: number } | null = null
@@ -9,103 +10,77 @@ const LEGACY_CACHE_TTL = 30 * 60 * 1000 // 30 minutes
 
 const routeSchema = z.object({
   routeCode: z.string().min(1, 'Route code is required'),
-  routeName: z.string().min(1, 'Route name is required'),
-  originId: z.string().min(1, 'Invalid origin ID'),
-  destinationId: z.string().min(1, 'Invalid destination ID'),
-  distanceKm: z.number().positive().optional(),
-  estimatedDurationMinutes: z.number().int().positive().optional(),
-  
-  plannedFrequency: z.string().optional(),
-  boardingPoint: z.string().optional(),
-  journeyDescription: z.string().optional(),
-  departureTimesDescription: z.string().optional(),
-  restStops: z.string().optional(),
-  
-  stops: z.array(z.object({
-    locationId: z.string().min(1),
-    stopOrder: z.number().int().positive(),
-    distanceFromOriginKm: z.number().optional(),
-    estimatedMinutesFromOrigin: z.number().int().optional(),
-  })).optional(),
+  routeCodeOld: z.string().optional(),
+  departureProvince: z.string().optional(),
+  departureStation: z.string().optional(),
+  departureStationRef: z.string().optional(),
+  arrivalProvince: z.string().optional(),
+  arrivalStation: z.string().optional(),
+  arrivalStationRef: z.string().optional(),
+  distanceKm: z.number().int().positive().optional(),
+  itinerary: z.string().optional(),
+  routeType: z.string().optional(),
+  totalTripsPerMonth: z.number().int().optional(),
+  tripsOperated: z.number().int().optional(),
+  remainingCapacity: z.number().int().optional(),
+  minIntervalMinutes: z.number().int().optional(),
+  decisionNumber: z.string().optional(),
+  decisionDate: z.string().optional(),
+  issuingAuthority: z.string().optional(),
+  operationStatus: z.string().optional(),
 })
 
 export const getAllRoutes = async (req: Request, res: Response) => {
   try {
-    const { originId, destinationId, isActive } = req.query
+    if (!db) throw new Error('Database not initialized')
 
-    let query = firebase
-      .from('routes')
-      .select(`
-        *,
-        origin:origin_id(id, name, code),
-        destination:destination_id(id, name, code)
-      `)
-      .order('route_name', { ascending: true })
+    const { departureStation, arrivalStation, isActive } = req.query
 
-    if (originId) {
-      query = query.eq('origin_id', originId as string)
+    // Build conditions
+    const conditions = []
+
+    if (departureStation) {
+      conditions.push(eq(routes.departureStation, departureStation as string))
     }
-    if (destinationId) {
-      query = query.eq('destination_id', destinationId as string)
+    if (arrivalStation) {
+      conditions.push(eq(routes.arrivalStation, arrivalStation as string))
     }
     if (isActive !== undefined) {
-      query = query.eq('is_active', isActive === 'true')
+      conditions.push(eq(routes.isActive, isActive === 'true'))
     }
 
-    const { data: routes, error } = await query
+    // Build and execute query
+    const routesData = conditions.length === 0
+      ? await db.select().from(routes).orderBy(asc(routes.routeCode))
+      : await db.select().from(routes).where(conditions.length === 1 ? conditions[0] : and(...conditions)).orderBy(asc(routes.routeCode))
 
-    if (error) throw error
+    const routesFormatted = routesData.map((route) => ({
+      id: route.id,
+      routeCode: route.routeCode,
+      routeCodeOld: route.routeCodeOld || null,
+      departureProvince: route.departureProvince || null,
+      departureStation: route.departureStation || null,
+      departureStationRef: route.departureStationRef || null,
+      arrivalProvince: route.arrivalProvince || null,
+      arrivalStation: route.arrivalStation || null,
+      arrivalStationRef: route.arrivalStationRef || null,
+      distanceKm: route.distanceKm || null,
+      itinerary: route.itinerary || null,
+      routeType: route.routeType || null,
+      totalTripsPerMonth: route.totalTripsPerMonth || null,
+      tripsOperated: route.tripsOperated || null,
+      remainingCapacity: route.remainingCapacity || null,
+      minIntervalMinutes: route.minIntervalMinutes || null,
+      decisionNumber: route.decisionNumber || null,
+      decisionDate: route.decisionDate || null,
+      issuingAuthority: route.issuingAuthority || null,
+      operationStatus: route.operationStatus || null,
+      isActive: route.isActive,
+      createdAt: route.createdAt,
+      updatedAt: route.updatedAt,
+    }))
 
-    // Fetch stops for all routes
-    const routeIds = routes.map((r: any) => r.id)
-    const { data: stops } = await firebase
-      .from('route_stops')
-      .select('*')
-      .in('route_id', routeIds)
-      .order('stop_order', { ascending: true })
-
-    const routesWithStops = routes.map((route: any) => {
-      const routeStops = stops?.filter((s: any) => s.route_id === route.id) || []
-      return {
-        id: route.id,
-        routeCode: route.route_code,
-        routeName: route.route_name,
-        originId: route.origin_id,
-        origin: route.origin ? {
-          id: route.origin.id,
-          name: route.origin.name,
-          code: route.origin.code,
-        } : undefined,
-        destinationId: route.destination_id,
-        destination: route.destination ? {
-          id: route.destination.id,
-          name: route.destination.name,
-          code: route.destination.code,
-        } : undefined,
-        distanceKm: route.distance_km ? parseFloat(route.distance_km) : null,
-        estimatedDurationMinutes: route.estimated_duration_minutes,
-        
-        plannedFrequency: route.planned_frequency,
-        boardingPoint: route.boarding_point,
-        journeyDescription: route.journey_description,
-        departureTimesDescription: route.departure_times_description,
-        restStops: route.rest_stops,
-        
-        isActive: route.is_active,
-        stops: routeStops.map((stop: any) => ({
-          id: stop.id,
-          locationId: stop.location_id,
-          stopOrder: stop.stop_order,
-          distanceFromOriginKm: stop.distance_from_origin_km ? parseFloat(stop.distance_from_origin_km) : null,
-          estimatedMinutesFromOrigin: stop.estimated_minutes_from_origin,
-          createdAt: stop.created_at,
-        })),
-        createdAt: route.created_at,
-        updatedAt: route.updated_at,
-      }
-    })
-
-    return res.json(routesWithStops)
+    return res.json(routesFormatted)
   } catch (error) {
     console.error('Error fetching routes:', error)
     return res.status(500).json({ error: 'Failed to fetch routes' })
@@ -114,66 +89,44 @@ export const getAllRoutes = async (req: Request, res: Response) => {
 
 export const getRouteById = async (req: Request, res: Response) => {
   try {
+    if (!db) throw new Error('Database not initialized')
+
     const { id } = req.params
 
-    const { data: route, error } = await firebase
-      .from('routes')
-      .select(`
-        *,
-        origin:origin_id(id, name, code),
-        destination:destination_id(id, name, code)
-      `)
-      .eq('id', id)
-      .single()
+    const [route] = await db
+      .select()
+      .from(routes)
+      .where(eq(routes.id, id))
+      .limit(1)
 
-    if (error) throw error
     if (!route) {
       return res.status(404).json({ error: 'Route not found' })
     }
 
-    const { data: stops } = await firebase
-      .from('route_stops')
-      .select(`
-        *,
-        locations:location_id(id, name, code)
-      `)
-      .eq('route_id', id)
-      .order('stop_order', { ascending: true })
-
     return res.json({
       id: route.id,
-      routeCode: route.route_code,
-      routeName: route.route_name,
-      originId: route.origin_id,
-      origin: route.origin ? {
-        id: route.origin.id,
-        name: route.origin.name,
-        code: route.origin.code,
-      } : undefined,
-      destinationId: route.destination_id,
-      destination: route.destination ? {
-        id: route.destination.id,
-        name: route.destination.name,
-        code: route.destination.code,
-      } : undefined,
-      distanceKm: route.distance_km ? parseFloat(route.distance_km) : null,
-      estimatedDurationMinutes: route.estimated_duration_minutes,
-      isActive: route.is_active,
-      stops: stops?.map((stop: any) => ({
-        id: stop.id,
-        locationId: stop.location_id,
-        location: stop.locations ? {
-          id: stop.locations.id,
-          name: stop.locations.name,
-          code: stop.locations.code,
-        } : undefined,
-        stopOrder: stop.stop_order,
-        distanceFromOriginKm: stop.distance_from_origin_km ? parseFloat(stop.distance_from_origin_km) : null,
-        estimatedMinutesFromOrigin: stop.estimated_minutes_from_origin,
-        createdAt: stop.created_at,
-      })) || [],
-      createdAt: route.created_at,
-      updatedAt: route.updated_at,
+      routeCode: route.routeCode,
+      routeCodeOld: route.routeCodeOld || null,
+      departureProvince: route.departureProvince || null,
+      departureStation: route.departureStation || null,
+      departureStationRef: route.departureStationRef || null,
+      arrivalProvince: route.arrivalProvince || null,
+      arrivalStation: route.arrivalStation || null,
+      arrivalStationRef: route.arrivalStationRef || null,
+      distanceKm: route.distanceKm || null,
+      itinerary: route.itinerary || null,
+      routeType: route.routeType || null,
+      totalTripsPerMonth: route.totalTripsPerMonth || null,
+      tripsOperated: route.tripsOperated || null,
+      remainingCapacity: route.remainingCapacity || null,
+      minIntervalMinutes: route.minIntervalMinutes || null,
+      decisionNumber: route.decisionNumber || null,
+      decisionDate: route.decisionDate || null,
+      issuingAuthority: route.issuingAuthority || null,
+      operationStatus: route.operationStatus || null,
+      isActive: route.isActive,
+      createdAt: route.createdAt,
+      updatedAt: route.updatedAt,
     })
   } catch (error) {
     console.error('Error fetching route:', error)
@@ -183,101 +136,60 @@ export const getRouteById = async (req: Request, res: Response) => {
 
 export const createRoute = async (req: Request, res: Response) => {
   try {
+    if (!db) throw new Error('Database not initialized')
+
     const validated = routeSchema.parse(req.body)
-    const { 
-      routeCode, routeName, originId, destinationId, distanceKm, estimatedDurationMinutes, 
-      plannedFrequency, boardingPoint, journeyDescription, departureTimesDescription, restStops,
-      stops 
-    } = validated
 
-    // Insert route
-    const { data: route, error: routeError } = await firebase
-      .from('routes')
-      .insert({
-        route_code: routeCode,
-        route_name: routeName,
-        origin_id: originId,
-        destination_id: destinationId,
-        distance_km: distanceKm || null,
-        estimated_duration_minutes: estimatedDurationMinutes || null,
-        
-        planned_frequency: plannedFrequency || null,
-        boarding_point: boardingPoint || null,
-        journey_description: journeyDescription || null,
-        departure_times_description: departureTimesDescription || null,
-        rest_stops: restStops || null,
-        
-        is_active: true,
+    const [route] = await db
+      .insert(routes)
+      .values({
+        routeCode: validated.routeCode,
+        routeCodeOld: validated.routeCodeOld || null,
+        departureProvince: validated.departureProvince || null,
+        departureStation: validated.departureStation || null,
+        departureStationRef: validated.departureStationRef || null,
+        arrivalProvince: validated.arrivalProvince || null,
+        arrivalStation: validated.arrivalStation || null,
+        arrivalStationRef: validated.arrivalStationRef || null,
+        distanceKm: validated.distanceKm || null,
+        itinerary: validated.itinerary || null,
+        routeType: validated.routeType || null,
+        totalTripsPerMonth: validated.totalTripsPerMonth || null,
+        tripsOperated: validated.tripsOperated || null,
+        remainingCapacity: validated.remainingCapacity || null,
+        minIntervalMinutes: validated.minIntervalMinutes || null,
+        decisionNumber: validated.decisionNumber || null,
+        decisionDate: validated.decisionDate || null,
+        issuingAuthority: validated.issuingAuthority || null,
+        operationStatus: validated.operationStatus || null,
+        isActive: true,
       })
-      .select(`
-        *,
-        origin:origin_id(id, name, code),
-        destination:destination_id(id, name, code)
-      `)
-      .single()
-
-    if (routeError) throw routeError
-
-    // Insert stops if provided
-    if (stops && stops.length > 0) {
-      const stopsToInsert = stops.map((stop) => ({
-        route_id: route.id,
-        location_id: stop.locationId,
-        stop_order: stop.stopOrder,
-        distance_from_origin_km: stop.distanceFromOriginKm || null,
-        estimated_minutes_from_origin: stop.estimatedMinutesFromOrigin || null,
-      }))
-
-      const { error: stopsError } = await firebase
-        .from('route_stops')
-        .insert(stopsToInsert)
-
-      if (stopsError) throw stopsError
-    }
-
-    // Fetch complete route with stops
-    const { data: routeStops } = await firebase
-      .from('route_stops')
-      .select('*')
-      .eq('route_id', route.id)
-      .order('stop_order', { ascending: true })
+      .returning()
 
     return res.status(201).json({
       id: route.id,
-      routeCode: route.route_code,
-      routeName: route.route_name,
-      originId: route.origin_id,
-      origin: route.origin ? {
-        id: route.origin.id,
-        name: route.origin.name,
-        code: route.origin.code,
-      } : undefined,
-      destinationId: route.destination_id,
-      destination: route.destination ? {
-        id: route.destination.id,
-        name: route.destination.name,
-        code: route.destination.code,
-      } : undefined,
-      distanceKm: route.distance_km ? parseFloat(route.distance_km) : null,
-      estimatedDurationMinutes: route.estimated_duration_minutes,
-      
-      plannedFrequency: route.planned_frequency,
-      boardingPoint: route.boarding_point,
-      journeyDescription: route.journey_description,
-      departureTimesDescription: route.departure_times_description,
-      restStops: route.rest_stops,
-      
-      isActive: route.is_active,
-      stops: routeStops?.map((stop: any) => ({
-        id: stop.id,
-        locationId: stop.location_id,
-        stopOrder: stop.stop_order,
-        distanceFromOriginKm: stop.distance_from_origin_km ? parseFloat(stop.distance_from_origin_km) : null,
-        estimatedMinutesFromOrigin: stop.estimated_minutes_from_origin,
-        createdAt: stop.created_at,
-      })) || [],
-      createdAt: route.created_at,
-      updatedAt: route.updated_at,
+      routeCode: route.routeCode,
+      routeCodeOld: route.routeCodeOld || null,
+      departureProvince: route.departureProvince || null,
+      departureStation: route.departureStation || null,
+      departureStationRef: route.departureStationRef || null,
+      arrivalProvince: route.arrivalProvince || null,
+      arrivalStation: route.arrivalStation || null,
+      arrivalStationRef: route.arrivalStationRef || null,
+      distanceKm: route.distanceKm || null,
+      itinerary: route.itinerary || null,
+      routeType: route.routeType || null,
+      totalTripsPerMonth: route.totalTripsPerMonth || null,
+      tripsOperated: route.tripsOperated || null,
+      remainingCapacity: route.remainingCapacity || null,
+      minIntervalMinutes: route.minIntervalMinutes || null,
+      decisionNumber: route.decisionNumber || null,
+      decisionDate: route.decisionDate || null,
+      issuingAuthority: route.issuingAuthority || null,
+      operationStatus: route.operationStatus || null,
+      isActive: route.isActive,
+      createdAt: route.createdAt,
+      updatedAt: route.updatedAt,
     })
   } catch (error: any) {
     if (error.code === '23505') {
@@ -292,123 +204,76 @@ export const createRoute = async (req: Request, res: Response) => {
 
 export const updateRoute = async (req: Request, res: Response) => {
   try {
+    if (!db) throw new Error('Database not initialized')
+
     const { id } = req.params
     const validated = routeSchema.partial().parse(req.body)
 
-    // Update route
+    // Build update object
     const updateData: any = {}
-    if (validated.routeCode) updateData.route_code = validated.routeCode
-    if (validated.routeName) updateData.route_name = validated.routeName
-    if (validated.originId) updateData.origin_id = validated.originId
-    if (validated.destinationId) updateData.destination_id = validated.destinationId
-    if (validated.distanceKm !== undefined) updateData.distance_km = validated.distanceKm || null
-    if (validated.estimatedDurationMinutes !== undefined) updateData.estimated_duration_minutes = validated.estimatedDurationMinutes || null
-    
-    if (validated.plannedFrequency !== undefined) updateData.planned_frequency = validated.plannedFrequency || null
-    if (validated.boardingPoint !== undefined) updateData.boarding_point = validated.boardingPoint || null
-    if (validated.journeyDescription !== undefined) updateData.journey_description = validated.journeyDescription || null
-    if (validated.departureTimesDescription !== undefined) updateData.departure_times_description = validated.departureTimesDescription || null
-    if (validated.restStops !== undefined) updateData.rest_stops = validated.restStops || null
+    if (validated.routeCode !== undefined) updateData.routeCode = validated.routeCode
+    if (validated.routeCodeOld !== undefined) updateData.routeCodeOld = validated.routeCodeOld || null
+    if (validated.departureProvince !== undefined) updateData.departureProvince = validated.departureProvince || null
+    if (validated.departureStation !== undefined) updateData.departureStation = validated.departureStation || null
+    if (validated.departureStationRef !== undefined) updateData.departureStationRef = validated.departureStationRef || null
+    if (validated.arrivalProvince !== undefined) updateData.arrivalProvince = validated.arrivalProvince || null
+    if (validated.arrivalStation !== undefined) updateData.arrivalStation = validated.arrivalStation || null
+    if (validated.arrivalStationRef !== undefined) updateData.arrivalStationRef = validated.arrivalStationRef || null
+    if (validated.distanceKm !== undefined) updateData.distanceKm = validated.distanceKm || null
+    if (validated.itinerary !== undefined) updateData.itinerary = validated.itinerary || null
+    if (validated.routeType !== undefined) updateData.routeType = validated.routeType || null
+    if (validated.totalTripsPerMonth !== undefined) updateData.totalTripsPerMonth = validated.totalTripsPerMonth || null
+    if (validated.tripsOperated !== undefined) updateData.tripsOperated = validated.tripsOperated || null
+    if (validated.remainingCapacity !== undefined) updateData.remainingCapacity = validated.remainingCapacity || null
+    if (validated.minIntervalMinutes !== undefined) updateData.minIntervalMinutes = validated.minIntervalMinutes || null
+    if (validated.decisionNumber !== undefined) updateData.decisionNumber = validated.decisionNumber || null
+    if (validated.decisionDate !== undefined) updateData.decisionDate = validated.decisionDate || null
+    if (validated.issuingAuthority !== undefined) updateData.issuingAuthority = validated.issuingAuthority || null
+    if (validated.operationStatus !== undefined) updateData.operationStatus = validated.operationStatus || null
 
     if (Object.keys(updateData).length > 0) {
-      const { error: routeError } = await firebase
-        .from('routes')
-        .update(updateData)
-        .eq('id', id)
-
-      if (routeError) throw routeError
-    }
-
-    // Update stops if provided
-    if (validated.stops) {
-      // Delete existing stops
-      await firebase
-        .from('route_stops')
-        .delete()
-        .eq('route_id', id)
-
-      // Insert new stops
-      if (validated.stops.length > 0) {
-        const stopsToInsert = validated.stops.map((stop) => ({
-          route_id: id,
-          location_id: stop.locationId,
-          stop_order: stop.stopOrder,
-          distance_from_origin_km: stop.distanceFromOriginKm || null,
-          estimated_minutes_from_origin: stop.estimatedMinutesFromOrigin || null,
-        }))
-
-        const { error: stopsError } = await firebase
-          .from('route_stops')
-          .insert(stopsToInsert)
-
-        if (stopsError) throw stopsError
-      }
+      updateData.updatedAt = new Date()
+      await db
+        .update(routes)
+        .set(updateData)
+        .where(eq(routes.id, id))
     }
 
     // Fetch updated route
-    const { data: route } = await firebase
-      .from('routes')
-      .select(`
-        *,
-        origin:origin_id(id, name, code),
-        destination:destination_id(id, name, code)
-      `)
-      .eq('id', id)
-      .single()
+    const [route] = await db
+      .select()
+      .from(routes)
+      .where(eq(routes.id, id))
+      .limit(1)
 
-    // Sync denormalized data to dispatch_records if route_name or destination changed
-    if (updateData.route_name || updateData.destination_id) {
-      const destData = route.destination
-        ? (Array.isArray(route.destination) ? route.destination[0] : route.destination)
-        : null
-
-      // Run sync in background (non-blocking)
-      syncRouteChanges(id, {
-        routeName: route.route_name,
-        routeType: route.route_type,
-        destinationId: route.destination_id,
-        destinationName: destData?.name || null,
-        destinationCode: destData?.code || null,
-      }).catch((err) => {
-        console.error('[Route Update] Failed to sync denormalized data:', err)
-      })
+    if (!route) {
+      return res.status(404).json({ error: 'Route not found' })
     }
-
-    const { data: stops } = await firebase
-      .from('route_stops')
-      .select('*')
-      .eq('route_id', id)
-      .order('stop_order', { ascending: true })
 
     return res.json({
       id: route.id,
-      routeCode: route.route_code,
-      routeName: route.route_name,
-      originId: route.origin_id,
-      origin: route.origin ? {
-        id: route.origin.id,
-        name: route.origin.name,
-        code: route.origin.code,
-      } : undefined,
-      destinationId: route.destination_id,
-      destination: route.destination ? {
-        id: route.destination.id,
-        name: route.destination.name,
-        code: route.destination.code,
-      } : undefined,
-      distanceKm: route.distance_km ? parseFloat(route.distance_km) : null,
-      estimatedDurationMinutes: route.estimated_duration_minutes,
-      isActive: route.is_active,
-      stops: stops?.map((stop: any) => ({
-        id: stop.id,
-        locationId: stop.location_id,
-        stopOrder: stop.stop_order,
-        distanceFromOriginKm: stop.distance_from_origin_km ? parseFloat(stop.distance_from_origin_km) : null,
-        estimatedMinutesFromOrigin: stop.estimated_minutes_from_origin,
-        createdAt: stop.created_at,
-      })) || [],
-      createdAt: route.created_at,
-      updatedAt: route.updated_at,
+      routeCode: route.routeCode,
+      routeCodeOld: route.routeCodeOld || null,
+      departureProvince: route.departureProvince || null,
+      departureStation: route.departureStation || null,
+      departureStationRef: route.departureStationRef || null,
+      arrivalProvince: route.arrivalProvince || null,
+      arrivalStation: route.arrivalStation || null,
+      arrivalStationRef: route.arrivalStationRef || null,
+      distanceKm: route.distanceKm || null,
+      itinerary: route.itinerary || null,
+      routeType: route.routeType || null,
+      totalTripsPerMonth: route.totalTripsPerMonth || null,
+      tripsOperated: route.tripsOperated || null,
+      remainingCapacity: route.remainingCapacity || null,
+      minIntervalMinutes: route.minIntervalMinutes || null,
+      decisionNumber: route.decisionNumber || null,
+      decisionDate: route.decisionDate || null,
+      issuingAuthority: route.issuingAuthority || null,
+      operationStatus: route.operationStatus || null,
+      isActive: route.isActive,
+      createdAt: route.createdAt,
+      updatedAt: route.updatedAt,
     })
   } catch (error: any) {
     if (error.name === 'ZodError') {
@@ -420,14 +285,13 @@ export const updateRoute = async (req: Request, res: Response) => {
 
 export const deleteRoute = async (req: Request, res: Response) => {
   try {
+    if (!db) throw new Error('Database not initialized')
+
     const { id } = req.params
 
-    const { error } = await firebase
-      .from('routes')
-      .delete()
-      .eq('id', id)
-
-    if (error) throw error
+    await db
+      .delete(routes)
+      .where(eq(routes.id, id))
 
     res.status(204).send()
   } catch (error: any) {
@@ -435,9 +299,11 @@ export const deleteRoute = async (req: Request, res: Response) => {
   }
 }
 
-// Get legacy routes from Supabase routes table
+// Get legacy routes from Drizzle routes table
 export const getLegacyRoutes = async (req: Request, res: Response) => {
   try {
+    if (!db) throw new Error('Database not initialized')
+
     const forceRefresh = req.query.refresh === 'true'
 
     // Check cache
@@ -445,59 +311,54 @@ export const getLegacyRoutes = async (req: Request, res: Response) => {
       return res.json(legacyRoutesCache.data)
     }
 
-    // Get routes from Supabase
-    const { data: routesData, error } = await firebase
-      .from('routes')
-      .select('*')
-      .order('route_code', { ascending: true })
+    // Get routes from database
+    const routesData = await db
+      .select()
+      .from(routes)
+      .orderBy(asc(routes.routeCode))
 
-    if (error) {
-      console.error('Error fetching legacy routes:', error)
-      return res.status(500).json({ error: 'Failed to fetch legacy routes' })
-    }
-
-    const routes = (routesData || []).map((route: any) => ({
+    const routesFormatted = routesData.map((route) => ({
       id: route.id,
-      routeCode: route.route_code || '',
-      routeCodeOld: route.route_code_old || '',
-      routeCodeFixed: route.route_code_fixed || '',
-      routeClass: route.route_class || '',
-      routeType: route.route_type || '',
+      routeCode: route.routeCode || '',
+      routeCodeOld: route.routeCodeOld || '',
+      routeCodeFixed: route.routeCode || '',
+      routeClass: '',
+      routeType: route.routeType || '',
       routePath: route.itinerary || '',
 
-      departureStation: route.departure_station || '',
-      departureStationRef: route.departure_station_ref || '',
-      departureProvince: route.departure_province || '',
-      departureProvinceOld: route.departure_province_old || '',
+      departureStation: route.departureStation || '',
+      departureStationRef: route.departureStationRef || '',
+      departureProvince: route.departureProvince || '',
+      departureProvinceOld: route.departureProvince || '',
 
-      arrivalStation: route.arrival_station || '',
-      arrivalStationRef: route.arrival_station_ref || '',
-      arrivalProvince: route.arrival_province || '',
-      arrivalProvinceOld: route.arrival_province_old || '',
+      arrivalStation: route.arrivalStation || '',
+      arrivalStationRef: route.arrivalStationRef || '',
+      arrivalProvince: route.arrivalProvince || '',
+      arrivalProvinceOld: route.arrivalProvince || '',
 
-      distanceKm: route.distance_km || 0,
-      minIntervalMinutes: route.min_interval_minutes || 0,
-      totalTripsMonth: route.total_trips_per_month || 0,
-      tripsInOperation: route.trips_operated || 0,
-      remainingCapacity: route.remaining_capacity || 0,
+      distanceKm: route.distanceKm || 0,
+      minIntervalMinutes: route.minIntervalMinutes || 0,
+      totalTripsMonth: route.totalTripsPerMonth || 0,
+      tripsInOperation: route.tripsOperated || 0,
+      remainingCapacity: route.remainingCapacity || 0,
 
-      operationStatus: route.operation_status || '',
-      calendarType: route.calendar_type || '',
+      operationStatus: route.operationStatus || '',
+      calendarType: '',
 
-      decisionNumber: route.decision_number || '',
-      decisionDate: route.decision_date || '',
-      issuingAuthority: route.issuing_authority || '',
+      decisionNumber: route.decisionNumber || '',
+      decisionDate: route.decisionDate || '',
+      issuingAuthority: route.issuingAuthority || '',
 
-      notes: route.notes || '',
-      filePath: route.file_path || '',
+      notes: '',
+      filePath: '',
 
-      _source: 'supabase',
+      _source: 'drizzle',
     }))
 
     // Update cache
-    legacyRoutesCache = { data: routes, timestamp: Date.now() }
+    legacyRoutesCache = { data: routesFormatted, timestamp: Date.now() }
 
-    return res.json(routes)
+    return res.json(routesFormatted)
   } catch (error: any) {
     console.error('Error fetching legacy routes:', error)
     return res.status(500).json({ error: 'Failed to fetch legacy routes' })

@@ -1,5 +1,7 @@
 import { Request, Response } from 'express'
-import { firebase } from '../config/database.js'
+import { db } from '../db/drizzle.js'
+import { services, serviceFormulaUsage } from '../db/schema/index.js'
+import { eq, asc } from 'drizzle-orm'
 import { z } from 'zod'
 
 const serviceSchema = z.object({
@@ -18,40 +20,39 @@ const serviceSchema = z.object({
 
 export const getAllServices = async (req: Request, res: Response) => {
   try {
+    if (!db) throw new Error('Database not initialized')
+
     const { isActive } = req.query
 
-    let query = firebase
-      .from('services')
-      .select('*')
-      .order('display_order', { ascending: true })
-      .order('name', { ascending: true })
+    let query = db
+      .select()
+      .from(services)
+      .$dynamic()
 
     if (isActive !== undefined) {
-      query = query.eq('is_active', isActive === 'true')
+      query = query.where(eq(services.isActive, isActive === 'true'))
     }
 
-    const { data, error } = await query
+    const data = await query.orderBy(asc(services.displayOrder), asc(services.name))
 
-    if (error) throw error
-
-    const services = data.map((svc: any) => ({
+    const servicesData = data.map((svc) => ({
       id: svc.id,
       code: svc.code,
       name: svc.name,
       unit: svc.unit,
-      taxPercentage: parseFloat(svc.tax_percentage) || 0,
-      materialType: svc.material_type,
-      useQuantityFormula: svc.use_quantity_formula,
-      usePriceFormula: svc.use_price_formula,
-      displayOrder: svc.display_order,
-      isDefault: svc.is_default,
-      autoCalculateQuantity: svc.auto_calculate_quantity,
-      isActive: svc.is_active,
-      createdAt: svc.created_at,
-      updatedAt: svc.updated_at,
+      taxPercentage: parseFloat(svc.taxPercentage || '0'),
+      materialType: svc.materialType,
+      useQuantityFormula: svc.useQuantityFormula,
+      usePriceFormula: svc.usePriceFormula,
+      displayOrder: svc.displayOrder,
+      isDefault: svc.isDefault,
+      autoCalculateQuantity: svc.autoCalculateQuantity,
+      isActive: svc.isActive,
+      createdAt: svc.createdAt,
+      updatedAt: svc.updatedAt,
     }))
 
-    return res.json(services)
+    return res.json(servicesData)
   } catch (error) {
     console.error('Error fetching services:', error)
     return res.status(500).json({ error: 'Failed to fetch services' })
@@ -60,52 +61,55 @@ export const getAllServices = async (req: Request, res: Response) => {
 
 export const getServiceById = async (req: Request, res: Response) => {
   try {
+    if (!db) throw new Error('Database not initialized')
+
     const { id } = req.params
 
-    const { data, error } = await firebase
-      .from('services')
-      .select('*')
-      .eq('id', id)
-      .single()
+    const data = await db
+      .select()
+      .from(services)
+      .where(eq(services.id, id))
+      .limit(1)
 
-    if (error) throw error
-    if (!data) {
+    if (!data || data.length === 0) {
       return res.status(404).json({ error: 'Service not found' })
     }
 
+    const service = data[0]
+
     // Lấy thông tin biểu thức đã chọn
-    const { data: usageData } = await firebase
-      .from('service_formula_usage')
-      .select('formula_id, usage_type')
-      .eq('service_id', id)
+    const usageData = await db
+      .select()
+      .from(serviceFormulaUsage)
+      .where(eq(serviceFormulaUsage.serviceId, id))
 
     let quantityFormulaId = ''
     let priceFormulaId = ''
-    
-    if (usageData) {
-      const quantityUsage = usageData.find((u: any) => u.usage_type === 'quantity')
-      const priceUsage = usageData.find((u: any) => u.usage_type === 'price')
-      quantityFormulaId = quantityUsage?.formula_id || ''
-      priceFormulaId = priceUsage?.formula_id || ''
+
+    if (usageData && usageData.length > 0) {
+      const quantityUsage = usageData.find((u) => u.usageType === 'quantity')
+      const priceUsage = usageData.find((u) => u.usageType === 'price')
+      quantityFormulaId = quantityUsage?.formulaId || ''
+      priceFormulaId = priceUsage?.formulaId || ''
     }
 
     return res.json({
-      id: data.id,
-      code: data.code,
-      name: data.name,
-      unit: data.unit,
-      taxPercentage: parseFloat(data.tax_percentage) || 0,
-      materialType: data.material_type,
-      useQuantityFormula: data.use_quantity_formula,
-      usePriceFormula: data.use_price_formula,
-      displayOrder: data.display_order,
-      isDefault: data.is_default,
-      autoCalculateQuantity: data.auto_calculate_quantity,
-      isActive: data.is_active,
+      id: service.id,
+      code: service.code,
+      name: service.name,
+      unit: service.unit,
+      taxPercentage: parseFloat(service.taxPercentage || '0'),
+      materialType: service.materialType,
+      useQuantityFormula: service.useQuantityFormula,
+      usePriceFormula: service.usePriceFormula,
+      displayOrder: service.displayOrder,
+      isDefault: service.isDefault,
+      autoCalculateQuantity: service.autoCalculateQuantity,
+      isActive: service.isActive,
       quantityFormulaExpression: quantityFormulaId,
       priceFormulaExpression: priceFormulaId,
-      createdAt: data.created_at,
-      updatedAt: data.updated_at,
+      createdAt: service.createdAt,
+      updatedAt: service.updatedAt,
     })
   } catch (error) {
     console.error('Error fetching service:', error)
@@ -115,75 +119,72 @@ export const getServiceById = async (req: Request, res: Response) => {
 
 export const createService = async (req: Request, res: Response) => {
   try {
+    if (!db) throw new Error('Database not initialized')
+
     const validated = serviceSchema.parse(req.body)
     const { quantityFormulaExpression, priceFormulaExpression } = req.body
 
-    const { data, error } = await firebase
-      .from('services')
-      .insert({
+    const data = await db
+      .insert(services)
+      .values({
         code: validated.code,
         name: validated.name,
         unit: validated.unit,
-        tax_percentage: validated.taxPercentage,
-        material_type: validated.materialType,
-        use_quantity_formula: validated.useQuantityFormula,
-        use_price_formula: validated.usePriceFormula,
-        display_order: validated.displayOrder,
-        is_default: validated.isDefault,
-        auto_calculate_quantity: validated.autoCalculateQuantity,
-        is_active: validated.isActive,
+        taxPercentage: validated.taxPercentage.toString(),
+        materialType: validated.materialType,
+        useQuantityFormula: validated.useQuantityFormula,
+        usePriceFormula: validated.usePriceFormula,
+        displayOrder: validated.displayOrder,
+        isDefault: validated.isDefault,
+        autoCalculateQuantity: validated.autoCalculateQuantity,
+        isActive: validated.isActive,
       })
-      .select()
-      .single()
+      .returning()
 
-    if (error) throw error
+    const newService = data[0]
 
     // Lưu mối quan hệ với biểu thức vào service_formula_usage
-    // Lưu nếu có chọn biểu thức (không cần kiểm tra checkbox)
-    const usageInserts: any[] = []
-    
+    const usageInserts: Array<typeof serviceFormulaUsage.$inferInsert> = []
+
     if (quantityFormulaExpression) {
       usageInserts.push({
-        service_id: data.id,
-        formula_id: quantityFormulaExpression,
-        usage_type: 'quantity',
+        serviceId: newService.id,
+        formulaId: quantityFormulaExpression,
+        usageType: 'quantity',
       })
     }
-    
+
     if (priceFormulaExpression) {
       usageInserts.push({
-        service_id: data.id,
-        formula_id: priceFormulaExpression,
-        usage_type: 'price',
+        serviceId: newService.id,
+        formulaId: priceFormulaExpression,
+        usageType: 'price',
       })
     }
 
     if (usageInserts.length > 0) {
-      const { error: usageError } = await firebase
-        .from('service_formula_usage')
-        .insert(usageInserts)
-
-      if (usageError) {
+      try {
+        await db.insert(serviceFormulaUsage).values(usageInserts)
+      } catch (usageError) {
         console.error('Error creating service formula usage:', usageError)
-        // Không throw error, chỉ log vì service đã được tạo thành công
       }
     }
 
     return res.status(201).json({
-      id: data.id,
-      code: data.code,
-      name: data.name,
-      unit: data.unit,
-      taxPercentage: parseFloat(data.tax_percentage) || 0,
-      materialType: data.material_type,
-      useQuantityFormula: data.use_quantity_formula,
-      usePriceFormula: data.use_price_formula,
-      displayOrder: data.display_order,
-      isDefault: data.is_default,
-      autoCalculateQuantity: data.auto_calculate_quantity,
-      isActive: data.is_active,
-      createdAt: data.created_at,
-      updatedAt: data.updated_at,
+      id: newService.id,
+      code: newService.code,
+      name: newService.name,
+      unit: newService.unit,
+      taxPercentage: parseFloat(newService.taxPercentage || '0'),
+      materialType: newService.materialType,
+      useQuantityFormula: newService.useQuantityFormula,
+      usePriceFormula: newService.usePriceFormula,
+      displayOrder: newService.displayOrder,
+      isDefault: newService.isDefault,
+      autoCalculateQuantity: newService.autoCalculateQuantity,
+      isActive: newService.isActive,
+      createdAt: newService.createdAt,
+      updatedAt: newService.updatedAt,
     })
   } catch (error: any) {
     console.error('Error creating service:', error)
@@ -199,6 +200,8 @@ export const createService = async (req: Request, res: Response) => {
 
 export const updateService = async (req: Request, res: Response) => {
   try {
+    if (!db) throw new Error('Database not initialized')
+
     const { id } = req.params
     const validated = serviceSchema.partial().parse(req.body)
     const { quantityFormulaExpression, priceFormulaExpression } = req.body
@@ -207,82 +210,74 @@ export const updateService = async (req: Request, res: Response) => {
     if (validated.code !== undefined) updateData.code = validated.code
     if (validated.name !== undefined) updateData.name = validated.name
     if (validated.unit !== undefined) updateData.unit = validated.unit
-    if (validated.taxPercentage !== undefined) updateData.tax_percentage = validated.taxPercentage
-    if (validated.materialType !== undefined) updateData.material_type = validated.materialType
-    if (validated.useQuantityFormula !== undefined) updateData.use_quantity_formula = validated.useQuantityFormula
-    if (validated.usePriceFormula !== undefined) updateData.use_price_formula = validated.usePriceFormula
-    if (validated.displayOrder !== undefined) updateData.display_order = validated.displayOrder
-    if (validated.isDefault !== undefined) updateData.is_default = validated.isDefault
-    if (validated.autoCalculateQuantity !== undefined) updateData.auto_calculate_quantity = validated.autoCalculateQuantity
-    if (validated.isActive !== undefined) updateData.is_active = validated.isActive
-    
-    updateData.updated_at = new Date().toISOString()
+    if (validated.taxPercentage !== undefined) updateData.taxPercentage = validated.taxPercentage.toString()
+    if (validated.materialType !== undefined) updateData.materialType = validated.materialType
+    if (validated.useQuantityFormula !== undefined) updateData.useQuantityFormula = validated.useQuantityFormula
+    if (validated.usePriceFormula !== undefined) updateData.usePriceFormula = validated.usePriceFormula
+    if (validated.displayOrder !== undefined) updateData.displayOrder = validated.displayOrder
+    if (validated.isDefault !== undefined) updateData.isDefault = validated.isDefault
+    if (validated.autoCalculateQuantity !== undefined) updateData.autoCalculateQuantity = validated.autoCalculateQuantity
+    if (validated.isActive !== undefined) updateData.isActive = validated.isActive
 
-    const { data, error } = await firebase
-      .from('services')
-      .update(updateData)
-      .eq('id', id)
-      .select()
-      .single()
+    updateData.updatedAt = new Date()
 
-    if (error) throw error
-    if (!data) {
+    const data = await db
+      .update(services)
+      .set(updateData)
+      .where(eq(services.id, id))
+      .returning()
+
+    if (!data || data.length === 0) {
       return res.status(404).json({ error: 'Service not found' })
     }
 
+    const updatedService = data[0]
+
     // Cập nhật mối quan hệ với biểu thức
-    // Xóa các usage cũ
-    await firebase
-      .from('service_formula_usage')
-      .delete()
-      .eq('service_id', id)
+    await db.delete(serviceFormulaUsage).where(eq(serviceFormulaUsage.serviceId, id))
 
     // Tạo lại các usage mới
-    // Lưu nếu có chọn biểu thức (không cần kiểm tra checkbox)
-    const usageInserts: any[] = []
-    
+    const usageInserts: Array<typeof serviceFormulaUsage.$inferInsert> = []
+
     if (quantityFormulaExpression) {
       usageInserts.push({
-        service_id: id,
-        formula_id: quantityFormulaExpression,
-        usage_type: 'quantity',
+        serviceId: id,
+        formulaId: quantityFormulaExpression,
+        usageType: 'quantity',
       })
     }
-    
+
     if (priceFormulaExpression) {
       usageInserts.push({
-        service_id: id,
-        formula_id: priceFormulaExpression,
-        usage_type: 'price',
+        serviceId: id,
+        formulaId: priceFormulaExpression,
+        usageType: 'price',
       })
     }
 
     if (usageInserts.length > 0) {
-      const { error: usageError } = await firebase
-        .from('service_formula_usage')
-        .insert(usageInserts)
-
-      if (usageError) {
+      try {
+        await db.insert(serviceFormulaUsage).values(usageInserts)
+      } catch (usageError) {
         console.error('Error updating service formula usage:', usageError)
-        // Không throw error, chỉ log vì service đã được cập nhật thành công
       }
     }
 
     return res.json({
-      id: data.id,
-      code: data.code,
-      name: data.name,
-      unit: data.unit,
-      taxPercentage: parseFloat(data.tax_percentage) || 0,
-      materialType: data.material_type,
-      useQuantityFormula: data.use_quantity_formula,
-      usePriceFormula: data.use_price_formula,
-      displayOrder: data.display_order,
-      isDefault: data.is_default,
-      autoCalculateQuantity: data.auto_calculate_quantity,
-      isActive: data.is_active,
-      createdAt: data.created_at,
-      updatedAt: data.updated_at,
+      id: updatedService.id,
+      code: updatedService.code,
+      name: updatedService.name,
+      unit: updatedService.unit,
+      taxPercentage: parseFloat(updatedService.taxPercentage || '0'),
+      materialType: updatedService.materialType,
+      useQuantityFormula: updatedService.useQuantityFormula,
+      usePriceFormula: updatedService.usePriceFormula,
+      displayOrder: updatedService.displayOrder,
+      isDefault: updatedService.isDefault,
+      autoCalculateQuantity: updatedService.autoCalculateQuantity,
+      isActive: updatedService.isActive,
+      createdAt: updatedService.createdAt,
+      updatedAt: updatedService.updatedAt,
     })
   } catch (error: any) {
     console.error('Error updating service:', error)
@@ -298,14 +293,11 @@ export const updateService = async (req: Request, res: Response) => {
 
 export const deleteService = async (req: Request, res: Response) => {
   try {
+    if (!db) throw new Error('Database not initialized')
+
     const { id } = req.params
 
-    const { error } = await firebase
-      .from('services')
-      .delete()
-      .eq('id', id)
-
-    if (error) throw error
+    await db.delete(services).where(eq(services.id, id))
 
     return res.status(204).send()
   } catch (error: any) {

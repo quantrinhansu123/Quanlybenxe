@@ -1,5 +1,7 @@
 import { Request, Response } from 'express'
-import { firebase } from '../config/database.js'
+import { db } from '../db/drizzle.js'
+import { schedules, routes, operators } from '../db/schema/index.js'
+import { eq, and } from 'drizzle-orm'
 import { z } from 'zod'
 
 const scheduleSchema = z.object({
@@ -15,57 +17,74 @@ const scheduleSchema = z.object({
 
 export const getAllSchedules = async (req: Request, res: Response) => {
   try {
+    if (!db) {
+      return res.status(500).json({ error: 'Database connection not available' })
+    }
+
     const { routeId, operatorId, isActive } = req.query
 
-    let query = firebase
-      .from('schedules')
-      .select(`
-        *,
-        routes:route_id(id, route_name, route_code),
-        operators:operator_id(id, name, code)
-      `)
-      .order('departure_time', { ascending: true })
-
+    // Build where conditions
+    const conditions = []
     if (routeId) {
-      query = query.eq('route_id', routeId as string)
+      conditions.push(eq(schedules.routeId, routeId as string))
     }
     if (operatorId) {
-      query = query.eq('operator_id', operatorId as string)
+      conditions.push(eq(schedules.operatorId, operatorId as string))
     }
     if (isActive !== undefined) {
-      query = query.eq('is_active', isActive === 'true')
+      conditions.push(eq(schedules.isActive, isActive === 'true'))
     }
 
-    const { data, error } = await query
+    // Query with joins
+    const data = await db
+      .select({
+        id: schedules.id,
+        scheduleCode: schedules.scheduleCode,
+        routeId: schedules.routeId,
+        operatorId: schedules.operatorId,
+        departureTime: schedules.departureTime,
+        frequencyType: schedules.frequencyType,
+        daysOfWeek: schedules.daysOfWeek,
+        effectiveFrom: schedules.effectiveFrom,
+        effectiveTo: schedules.effectiveTo,
+        isActive: schedules.isActive,
+        createdAt: schedules.createdAt,
+        updatedAt: schedules.updatedAt,
+        route: {
+          id: routes.id,
+          routeName: routes.routeCode,
+          routeCode: routes.routeCode,
+        },
+        operator: {
+          id: operators.id,
+          name: operators.name,
+          code: operators.code,
+        },
+      })
+      .from(schedules)
+      .leftJoin(routes, eq(schedules.routeId, routes.id))
+      .leftJoin(operators, eq(schedules.operatorId, operators.id))
+      .where(conditions.length > 0 ? and(...conditions) : undefined)
+      .orderBy(schedules.departureTime)
 
-    if (error) throw error
-
-    const schedules = data.map((schedule: any) => ({
-      id: schedule.id,
-      scheduleCode: schedule.schedule_code,
-      routeId: schedule.route_id,
-      route: schedule.routes ? {
-        id: schedule.routes.id,
-        routeName: schedule.routes.route_name,
-        routeCode: schedule.routes.route_code,
-      } : undefined,
-      operatorId: schedule.operator_id,
-      operator: schedule.operators ? {
-        id: schedule.operators.id,
-        name: schedule.operators.name,
-        code: schedule.operators.code,
-      } : undefined,
-      departureTime: schedule.departure_time,
-      frequencyType: schedule.frequency_type,
-      daysOfWeek: schedule.days_of_week || [],
-      effectiveFrom: schedule.effective_from,
-      effectiveTo: schedule.effective_to,
-      isActive: schedule.is_active,
-      createdAt: schedule.created_at,
-      updatedAt: schedule.updated_at,
+    const result = data.map((item) => ({
+      id: item.id,
+      scheduleCode: item.scheduleCode,
+      routeId: item.routeId,
+      route: item.route?.id ? item.route : undefined,
+      operatorId: item.operatorId,
+      operator: item.operator?.id ? item.operator : undefined,
+      departureTime: item.departureTime,
+      frequencyType: item.frequencyType,
+      daysOfWeek: (item.daysOfWeek as number[]) || [],
+      effectiveFrom: item.effectiveFrom,
+      effectiveTo: item.effectiveTo,
+      isActive: item.isActive,
+      createdAt: item.createdAt,
+      updatedAt: item.updatedAt,
     }))
 
-    return res.json(schedules)
+    return res.json(result)
   } catch (error: any) {
     if (error.name === 'ZodError') {
       return res.status(400).json({ error: error.errors[0].message })
@@ -76,46 +95,63 @@ export const getAllSchedules = async (req: Request, res: Response) => {
 
 export const getScheduleById = async (req: Request, res: Response) => {
   try {
+    if (!db) {
+      return res.status(500).json({ error: 'Database connection not available' })
+    }
+
     const { id } = req.params
 
-    const { data, error } = await firebase
-      .from('schedules')
-      .select(`
-        *,
-        routes:route_id(id, route_name, route_code),
-        operators:operator_id(id, name, code)
-      `)
-      .eq('id', id)
-      .single()
+    const data = await db
+      .select({
+        id: schedules.id,
+        scheduleCode: schedules.scheduleCode,
+        routeId: schedules.routeId,
+        operatorId: schedules.operatorId,
+        departureTime: schedules.departureTime,
+        frequencyType: schedules.frequencyType,
+        daysOfWeek: schedules.daysOfWeek,
+        effectiveFrom: schedules.effectiveFrom,
+        effectiveTo: schedules.effectiveTo,
+        isActive: schedules.isActive,
+        createdAt: schedules.createdAt,
+        updatedAt: schedules.updatedAt,
+        route: {
+          id: routes.id,
+          routeName: routes.routeCode,
+          routeCode: routes.routeCode,
+        },
+        operator: {
+          id: operators.id,
+          name: operators.name,
+          code: operators.code,
+        },
+      })
+      .from(schedules)
+      .leftJoin(routes, eq(schedules.routeId, routes.id))
+      .leftJoin(operators, eq(schedules.operatorId, operators.id))
+      .where(eq(schedules.id, id))
+      .limit(1)
 
-    if (error) throw error
-    if (!data) {
+    if (!data || data.length === 0) {
       return res.status(404).json({ error: 'Schedule not found' })
     }
 
+    const item = data[0]
     return res.json({
-      id: data.id,
-      scheduleCode: data.schedule_code,
-      routeId: data.route_id,
-      route: data.routes ? {
-        id: data.routes.id,
-        routeName: data.routes.route_name,
-        routeCode: data.routes.route_code,
-      } : undefined,
-      operatorId: data.operator_id,
-      operator: data.operators ? {
-        id: data.operators.id,
-        name: data.operators.name,
-        code: data.operators.code,
-      } : undefined,
-      departureTime: data.departure_time,
-      frequencyType: data.frequency_type,
-      daysOfWeek: data.days_of_week || [],
-      effectiveFrom: data.effective_from,
-      effectiveTo: data.effective_to,
-      isActive: data.is_active,
-      createdAt: data.created_at,
-      updatedAt: data.updated_at,
+      id: item.id,
+      scheduleCode: item.scheduleCode,
+      routeId: item.routeId,
+      route: item.route?.id ? item.route : undefined,
+      operatorId: item.operatorId,
+      operator: item.operator?.id ? item.operator : undefined,
+      departureTime: item.departureTime,
+      frequencyType: item.frequencyType,
+      daysOfWeek: (item.daysOfWeek as number[]) || [],
+      effectiveFrom: item.effectiveFrom,
+      effectiveTo: item.effectiveTo,
+      isActive: item.isActive,
+      createdAt: item.createdAt,
+      updatedAt: item.updatedAt,
     })
   } catch (error: any) {
     if (error.name === 'ZodError') {
@@ -127,53 +163,78 @@ export const getScheduleById = async (req: Request, res: Response) => {
 
 export const createSchedule = async (req: Request, res: Response) => {
   try {
+    if (!db) {
+      return res.status(500).json({ error: 'Database connection not available' })
+    }
+
     const validated = scheduleSchema.parse(req.body)
 
-    const { data, error } = await firebase
-      .from('schedules')
-      .insert({
-        schedule_code: validated.scheduleCode || null, // Will be auto-generated by trigger if null
-        route_id: validated.routeId,
-        operator_id: validated.operatorId,
-        departure_time: validated.departureTime,
-        frequency_type: validated.frequencyType,
-        days_of_week: validated.daysOfWeek || null,
-        effective_from: validated.effectiveFrom,
-        effective_to: validated.effectiveTo || null,
-        is_active: true,
+    // Generate schedule code if not provided
+    const scheduleCode = validated.scheduleCode || `SCH-${Date.now()}`
+
+    const [inserted] = await db
+      .insert(schedules)
+      .values({
+        scheduleCode,
+        routeId: validated.routeId,
+        operatorId: validated.operatorId,
+        departureTime: validated.departureTime,
+        frequencyType: validated.frequencyType,
+        daysOfWeek: validated.daysOfWeek || null,
+        effectiveFrom: validated.effectiveFrom,
+        effectiveTo: validated.effectiveTo || null,
+        isActive: true,
       })
-      .select(`
-        *,
-        routes:route_id(id, route_name, route_code),
-        operators:operator_id(id, name, code)
-      `)
-      .single()
+      .returning()
 
-    if (error) throw error
+    // Fetch with relations
+    const data = await db
+      .select({
+        id: schedules.id,
+        scheduleCode: schedules.scheduleCode,
+        routeId: schedules.routeId,
+        operatorId: schedules.operatorId,
+        departureTime: schedules.departureTime,
+        frequencyType: schedules.frequencyType,
+        daysOfWeek: schedules.daysOfWeek,
+        effectiveFrom: schedules.effectiveFrom,
+        effectiveTo: schedules.effectiveTo,
+        isActive: schedules.isActive,
+        createdAt: schedules.createdAt,
+        updatedAt: schedules.updatedAt,
+        route: {
+          id: routes.id,
+          routeName: routes.routeCode,
+          routeCode: routes.routeCode,
+        },
+        operator: {
+          id: operators.id,
+          name: operators.name,
+          code: operators.code,
+        },
+      })
+      .from(schedules)
+      .leftJoin(routes, eq(schedules.routeId, routes.id))
+      .leftJoin(operators, eq(schedules.operatorId, operators.id))
+      .where(eq(schedules.id, inserted.id))
+      .limit(1)
 
+    const item = data[0]
     return res.status(201).json({
-      id: data.id,
-      scheduleCode: data.schedule_code,
-      routeId: data.route_id,
-      route: data.routes ? {
-        id: data.routes.id,
-        routeName: data.routes.route_name,
-        routeCode: data.routes.route_code,
-      } : undefined,
-      operatorId: data.operator_id,
-      operator: data.operators ? {
-        id: data.operators.id,
-        name: data.operators.name,
-        code: data.operators.code,
-      } : undefined,
-      departureTime: data.departure_time,
-      frequencyType: data.frequency_type,
-      daysOfWeek: data.days_of_week || [],
-      effectiveFrom: data.effective_from,
-      effectiveTo: data.effective_to,
-      isActive: data.is_active,
-      createdAt: data.created_at,
-      updatedAt: data.updated_at,
+      id: item.id,
+      scheduleCode: item.scheduleCode,
+      routeId: item.routeId,
+      route: item.route?.id ? item.route : undefined,
+      operatorId: item.operatorId,
+      operator: item.operator?.id ? item.operator : undefined,
+      departureTime: item.departureTime,
+      frequencyType: item.frequencyType,
+      daysOfWeek: (item.daysOfWeek as number[]) || [],
+      effectiveFrom: item.effectiveFrom,
+      effectiveTo: item.effectiveTo,
+      isActive: item.isActive,
+      createdAt: item.createdAt,
+      updatedAt: item.updatedAt,
     })
   } catch (error: any) {
     if (error.code === '23505') {
@@ -188,58 +249,81 @@ export const createSchedule = async (req: Request, res: Response) => {
 
 export const updateSchedule = async (req: Request, res: Response) => {
   try {
+    if (!db) {
+      return res.status(500).json({ error: 'Database connection not available' })
+    }
+
     const { id } = req.params
     const validated = scheduleSchema.partial().parse(req.body)
 
-    const updateData: any = {}
-    if (validated.scheduleCode) updateData.schedule_code = validated.scheduleCode
-    if (validated.routeId) updateData.route_id = validated.routeId
-    if (validated.operatorId) updateData.operator_id = validated.operatorId
-    if (validated.departureTime) updateData.departure_time = validated.departureTime
-    if (validated.frequencyType) updateData.frequency_type = validated.frequencyType
-    if (validated.daysOfWeek !== undefined) updateData.days_of_week = validated.daysOfWeek || null
-    if (validated.effectiveFrom) updateData.effective_from = validated.effectiveFrom
-    if (validated.effectiveTo !== undefined) updateData.effective_to = validated.effectiveTo || null
+    const updateData: any = { updatedAt: new Date() }
+    if (validated.scheduleCode) updateData.scheduleCode = validated.scheduleCode
+    if (validated.routeId) updateData.routeId = validated.routeId
+    if (validated.operatorId) updateData.operatorId = validated.operatorId
+    if (validated.departureTime) updateData.departureTime = validated.departureTime
+    if (validated.frequencyType) updateData.frequencyType = validated.frequencyType
+    if (validated.daysOfWeek !== undefined) updateData.daysOfWeek = validated.daysOfWeek || null
+    if (validated.effectiveFrom) updateData.effectiveFrom = validated.effectiveFrom
+    if (validated.effectiveTo !== undefined) updateData.effectiveTo = validated.effectiveTo || null
 
-    const { data, error } = await firebase
-      .from('schedules')
-      .update(updateData)
-      .eq('id', id)
-      .select(`
-        *,
-        routes:route_id(id, route_name, route_code),
-        operators:operator_id(id, name, code)
-      `)
-      .single()
+    const [updated] = await db
+      .update(schedules)
+      .set(updateData)
+      .where(eq(schedules.id, id))
+      .returning()
 
-    if (error) throw error
-    if (!data) {
+    if (!updated) {
       return res.status(404).json({ error: 'Schedule not found' })
     }
 
+    // Fetch with relations
+    const data = await db
+      .select({
+        id: schedules.id,
+        scheduleCode: schedules.scheduleCode,
+        routeId: schedules.routeId,
+        operatorId: schedules.operatorId,
+        departureTime: schedules.departureTime,
+        frequencyType: schedules.frequencyType,
+        daysOfWeek: schedules.daysOfWeek,
+        effectiveFrom: schedules.effectiveFrom,
+        effectiveTo: schedules.effectiveTo,
+        isActive: schedules.isActive,
+        createdAt: schedules.createdAt,
+        updatedAt: schedules.updatedAt,
+        route: {
+          id: routes.id,
+          routeName: routes.routeCode,
+          routeCode: routes.routeCode,
+        },
+        operator: {
+          id: operators.id,
+          name: operators.name,
+          code: operators.code,
+        },
+      })
+      .from(schedules)
+      .leftJoin(routes, eq(schedules.routeId, routes.id))
+      .leftJoin(operators, eq(schedules.operatorId, operators.id))
+      .where(eq(schedules.id, id))
+      .limit(1)
+
+    const item = data[0]
     return res.json({
-      id: data.id,
-      scheduleCode: data.schedule_code,
-      routeId: data.route_id,
-      route: data.routes ? {
-        id: data.routes.id,
-        routeName: data.routes.route_name,
-        routeCode: data.routes.route_code,
-      } : undefined,
-      operatorId: data.operator_id,
-      operator: data.operators ? {
-        id: data.operators.id,
-        name: data.operators.name,
-        code: data.operators.code,
-      } : undefined,
-      departureTime: data.departure_time,
-      frequencyType: data.frequency_type,
-      daysOfWeek: data.days_of_week || [],
-      effectiveFrom: data.effective_from,
-      effectiveTo: data.effective_to,
-      isActive: data.is_active,
-      createdAt: data.created_at,
-      updatedAt: data.updated_at,
+      id: item.id,
+      scheduleCode: item.scheduleCode,
+      routeId: item.routeId,
+      route: item.route?.id ? item.route : undefined,
+      operatorId: item.operatorId,
+      operator: item.operator?.id ? item.operator : undefined,
+      departureTime: item.departureTime,
+      frequencyType: item.frequencyType,
+      daysOfWeek: (item.daysOfWeek as number[]) || [],
+      effectiveFrom: item.effectiveFrom,
+      effectiveTo: item.effectiveTo,
+      isActive: item.isActive,
+      createdAt: item.createdAt,
+      updatedAt: item.updatedAt,
     })
   } catch (error: any) {
     if (error.name === 'ZodError') {
@@ -249,20 +333,21 @@ export const updateSchedule = async (req: Request, res: Response) => {
   }
 }
 
-export const deleteSchedule = async (req: Request, res: Response) => {
+export const deleteSchedule = async (req: Request, res: Response): Promise<void> => {
   try {
+    if (!db) {
+      res.status(500).json({ error: 'Database connection not available' })
+      return
+    }
+
     const { id } = req.params
 
-    const { error } = await firebase
-      .from('schedules')
-      .delete()
-      .eq('id', id)
-
-    if (error) throw error
+    await db
+      .delete(schedules)
+      .where(eq(schedules.id, id))
 
     res.status(204).send()
   } catch (error: any) {
     res.status(500).json({ error: error.message || 'Failed to delete schedule' })
   }
 }
-

@@ -1,5 +1,7 @@
 import { Request, Response } from 'express'
-import { firebase } from '../config/database.js'
+import { db } from '../db/drizzle.js'
+import { violations, violationTypes } from '../db/schema/index.js'
+import { eq, desc, and } from 'drizzle-orm'
 import { z } from 'zod'
 import { AuthRequest } from '../middleware/auth.js'
 
@@ -13,98 +15,139 @@ const violationSchema = z.object({
 })
 
 export const getAllViolations = async (req: Request, res: Response) => {
+  if (!db) {
+    return res.status(500).json({ error: 'Database connection not available' })
+  }
+
   try {
     const { vehicleId, driverId, dispatchRecordId, resolutionStatus } = req.query
 
-    let query = firebase
-      .from('violations')
-      .select(`
-        *,
-        violation_types:violation_type_id(id, code, name, severity)
-      `)
-      .order('violation_date', { ascending: false })
-
+    const conditions = []
     if (vehicleId) {
-      query = query.eq('vehicle_id', vehicleId as string)
+      conditions.push(eq(violations.vehicleId, vehicleId as string))
     }
     if (driverId) {
-      query = query.eq('driver_id', driverId as string)
+      conditions.push(eq(violations.driverId, driverId as string))
     }
     if (dispatchRecordId) {
-      query = query.eq('dispatch_record_id', dispatchRecordId as string)
+      conditions.push(eq(violations.dispatchRecordId, dispatchRecordId as string))
     }
     if (resolutionStatus) {
-      query = query.eq('resolution_status', resolutionStatus as string)
+      conditions.push(eq(violations.resolutionStatus, resolutionStatus as string))
     }
 
-    const { data, error } = await query
+    const data = await db
+      .select({
+        id: violations.id,
+        dispatchRecordId: violations.dispatchRecordId,
+        vehicleId: violations.vehicleId,
+        driverId: violations.driverId,
+        violationTypeId: violations.violationTypeId,
+        violationDate: violations.violationDate,
+        description: violations.description,
+        resolutionStatus: violations.resolutionStatus,
+        resolutionNotes: violations.resolutionNotes,
+        recordedBy: violations.recordedBy,
+        createdAt: violations.createdAt,
+        updatedAt: violations.updatedAt,
+        violationType: {
+          id: violationTypes.id,
+          code: violationTypes.code,
+          name: violationTypes.name,
+          severity: violationTypes.severity,
+        },
+      })
+      .from(violations)
+      .leftJoin(violationTypes, eq(violations.violationTypeId, violationTypes.id))
+      .where(conditions.length > 0 ? and(...conditions) : undefined)
+      .orderBy(desc(violations.violationDate))
 
-    if (error) throw error
-
-    const violations = data.map((violation: any) => ({
-      id: violation.id,
-      dispatchRecordId: violation.dispatch_record_id,
-      vehicleId: violation.vehicle_id,
-      driverId: violation.driver_id,
-      violationTypeId: violation.violation_type_id,
-      violationType: violation.violation_types ? {
-        id: violation.violation_types.id,
-        code: violation.violation_types.code,
-        name: violation.violation_types.name,
-        severity: violation.violation_types.severity,
+    const formatted = data.map((item) => ({
+      id: item.id,
+      dispatchRecordId: item.dispatchRecordId,
+      vehicleId: item.vehicleId,
+      driverId: item.driverId,
+      violationTypeId: item.violationTypeId,
+      violationType: item.violationType?.id ? {
+        id: item.violationType.id,
+        code: item.violationType.code,
+        name: item.violationType.name,
+        severity: item.violationType.severity,
       } : undefined,
-      violationDate: violation.violation_date,
-      description: violation.description,
-      resolutionStatus: violation.resolution_status,
-      resolutionNotes: violation.resolution_notes,
-      recordedBy: violation.recorded_by,
-      createdAt: violation.created_at,
-      updatedAt: violation.updated_at,
+      violationDate: item.violationDate,
+      description: item.description,
+      resolutionStatus: item.resolutionStatus,
+      resolutionNotes: item.resolutionNotes,
+      recordedBy: item.recordedBy,
+      createdAt: item.createdAt,
+      updatedAt: item.updatedAt,
     }))
 
-    return res.json(violations)
+    return res.json(formatted)
   } catch (error: any) {
     return res.status(500).json({ error: error.message || 'Failed to fetch violations' })
   }
 }
 
 export const getViolationById = async (req: Request, res: Response) => {
+  if (!db) {
+    return res.status(500).json({ error: 'Database connection not available' })
+  }
+
   try {
     const { id } = req.params
 
-    const { data, error } = await firebase
-      .from('violations')
-      .select(`
-        *,
-        violation_types:violation_type_id(id, code, name, severity)
-      `)
-      .eq('id', id)
-      .single()
+    const data = await db
+      .select({
+        id: violations.id,
+        dispatchRecordId: violations.dispatchRecordId,
+        vehicleId: violations.vehicleId,
+        driverId: violations.driverId,
+        violationTypeId: violations.violationTypeId,
+        violationDate: violations.violationDate,
+        description: violations.description,
+        resolutionStatus: violations.resolutionStatus,
+        resolutionNotes: violations.resolutionNotes,
+        recordedBy: violations.recordedBy,
+        createdAt: violations.createdAt,
+        updatedAt: violations.updatedAt,
+        violationType: {
+          id: violationTypes.id,
+          code: violationTypes.code,
+          name: violationTypes.name,
+          severity: violationTypes.severity,
+        },
+      })
+      .from(violations)
+      .leftJoin(violationTypes, eq(violations.violationTypeId, violationTypes.id))
+      .where(eq(violations.id, id))
+      .limit(1)
 
-    if (error) throw error
-    if (!data) {
+    if (!data || data.length === 0) {
       return res.status(404).json({ error: 'Violation not found' })
     }
 
+    const item = data[0]
+
     return res.json({
-      id: data.id,
-      dispatchRecordId: data.dispatch_record_id,
-      vehicleId: data.vehicle_id,
-      driverId: data.driver_id,
-      violationTypeId: data.violation_type_id,
-      violationType: data.violation_types ? {
-        id: data.violation_types.id,
-        code: data.violation_types.code,
-        name: data.violation_types.name,
-        severity: data.violation_types.severity,
+      id: item.id,
+      dispatchRecordId: item.dispatchRecordId,
+      vehicleId: item.vehicleId,
+      driverId: item.driverId,
+      violationTypeId: item.violationTypeId,
+      violationType: item.violationType?.id ? {
+        id: item.violationType.id,
+        code: item.violationType.code,
+        name: item.violationType.name,
+        severity: item.violationType.severity,
       } : undefined,
-      violationDate: data.violation_date,
-      description: data.description,
-      resolutionStatus: data.resolution_status,
-      resolutionNotes: data.resolution_notes,
-      recordedBy: data.recorded_by,
-      createdAt: data.created_at,
-      updatedAt: data.updated_at,
+      violationDate: item.violationDate,
+      description: item.description,
+      resolutionStatus: item.resolutionStatus,
+      resolutionNotes: item.resolutionNotes,
+      recordedBy: item.recordedBy,
+      createdAt: item.createdAt,
+      updatedAt: item.updatedAt,
     })
   } catch (error: any) {
     return res.status(500).json({ error: error.message || 'Failed to fetch violation' })
@@ -112,49 +155,75 @@ export const getViolationById = async (req: Request, res: Response) => {
 }
 
 export const createViolation = async (req: AuthRequest, res: Response) => {
+  if (!db) {
+    return res.status(500).json({ error: 'Database connection not available' })
+  }
+
   try {
     const validated = violationSchema.parse(req.body)
     const userId = req.user?.id
 
-    const { data, error } = await firebase
-      .from('violations')
-      .insert({
-        dispatch_record_id: validated.dispatchRecordId || null,
-        vehicle_id: validated.vehicleId || null,
-        driver_id: validated.driverId || null,
-        violation_type_id: validated.violationTypeId,
-        violation_date: validated.violationDate,
+    const [inserted] = await db
+      .insert(violations)
+      .values({
+        dispatchRecordId: validated.dispatchRecordId || null,
+        vehicleId: validated.vehicleId || null,
+        driverId: validated.driverId || null,
+        violationTypeId: validated.violationTypeId,
+        violationDate: new Date(validated.violationDate),
         description: validated.description || null,
-        resolution_status: 'pending',
-        recorded_by: userId || null,
+        resolutionStatus: 'pending',
+        recordedBy: userId || null,
       })
-      .select(`
-        *,
-        violation_types:violation_type_id(id, code, name, severity)
-      `)
-      .single()
+      .returning()
 
-    if (error) throw error
+    const data = await db
+      .select({
+        id: violations.id,
+        dispatchRecordId: violations.dispatchRecordId,
+        vehicleId: violations.vehicleId,
+        driverId: violations.driverId,
+        violationTypeId: violations.violationTypeId,
+        violationDate: violations.violationDate,
+        description: violations.description,
+        resolutionStatus: violations.resolutionStatus,
+        resolutionNotes: violations.resolutionNotes,
+        recordedBy: violations.recordedBy,
+        createdAt: violations.createdAt,
+        updatedAt: violations.updatedAt,
+        violationType: {
+          id: violationTypes.id,
+          code: violationTypes.code,
+          name: violationTypes.name,
+          severity: violationTypes.severity,
+        },
+      })
+      .from(violations)
+      .leftJoin(violationTypes, eq(violations.violationTypeId, violationTypes.id))
+      .where(eq(violations.id, inserted.id))
+      .limit(1)
+
+    const item = data[0]
 
     return res.status(201).json({
-      id: data.id,
-      dispatchRecordId: data.dispatch_record_id,
-      vehicleId: data.vehicle_id,
-      driverId: data.driver_id,
-      violationTypeId: data.violation_type_id,
-      violationType: data.violation_types ? {
-        id: data.violation_types.id,
-        code: data.violation_types.code,
-        name: data.violation_types.name,
-        severity: data.violation_types.severity,
+      id: item.id,
+      dispatchRecordId: item.dispatchRecordId,
+      vehicleId: item.vehicleId,
+      driverId: item.driverId,
+      violationTypeId: item.violationTypeId,
+      violationType: item.violationType?.id ? {
+        id: item.violationType.id,
+        code: item.violationType.code,
+        name: item.violationType.name,
+        severity: item.violationType.severity,
       } : undefined,
-      violationDate: data.violation_date,
-      description: data.description,
-      resolutionStatus: data.resolution_status,
-      resolutionNotes: data.resolution_notes,
-      recordedBy: data.recorded_by,
-      createdAt: data.created_at,
-      updatedAt: data.updated_at,
+      violationDate: item.violationDate,
+      description: item.description,
+      resolutionStatus: item.resolutionStatus,
+      resolutionNotes: item.resolutionNotes,
+      recordedBy: item.recordedBy,
+      createdAt: item.createdAt,
+      updatedAt: item.updatedAt,
     })
   } catch (error: any) {
     if (error.name === 'ZodError') {
@@ -165,6 +234,10 @@ export const createViolation = async (req: AuthRequest, res: Response) => {
 }
 
 export const updateViolation = async (req: Request, res: Response) => {
+  if (!db) {
+    return res.status(500).json({ error: 'Database connection not available' })
+  }
+
   try {
     const { id } = req.params
     const { resolutionStatus, resolutionNotes } = req.body
@@ -173,43 +246,67 @@ export const updateViolation = async (req: Request, res: Response) => {
       return res.status(400).json({ error: 'Invalid resolution status' })
     }
 
-    const { data, error } = await firebase
-      .from('violations')
-      .update({
-        resolution_status: resolutionStatus,
-        resolution_notes: resolutionNotes || null,
+    const [updated] = await db
+      .update(violations)
+      .set({
+        resolutionStatus,
+        resolutionNotes: resolutionNotes || null,
+        updatedAt: new Date(),
       })
-      .eq('id', id)
-      .select(`
-        *,
-        violation_types:violation_type_id(id, code, name, severity)
-      `)
-      .single()
+      .where(eq(violations.id, id))
+      .returning()
 
-    if (error) throw error
-    if (!data) {
+    if (!updated) {
       return res.status(404).json({ error: 'Violation not found' })
     }
 
+    const data = await db
+      .select({
+        id: violations.id,
+        dispatchRecordId: violations.dispatchRecordId,
+        vehicleId: violations.vehicleId,
+        driverId: violations.driverId,
+        violationTypeId: violations.violationTypeId,
+        violationDate: violations.violationDate,
+        description: violations.description,
+        resolutionStatus: violations.resolutionStatus,
+        resolutionNotes: violations.resolutionNotes,
+        recordedBy: violations.recordedBy,
+        createdAt: violations.createdAt,
+        updatedAt: violations.updatedAt,
+        violationType: {
+          id: violationTypes.id,
+          code: violationTypes.code,
+          name: violationTypes.name,
+          severity: violationTypes.severity,
+        },
+      })
+      .from(violations)
+      .leftJoin(violationTypes, eq(violations.violationTypeId, violationTypes.id))
+      .where(eq(violations.id, id))
+      .limit(1)
+
+    const item = data[0]
+
     return res.json({
-      id: data.id,
-      dispatchRecordId: data.dispatch_record_id,
-      vehicleId: data.vehicle_id,
-      driverId: data.driver_id,
-      violationTypeId: data.violation_type_id,
-      violationType: data.violation_types ? {
-        id: data.violation_types.id,
-        code: data.violation_types.code,
-        name: data.violation_types.name,
-        severity: data.violation_types.severity,
+      id: item.id,
+      dispatchRecordId: item.dispatchRecordId,
+      vehicleId: item.vehicleId,
+      driverId: item.driverId,
+      violationTypeId: item.violationTypeId,
+      violationType: item.violationType?.id ? {
+        id: item.violationType.id,
+        code: item.violationType.code,
+        name: item.violationType.name,
+        severity: item.violationType.severity,
       } : undefined,
-      violationDate: data.violation_date,
-      description: data.description,
-      resolutionStatus: data.resolution_status,
-      resolutionNotes: data.resolution_notes,
-      recordedBy: data.recorded_by,
-      createdAt: data.created_at,
-      updatedAt: data.updated_at,
+      violationDate: item.violationDate,
+      description: item.description,
+      resolutionStatus: item.resolutionStatus,
+      resolutionNotes: item.resolutionNotes,
+      recordedBy: item.recordedBy,
+      createdAt: item.createdAt,
+      updatedAt: item.updatedAt,
     })
   } catch (error: any) {
     return res.status(500).json({ error: error.message || 'Failed to update violation' })
@@ -217,26 +314,27 @@ export const updateViolation = async (req: Request, res: Response) => {
 }
 
 export const getAllViolationTypes = async (_req: Request, res: Response) => {
+  if (!db) {
+    return res.status(500).json({ error: 'Database connection not available' })
+  }
+
   try {
-    const { data, error } = await firebase
-      .from('violation_types')
-      .select('*')
-      .order('name', { ascending: true })
+    const data = await db
+      .select()
+      .from(violationTypes)
+      .orderBy(violationTypes.name)
 
-    if (error) throw error
-
-    const violationTypes = data.map((vt: any) => ({
+    const formatted = data.map((vt) => ({
       id: vt.id,
       code: vt.code,
       name: vt.name,
       description: vt.description,
       severity: vt.severity,
-      createdAt: vt.created_at,
+      createdAt: vt.createdAt,
     }))
 
-    res.json(violationTypes)
+    return res.json(formatted)
   } catch (error: any) {
-    res.status(500).json({ error: error.message || 'Failed to fetch violation types' })
+    return res.status(500).json({ error: error.message || 'Failed to fetch violation types' })
   }
 }
-

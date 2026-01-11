@@ -1,5 +1,7 @@
 import { Request, Response } from 'express'
-import { firebase } from '../config/database.js'
+import { db } from '../db/drizzle.js'
+import { serviceFormulas, serviceFormulaUsage, services } from '../db/schema/index.js'
+import { eq } from 'drizzle-orm'
 import { z } from 'zod'
 
 const serviceFormulaSchema = z.object({
@@ -15,44 +17,37 @@ const serviceFormulaSchema = z.object({
 
 export const getAllServiceFormulas = async (req: Request, res: Response) => {
   try {
+    if (!db) throw new Error('Database not initialized')
+
     const { formulaType, isActive } = req.query
 
-    // Query from service_formulas table directly (Firebase doesn't support views)
-    let query = firebase
-      .from('service_formulas')
-      .select('*')
+    let query = db.select().from(serviceFormulas).$dynamic()
 
     if (formulaType) {
-      query = query.eq('formula_type', formulaType as string)
+      query = query.where(eq(serviceFormulas.formulaType, formulaType as string))
     }
 
     if (isActive !== undefined) {
-      query = query.eq('is_active', isActive === 'true')
+      query = query.where(eq(serviceFormulas.isActive, isActive === 'true'))
     }
 
-    const { data, error } = await query
-
-    if (error) throw error
+    const data = await query
 
     // Get formula usage data
-    const { data: usageData } = await firebase
-      .from('service_formula_usage')
-      .select('*')
+    const usageData = await db.select().from(serviceFormulaUsage)
 
     // Get services data to get service names
-    const { data: servicesData } = await firebase
-      .from('services')
-      .select('*')
+    const servicesData = await db.select().from(services)
 
     // Create a map of formula_id -> service names
     const formulaUsageMap: Record<string, { count: number; serviceNames: string[] }> = {}
 
     if (usageData && servicesData) {
-      const servicesMap = new Map(servicesData.map((s: any) => [s.id, s.name]))
+      const servicesMap = new Map(servicesData.map((s) => [s.id, s.name]))
 
-      usageData.forEach((usage: any) => {
-        const formulaId = usage.formula_id
-        const serviceName = servicesMap.get(usage.service_id) as string
+      usageData.forEach((usage) => {
+        const formulaId = usage.formulaId
+        const serviceName = servicesMap.get(usage.serviceId) as string
 
         if (!formulaUsageMap[formulaId]) {
           formulaUsageMap[formulaId] = { count: 0, serviceNames: [] }
@@ -65,28 +60,28 @@ export const getAllServiceFormulas = async (req: Request, res: Response) => {
       })
     }
 
-    // Sort in memory since Firebase query builder may not support multiple order by
-    const sortedData = (data || []).sort((a: any, b: any) => {
-      if (a.formula_type !== b.formula_type) {
-        return a.formula_type.localeCompare(b.formula_type)
+    // Sort in memory
+    const sortedData = (data || []).sort((a, b) => {
+      if (a.formulaType !== b.formulaType) {
+        return a.formulaType.localeCompare(b.formulaType)
       }
       return (a.code || '').localeCompare(b.code || '')
     })
 
-    const formulas = sortedData.map((formula: any) => {
+    const formulas = sortedData.map((formula) => {
       const usage = formulaUsageMap[formula.id] || { count: 0, serviceNames: [] }
       return {
         id: formula.id,
         code: formula.code,
         name: formula.name,
         description: formula.description,
-        formulaType: formula.formula_type,
-        formulaExpression: formula.formula_expression,
-        isActive: formula.is_active,
+        formulaType: formula.formulaType,
+        formulaExpression: formula.formulaExpression,
+        isActive: formula.isActive,
         usageCount: usage.count,
         usedByServices: usage.serviceNames.join(', '),
-        createdAt: formula.created_at,
-        updatedAt: formula.updated_at,
+        createdAt: formula.createdAt,
+        updatedAt: formula.updatedAt,
       }
     })
 
@@ -99,25 +94,27 @@ export const getAllServiceFormulas = async (req: Request, res: Response) => {
 
 export const getServiceFormulaById = async (req: Request, res: Response) => {
   try {
+    if (!db) throw new Error('Database not initialized')
+
     const { id } = req.params
 
-    // Query formula directly (Firebase doesn't support SQL-style joins)
-    const { data, error } = await firebase
-      .from('service_formulas')
-      .select('*')
-      .eq('id', id)
-      .single()
+    const data = await db
+      .select()
+      .from(serviceFormulas)
+      .where(eq(serviceFormulas.id, id))
+      .limit(1)
 
-    if (error) throw error
-    if (!data) {
+    if (!data || data.length === 0) {
       return res.status(404).json({ error: 'Service formula not found' })
     }
 
+    const formula = data[0]
+
     // Get usage data for this formula
-    const { data: usageData } = await firebase
-      .from('service_formula_usage')
-      .select('*')
-      .eq('formula_id', id)
+    const usageData = await db
+      .select()
+      .from(serviceFormulaUsage)
+      .where(eq(serviceFormulaUsage.formulaId, id))
 
     // Get service names
     let usageCount = 0
@@ -125,14 +122,12 @@ export const getServiceFormulaById = async (req: Request, res: Response) => {
 
     if (usageData && usageData.length > 0) {
       usageCount = usageData.length
-      const serviceIds = usageData.map((u: any) => u.service_id)
+      const serviceIds = usageData.map((u) => u.serviceId)
 
-      const { data: servicesData } = await firebase
-        .from('services')
-        .select('*')
+      const servicesData = await db.select().from(services)
 
       if (servicesData) {
-        servicesData.forEach((s: any) => {
+        servicesData.forEach((s) => {
           if (serviceIds.includes(s.id) && !serviceNames.includes(s.name)) {
             serviceNames.push(s.name)
           }
@@ -141,17 +136,17 @@ export const getServiceFormulaById = async (req: Request, res: Response) => {
     }
 
     return res.json({
-      id: data.id,
-      code: data.code,
-      name: data.name,
-      description: data.description,
-      formulaType: data.formula_type,
-      formulaExpression: data.formula_expression,
-      isActive: data.is_active,
+      id: formula.id,
+      code: formula.code,
+      name: formula.name,
+      description: formula.description,
+      formulaType: formula.formulaType,
+      formulaExpression: formula.formulaExpression,
+      isActive: formula.isActive,
       usageCount: usageCount,
       usedByServices: serviceNames.join(', '),
-      createdAt: data.created_at,
-      updatedAt: data.updated_at,
+      createdAt: formula.createdAt,
+      updatedAt: formula.updatedAt,
     })
   } catch (error: any) {
     console.error('Error fetching service formula:', error)
@@ -161,35 +156,36 @@ export const getServiceFormulaById = async (req: Request, res: Response) => {
 
 export const createServiceFormula = async (req: Request, res: Response) => {
   try {
+    if (!db) throw new Error('Database not initialized')
+
     const validated = serviceFormulaSchema.parse(req.body)
 
-    const { data, error } = await firebase
-      .from('service_formulas')
-      .insert({
+    const data = await db
+      .insert(serviceFormulas)
+      .values({
         code: validated.code,
         name: validated.name,
         description: validated.description,
-        formula_type: validated.formulaType,
-        formula_expression: validated.formulaExpression,
-        is_active: validated.isActive,
+        formulaType: validated.formulaType,
+        formulaExpression: validated.formulaExpression,
+        isActive: validated.isActive,
       })
-      .select('*')
-      .single()
+      .returning()
 
-    if (error) throw error
+    const newFormula = data[0]
 
     return res.status(201).json({
-      id: data.id,
-      code: data.code,
-      name: data.name,
-      description: data.description,
-      formulaType: data.formula_type,
-      formulaExpression: data.formula_expression,
-      isActive: data.is_active,
+      id: newFormula.id,
+      code: newFormula.code,
+      name: newFormula.name,
+      description: newFormula.description,
+      formulaType: newFormula.formulaType,
+      formulaExpression: newFormula.formulaExpression,
+      isActive: newFormula.isActive,
       usageCount: 0,
       usedByServices: '',
-      createdAt: data.created_at,
-      updatedAt: data.updated_at,
+      createdAt: newFormula.createdAt,
+      updatedAt: newFormula.updatedAt,
     })
   } catch (error: any) {
     if (error.name === 'ZodError') {
@@ -205,6 +201,8 @@ export const createServiceFormula = async (req: Request, res: Response) => {
 
 export const updateServiceFormula = async (req: Request, res: Response) => {
   try {
+    if (!db) throw new Error('Database not initialized')
+
     const { id } = req.params
     const validated = serviceFormulaSchema.partial().parse(req.body)
 
@@ -212,34 +210,34 @@ export const updateServiceFormula = async (req: Request, res: Response) => {
     if (validated.code !== undefined) updateData.code = validated.code
     if (validated.name !== undefined) updateData.name = validated.name
     if (validated.description !== undefined) updateData.description = validated.description
-    if (validated.formulaType !== undefined) updateData.formula_type = validated.formulaType
-    if (validated.formulaExpression !== undefined) updateData.formula_expression = validated.formulaExpression
-    if (validated.isActive !== undefined) updateData.is_active = validated.isActive
+    if (validated.formulaType !== undefined) updateData.formulaType = validated.formulaType
+    if (validated.formulaExpression !== undefined) updateData.formulaExpression = validated.formulaExpression
+    if (validated.isActive !== undefined) updateData.isActive = validated.isActive
 
-    const { data, error } = await firebase
-      .from('service_formulas')
-      .update(updateData)
-      .eq('id', id)
-      .select('*')
-      .single()
+    const data = await db
+      .update(serviceFormulas)
+      .set(updateData)
+      .where(eq(serviceFormulas.id, id))
+      .returning()
 
-    if (error) throw error
-    if (!data) {
+    if (!data || data.length === 0) {
       return res.status(404).json({ error: 'Service formula not found' })
     }
 
+    const updatedFormula = data[0]
+
     return res.json({
-      id: data.id,
-      code: data.code,
-      name: data.name,
-      description: data.description,
-      formulaType: data.formula_type,
-      formulaExpression: data.formula_expression,
-      isActive: data.is_active,
+      id: updatedFormula.id,
+      code: updatedFormula.code,
+      name: updatedFormula.name,
+      description: updatedFormula.description,
+      formulaType: updatedFormula.formulaType,
+      formulaExpression: updatedFormula.formulaExpression,
+      isActive: updatedFormula.isActive,
       usageCount: 0,
       usedByServices: '',
-      createdAt: data.created_at,
-      updatedAt: data.updated_at,
+      createdAt: updatedFormula.createdAt,
+      updatedAt: updatedFormula.updatedAt,
     })
   } catch (error: any) {
     if (error.name === 'ZodError') {
@@ -255,15 +253,11 @@ export const updateServiceFormula = async (req: Request, res: Response) => {
 
 export const deleteServiceFormula = async (req: Request, res: Response) => {
   try {
+    if (!db) throw new Error('Database not initialized')
+
     const { id } = req.params
 
-    // Delete formula directly (usage check skipped for Firebase - can be added later)
-    const { error } = await firebase
-      .from('service_formulas')
-      .delete()
-      .eq('id', id)
-
-    if (error) throw error
+    await db.delete(serviceFormulas).where(eq(serviceFormulas.id, id))
 
     return res.status(204).send()
   } catch (error: any) {

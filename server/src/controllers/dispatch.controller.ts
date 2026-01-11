@@ -1,5 +1,7 @@
 import { Request, Response } from 'express'
-import { firebase } from '../config/database.js'
+import { db } from '../db/drizzle.js'
+import { dispatchRecords } from '../db/schema/index.js'
+import { eq, and, desc } from 'drizzle-orm'
 import { z } from 'zod'
 import { AuthRequest } from '../middleware/auth.js'
 import { getCurrentVietnamTime, convertVietnamISOToUTCForStorage } from '../utils/timezone.js'
@@ -31,88 +33,89 @@ const dispatchSchema = z.object({
 
 export const getAllDispatchRecords = async (req: Request, res: Response) => {
   try {
+    if (!db) throw new Error('Database not initialized')
+
     const { status, vehicleId, driverId, routeId } = req.query
 
-    let query = firebase
-      .from('dispatch_records')
-      .select('*')
-      .order('entry_time', { ascending: false })
-
+    // Build where conditions
+    const conditions = []
     if (status) {
-      query = query.eq('current_status', status as string)
+      conditions.push(eq(dispatchRecords.status, status as string))
     }
     if (vehicleId) {
-      query = query.eq('vehicle_id', vehicleId as string)
+      conditions.push(eq(dispatchRecords.vehicleId, vehicleId as string))
     }
     if (driverId) {
-      query = query.eq('driver_id', driverId as string)
+      conditions.push(eq(dispatchRecords.driverId, driverId as string))
     }
     if (routeId) {
-      query = query.eq('route_id', routeId as string)
+      conditions.push(eq(dispatchRecords.routeId, routeId as string))
     }
 
-    const { data: records, error } = await query
-
-    if (error) throw error
+    const records = await db
+      .select()
+      .from(dispatchRecords)
+      .where(conditions.length > 0 ? and(...conditions) : undefined)
+      .orderBy(desc(dispatchRecords.entryTime))
 
     // OPTIMIZED: Use denormalized data - no additional queries needed!
     // All related entity names are embedded in the dispatch_records
     const result = records.map((record: any) => ({
       id: record.id,
-      vehicleId: record.vehicle_id,
+      vehicleId: record.vehicleId,
       vehicle: {
-        id: record.vehicle_id,
-        plateNumber: record.vehicle_plate_number || '',
-        operatorId: record.vehicle_operator_id || null,
-        operator: record.vehicle_operator_name ? {
-          id: record.vehicle_operator_id,
-          name: record.vehicle_operator_name,
-          code: record.vehicle_operator_code,
+        id: record.vehicleId,
+        plateNumber: record.vehiclePlateNumber || '',
+        operatorId: record.vehicleOperatorId || null,
+        operator: record.vehicleOperatorName ? {
+          id: record.vehicleOperatorId,
+          name: record.vehicleOperatorName,
+          code: record.vehicleOperatorCode,
         } : undefined,
       },
-      vehiclePlateNumber: record.vehicle_plate_number || '',
-      driverId: record.driver_id,
-      driverName: record.driver_full_name || '',
-      scheduleId: record.schedule_id,
-      routeId: record.route_id,
-      route: record.route_name ? {
-        id: record.route_id,
-        routeName: record.route_name,
-        routeType: record.route_type,
-        destination: record.route_destination_name ? {
-          id: record.route_destination_id,
-          name: record.route_destination_name,
-          code: record.route_destination_code,
+      vehiclePlateNumber: record.vehiclePlateNumber || '',
+      driverId: record.driverId,
+      driverName: record.driverFullName || '',
+      scheduleId: record.scheduleId,
+      routeId: record.routeId,
+      route: record.routeName ? {
+        id: record.routeId,
+        routeName: record.routeName,
+        routeType: record.routeType,
+        destination: record.routeDestinationName ? {
+          id: record.routeDestinationId,
+          name: record.routeDestinationName,
+          code: record.routeDestinationCode,
         } : undefined,
       } : undefined,
-      routeName: record.route_name || '',
-      entryTime: record.entry_time,
-      entryBy: record.entry_by_name || record.entry_by,
-      passengerDropTime: record.passenger_drop_time,
-      passengersArrived: record.passengers_arrived,
-      passengerDropBy: record.passenger_drop_by_name || record.passenger_drop_by,
-      boardingPermitTime: record.boarding_permit_time,
-      plannedDepartureTime: record.planned_departure_time,
-      transportOrderCode: record.transport_order_code,
-      seatCount: record.seat_count,
-      permitStatus: record.permit_status,
-      rejectionReason: record.rejection_reason,
-      boardingPermitBy: record.boarding_permit_by_name || record.boarding_permit_by,
-      paymentTime: record.payment_time,
-      paymentAmount: record.payment_amount ? parseFloat(record.payment_amount) : null,
-      paymentMethod: record.payment_method,
-      invoiceNumber: record.invoice_number,
-      paymentBy: record.payment_by_name || record.payment_by,
-      departureOrderTime: record.departure_order_time,
-      passengersDeparting: record.passengers_departing,
-      departureOrderBy: record.departure_order_by_name || record.departure_order_by,
-      exitTime: record.exit_time,
-      exitBy: record.exit_by_name || record.exit_by,
-      currentStatus: record.current_status,
+      routeName: record.routeName || '',
+      entryTime: record.entryTime,
+      entryBy: record.entryByName || record.entryBy,
+      passengerDropTime: record.passengerDropTime,
+      passengersArrived: record.passengersArrived,
+      passengerDropBy: record.passengerDropByName || record.passengerDropBy,
+      boardingPermitTime: record.boardingPermitTime,
+      plannedDepartureTime: record.plannedDepartureTime,
+      transportOrderCode: record.transportOrderCode,
+      seatCount: record.seatCount,
+      permitStatus: record.permitStatus,
+      rejectionReason: record.rejectionReason,
+      boardingPermitBy: record.boardingPermitByName || record.boardingPermitBy,
+      paymentTime: record.paymentTime,
+      paymentAmount: record.paymentAmount ? parseFloat(record.paymentAmount) : null,
+      paymentMethod: record.paymentMethod,
+      invoiceNumber: record.invoiceNumber,
+      paymentBy: record.paymentByName || record.paymentBy,
+      departureOrderTime: record.departureOrderTime,
+      passengersDeparting: record.passengersDeparting,
+      departureOrderBy: record.departureOrderByName || record.departureOrderBy,
+      exitTime: record.exitTime,
+      exitBy: record.exitByName || record.exitBy,
+      currentStatus: record.status,
       notes: record.notes,
       metadata: record.metadata,
-      createdAt: record.created_at,
-      updatedAt: record.updated_at,
+      createdAt: record.createdAt,
+      updatedAt: record.updatedAt,
     }))
 
     return res.json(result)
@@ -124,15 +127,15 @@ export const getAllDispatchRecords = async (req: Request, res: Response) => {
 
 export const getDispatchRecordById = async (req: Request, res: Response) => {
   try {
+    if (!db) throw new Error('Database not initialized')
+
     const { id } = req.params
 
-    const { data: record, error } = await firebase
-      .from('dispatch_records')
-      .select('*')
-      .eq('id', id)
-      .single()
+    const [record] = await db
+      .select()
+      .from(dispatchRecords)
+      .where(eq(dispatchRecords.id, id))
 
-    if (error) throw error
     if (!record) {
       return res.status(404).json({ error: 'Dispatch record not found' })
     }
@@ -140,60 +143,60 @@ export const getDispatchRecordById = async (req: Request, res: Response) => {
     // OPTIMIZED: Use denormalized data - no additional queries needed!
     return res.json({
       id: record.id,
-      vehicleId: record.vehicle_id,
+      vehicleId: record.vehicleId,
       vehicle: {
-        id: record.vehicle_id,
-        plateNumber: record.vehicle_plate_number || '',
-        operatorId: record.vehicle_operator_id || null,
-        operator: record.vehicle_operator_name ? {
-          id: record.vehicle_operator_id,
-          name: record.vehicle_operator_name,
-          code: record.vehicle_operator_code,
+        id: record.vehicleId,
+        plateNumber: record.vehiclePlateNumber || '',
+        operatorId: record.vehicleOperatorId || null,
+        operator: record.vehicleOperatorName ? {
+          id: record.vehicleOperatorId,
+          name: record.vehicleOperatorName,
+          code: record.vehicleOperatorCode,
         } : undefined,
       },
-      vehiclePlateNumber: record.vehicle_plate_number || '',
-      driverId: record.driver_id,
-      driverName: record.driver_full_name || '',
-      scheduleId: record.schedule_id,
-      routeId: record.route_id,
-      route: record.route_name ? {
-        id: record.route_id,
-        routeName: record.route_name,
-        routeType: record.route_type,
-        destination: record.route_destination_name ? {
-          id: record.route_destination_id,
-          name: record.route_destination_name,
-          code: record.route_destination_code,
+      vehiclePlateNumber: record.vehiclePlateNumber || '',
+      driverId: record.driverId,
+      driverName: record.driverFullName || '',
+      scheduleId: record.scheduleId,
+      routeId: record.routeId,
+      route: record.routeName ? {
+        id: record.routeId,
+        routeName: record.routeName,
+        routeType: record.routeType,
+        destination: record.routeDestinationName ? {
+          id: record.routeDestinationId,
+          name: record.routeDestinationName,
+          code: record.routeDestinationCode,
         } : undefined,
       } : undefined,
-      routeName: record.route_name || '',
-      entryTime: record.entry_time,
-      entryBy: record.entry_by_name || record.entry_by,
-      passengerDropTime: record.passenger_drop_time,
-      passengersArrived: record.passengers_arrived,
-      passengerDropBy: record.passenger_drop_by_name || record.passenger_drop_by,
-      boardingPermitTime: record.boarding_permit_time,
-      plannedDepartureTime: record.planned_departure_time,
-      transportOrderCode: record.transport_order_code,
-      seatCount: record.seat_count,
-      permitStatus: record.permit_status,
-      rejectionReason: record.rejection_reason,
-      boardingPermitBy: record.boarding_permit_by_name || record.boarding_permit_by,
-      paymentTime: record.payment_time,
-      paymentAmount: record.payment_amount ? parseFloat(record.payment_amount) : null,
-      paymentMethod: record.payment_method,
-      invoiceNumber: record.invoice_number,
-      paymentBy: record.payment_by_name || record.payment_by,
-      departureOrderTime: record.departure_order_time,
-      passengersDeparting: record.passengers_departing,
-      departureOrderBy: record.departure_order_by_name || record.departure_order_by,
-      exitTime: record.exit_time,
-      exitBy: record.exit_by_name || record.exit_by,
-      currentStatus: record.current_status,
+      routeName: record.routeName || '',
+      entryTime: record.entryTime,
+      entryBy: record.entryByName || record.entryBy,
+      passengerDropTime: record.passengerDropTime,
+      passengersArrived: record.passengersArrived,
+      passengerDropBy: record.passengerDropByName || record.passengerDropBy,
+      boardingPermitTime: record.boardingPermitTime,
+      plannedDepartureTime: record.plannedDepartureTime,
+      transportOrderCode: record.transportOrderCode,
+      seatCount: record.seatCount,
+      permitStatus: record.permitStatus,
+      rejectionReason: record.rejectionReason,
+      boardingPermitBy: record.boardingPermitByName || record.boardingPermitBy,
+      paymentTime: record.paymentTime,
+      paymentAmount: record.paymentAmount ? parseFloat(record.paymentAmount) : null,
+      paymentMethod: record.paymentMethod,
+      invoiceNumber: record.invoiceNumber,
+      paymentBy: record.paymentByName || record.paymentBy,
+      departureOrderTime: record.departureOrderTime,
+      passengersDeparting: record.passengersDeparting,
+      departureOrderBy: record.departureOrderByName || record.departureOrderBy,
+      exitTime: record.exitTime,
+      exitBy: record.exitByName || record.exitBy,
+      currentStatus: record.status,
       notes: record.notes,
       metadata: record.metadata,
-      createdAt: record.created_at,
-      updatedAt: record.updated_at,
+      createdAt: record.createdAt,
+      updatedAt: record.updatedAt,
     })
   } catch (error) {
     console.error('Error fetching dispatch record:', error)
@@ -203,6 +206,8 @@ export const getDispatchRecordById = async (req: Request, res: Response) => {
 
 export const createDispatchRecord = async (req: AuthRequest, res: Response) => {
   try {
+    if (!db) throw new Error('Database not initialized')
+
     const { vehicleId, driverId, scheduleId, routeId, entryTime, notes, entryShiftId } = dispatchSchema.parse(req.body)
     const userId = req.user?.id
 
@@ -222,69 +227,66 @@ export const createDispatchRecord = async (req: AuthRequest, res: Response) => {
     const denormFields = buildDenormalizedFields(denormData)
 
     const insertData: any = {
-      vehicle_id: vehicleId,
-      driver_id: driverId || null,  // Firebase RTDB doesn't accept undefined
-      schedule_id: scheduleId || null,
-      route_id: routeId || null,
-      entry_time: entryTimeForDB,
-      entry_by: userId || null,
-      current_status: 'entered',
+      vehicleId,
+      driverId: driverId || null,
+      scheduleId: scheduleId || null,
+      routeId: routeId || null,
+      entryTime: entryTimeForDB,
+      entryBy: userId || null,
+      status: 'entered',
       notes: notes || null,
       // Denormalized fields
       ...denormFields,
-      entry_by_name: denormData.user?.fullName || null,
+      entryByName: denormData.user?.fullName || null,
     }
 
     // Set entry_shift_id if provided
     if (entryShiftId) {
-      insertData.entry_shift_id = entryShiftId
+      insertData.entryShiftId = entryShiftId
     }
 
-    const { data, error } = await firebase
-      .from('dispatch_records')
-      .insert(insertData)
-      .select('*')
-      .single()
-
-    if (error) throw error
+    const [data] = await db
+      .insert(dispatchRecords)
+      .values(insertData)
+      .returning()
 
     // Response uses denormalized data - no additional queries needed!
     return res.status(201).json({
       id: data.id,
-      vehicleId: data.vehicle_id,
+      vehicleId: data.vehicleId,
       vehicle: {
-        id: data.vehicle_id,
-        plateNumber: data.vehicle_plate_number || '',
-        operatorId: data.vehicle_operator_id || null,
-        operator: data.vehicle_operator_name ? {
-          id: data.vehicle_operator_id,
-          name: data.vehicle_operator_name,
-          code: data.vehicle_operator_code,
+        id: data.vehicleId,
+        plateNumber: data.vehiclePlateNumber || '',
+        operatorId: data.vehicleOperatorId || null,
+        operator: data.vehicleOperatorName ? {
+          id: data.vehicleOperatorId,
+          name: data.vehicleOperatorName,
+          code: data.vehicleOperatorCode,
         } : undefined,
       },
-      vehiclePlateNumber: data.vehicle_plate_number || '',
-      driverId: data.driver_id,
-      driverName: data.driver_full_name || '',
-      scheduleId: data.schedule_id,
-      routeId: data.route_id,
-      route: data.route_name ? {
-        id: data.route_id,
-        routeName: data.route_name,
-        routeType: data.route_type,
-        destination: data.route_destination_name ? {
-          id: data.route_destination_id,
-          name: data.route_destination_name,
-          code: data.route_destination_code,
+      vehiclePlateNumber: data.vehiclePlateNumber || '',
+      driverId: data.driverId,
+      driverName: data.driverFullName || '',
+      scheduleId: data.scheduleId,
+      routeId: data.routeId,
+      route: data.routeName ? {
+        id: data.routeId,
+        routeName: data.routeName,
+        routeType: data.routeType,
+        destination: data.routeDestinationName ? {
+          id: data.routeDestinationId,
+          name: data.routeDestinationName,
+          code: data.routeDestinationCode,
         } : undefined,
       } : undefined,
-      routeName: data.route_name || '',
-      entryTime: data.entry_time,
-      entryBy: data.entry_by_name || data.entry_by,
-      currentStatus: data.current_status,
+      routeName: data.routeName || '',
+      entryTime: data.entryTime,
+      entryBy: data.entryByName || data.entryBy,
+      currentStatus: data.status,
       notes: data.notes,
       metadata: data.metadata,
-      createdAt: data.created_at,
-      updatedAt: data.updated_at,
+      createdAt: data.createdAt,
+      updatedAt: data.updatedAt,
     })
   } catch (error: any) {
     console.error('Error creating dispatch record:', error)
@@ -300,6 +302,8 @@ export const createDispatchRecord = async (req: AuthRequest, res: Response) => {
 // Update dispatch status - passengers dropped
 export const recordPassengerDrop = async (req: AuthRequest, res: Response) => {
   try {
+    if (!db) throw new Error('Database not initialized')
+
     const { id } = req.params
     const { passengersArrived, routeId } = req.body
     const userId = req.user?.id
@@ -309,30 +313,28 @@ export const recordPassengerDrop = async (req: AuthRequest, res: Response) => {
 
     // Build update object with denormalized user name
     const updateData: any = {
-      passenger_drop_time: getCurrentVietnamTime(),
-      passengers_arrived: passengersArrived || null,
-      passenger_drop_by: userId || null,
-      passenger_drop_by_name: userName,
-      current_status: 'passengers_dropped',
+      passengerDropTime: getCurrentVietnamTime(),
+      passengersArrived: passengersArrived || null,
+      passengerDropBy: userId || null,
+      passengerDropByName: userName,
+      status: 'passengers_dropped',
     }
 
     // Set routeId and fetch route denormalized data if provided
     if (routeId) {
-      updateData.route_id = routeId
+      updateData.routeId = routeId
       const routeData = await fetchRouteData(routeId)
       if (routeData) {
         Object.assign(updateData, buildRouteDenormalizedFields(routeData))
       }
     }
 
-    const { data, error } = await firebase
-      .from('dispatch_records')
-      .update(updateData)
-      .eq('id', id)
-      .select('*')
-      .single()
+    const [data] = await db
+      .update(dispatchRecords)
+      .set(updateData)
+      .where(eq(dispatchRecords.id, id))
+      .returning()
 
-    if (error) throw error
     if (!data) {
       return res.status(404).json({ error: 'Dispatch record not found' })
     }
@@ -347,6 +349,8 @@ export const recordPassengerDrop = async (req: AuthRequest, res: Response) => {
 // Issue boarding permit
 export const issuePermit = async (req: AuthRequest, res: Response) => {
   try {
+    if (!db) throw new Error('Database not initialized')
+
     const { id } = req.params
     const { transportOrderCode, plannedDepartureTime, seatCount, permitStatus, rejectionReason, routeId, scheduleId, replacementVehicleId, permitShiftId } = req.body
     const userId = req.user?.id
@@ -362,14 +366,13 @@ export const issuePermit = async (req: AuthRequest, res: Response) => {
     const userName = await fetchUserName(userId)
 
     // Get current metadata to preserve existing data
-    const { data: currentRecord } = await firebase
-      .from('dispatch_records')
-      .select('metadata')
-      .eq('id', id)
-      .single()
+    const [currentRecord] = await db
+      .select({ metadata: dispatchRecords.metadata })
+      .from(dispatchRecords)
+      .where(eq(dispatchRecords.id, id))
 
-    const currentMetadata = currentRecord?.metadata || {}
-    const newMetadata = { ...currentMetadata }
+    const currentMetadata = (currentRecord?.metadata as Record<string, any>) || {}
+    const newMetadata: Record<string, any> = { ...currentMetadata }
 
     // Update replacement vehicle ID in metadata if provided
     if (replacementVehicleId) {
@@ -380,21 +383,21 @@ export const issuePermit = async (req: AuthRequest, res: Response) => {
     }
 
     const updateData: any = {
-      boarding_permit_time: getCurrentVietnamTime(),
-      boarding_permit_by: userId || null,
-      boarding_permit_by_name: userName,
-      permit_status: permitStatus || 'approved',
+      boardingPermitTime: getCurrentVietnamTime(),
+      boardingPermitBy: userId || null,
+      boardingPermitByName: userName,
+      permitStatus: permitStatus || 'approved',
       metadata: newMetadata,
     }
 
     // Set permit_shift_id if provided
     if (permitShiftId) {
-      updateData.permit_shift_id = permitShiftId
+      updateData.permitShiftId = permitShiftId
     }
 
     // Set routeId and fetch route denormalized data if provided
     if (routeId) {
-      updateData.route_id = routeId
+      updateData.routeId = routeId
       const routeData = await fetchRouteData(routeId)
       if (routeData) {
         Object.assign(updateData, buildRouteDenormalizedFields(routeData))
@@ -403,35 +406,33 @@ export const issuePermit = async (req: AuthRequest, res: Response) => {
 
     // Set scheduleId if provided
     if (scheduleId) {
-      updateData.schedule_id = scheduleId
+      updateData.scheduleId = scheduleId
     }
 
     if (permitStatus === 'approved') {
-      updateData.transport_order_code = transportOrderCode
-      updateData.planned_departure_time = plannedDepartureTime
-      updateData.seat_count = seatCount
-      updateData.current_status = 'permit_issued'
-      updateData.rejection_reason = rejectionReason || null
+      updateData.transportOrderCode = transportOrderCode
+      updateData.plannedDepartureTime = plannedDepartureTime
+      updateData.seatCount = seatCount
+      updateData.status = 'permit_issued'
+      updateData.rejectionReason = rejectionReason || null
     } else if (permitStatus === 'rejected') {
-      updateData.transport_order_code = transportOrderCode || null
-      updateData.planned_departure_time = plannedDepartureTime || null
-      updateData.seat_count = seatCount || null
-      updateData.current_status = 'permit_rejected'
-      updateData.rejection_reason = rejectionReason || null
+      updateData.transportOrderCode = transportOrderCode || null
+      updateData.plannedDepartureTime = plannedDepartureTime || null
+      updateData.seatCount = seatCount || null
+      updateData.status = 'permit_rejected'
+      updateData.rejectionReason = rejectionReason || null
     }
 
     console.log('[issuePermit] Updating record with data:', JSON.stringify(updateData, null, 2))
 
-    const { data, error } = await firebase
-      .from('dispatch_records')
-      .update(updateData)
-      .eq('id', id)
-      .select('*')
-      .single()
+    const [data] = await db
+      .update(dispatchRecords)
+      .set(updateData)
+      .where(eq(dispatchRecords.id, id))
+      .returning()
 
-    console.log('[issuePermit] Update result - data:', data ? 'found' : 'null', 'error:', error)
+    console.log('[issuePermit] Update result - data:', data ? 'found' : 'null')
 
-    if (error) throw error
     if (!data) {
       return res.status(404).json({ error: 'Dispatch record not found' })
     }
@@ -453,6 +454,8 @@ export const issuePermit = async (req: AuthRequest, res: Response) => {
 // Process payment
 export const processPayment = async (req: AuthRequest, res: Response) => {
   try {
+    if (!db) throw new Error('Database not initialized')
+
     const { id } = req.params
     const { paymentAmount, paymentMethod, invoiceNumber, paymentShiftId } = req.body
     const userId = req.user?.id
@@ -466,28 +469,26 @@ export const processPayment = async (req: AuthRequest, res: Response) => {
     const userName = await fetchUserName(userId)
 
     const updateData: any = {
-      payment_time: getCurrentVietnamTime(),
-      payment_amount: paymentAmount,
-      payment_method: paymentMethod || 'cash',
-      invoice_number: invoiceNumber || null,
-      payment_by: userId || null,
-      payment_by_name: userName,
-      current_status: 'paid',
+      paymentTime: getCurrentVietnamTime(),
+      paymentAmount: paymentAmount,
+      paymentMethod: paymentMethod || 'cash',
+      invoiceNumber: invoiceNumber || null,
+      paymentBy: userId || null,
+      paymentByName: userName,
+      status: 'paid',
     }
 
     // Set payment_shift_id if provided
     if (paymentShiftId) {
-      updateData.payment_shift_id = paymentShiftId
+      updateData.paymentShiftId = paymentShiftId
     }
 
-    const { data, error } = await firebase
-      .from('dispatch_records')
-      .update(updateData)
-      .eq('id', id)
-      .select('*')
-      .single()
+    const [data] = await db
+      .update(dispatchRecords)
+      .set(updateData)
+      .where(eq(dispatchRecords.id, id))
+      .returning()
 
-    if (error) throw error
     if (!data) {
       return res.status(404).json({ error: 'Dispatch record not found' })
     }
@@ -502,6 +503,8 @@ export const processPayment = async (req: AuthRequest, res: Response) => {
 // Issue departure order
 export const issueDepartureOrder = async (req: AuthRequest, res: Response) => {
   try {
+    if (!db) throw new Error('Database not initialized')
+
     const { id } = req.params
     const { passengersDeparting, departureOrderShiftId } = req.body
     const userId = req.user?.id
@@ -510,26 +513,24 @@ export const issueDepartureOrder = async (req: AuthRequest, res: Response) => {
     const userName = await fetchUserName(userId)
 
     const updateData: any = {
-      departure_order_time: getCurrentVietnamTime(),
-      passengers_departing: passengersDeparting || null,
-      departure_order_by: userId || null,
-      departure_order_by_name: userName,
-      current_status: 'departure_ordered',
+      departureOrderTime: getCurrentVietnamTime(),
+      passengersDeparting: passengersDeparting || null,
+      departureOrderBy: userId || null,
+      departureOrderByName: userName,
+      status: 'departure_ordered',
     }
 
     // Set departure_order_shift_id if provided
     if (departureOrderShiftId) {
-      updateData.departure_order_shift_id = departureOrderShiftId
+      updateData.departureOrderShiftId = departureOrderShiftId
     }
 
-    const { data, error } = await firebase
-      .from('dispatch_records')
-      .update(updateData)
-      .eq('id', id)
-      .select('*')
-      .single()
+    const [data] = await db
+      .update(dispatchRecords)
+      .set(updateData)
+      .where(eq(dispatchRecords.id, id))
+      .returning()
 
-    if (error) throw error
     if (!data) {
       return res.status(404).json({ error: 'Dispatch record not found' })
     }
@@ -544,6 +545,8 @@ export const issueDepartureOrder = async (req: AuthRequest, res: Response) => {
 // Record exit
 export const recordExit = async (req: AuthRequest, res: Response) => {
   try {
+    if (!db) throw new Error('Database not initialized')
+
     const { id } = req.params
     const { exitTime, passengersDeparting, exitShiftId } = req.body
     const userId = req.user?.id
@@ -552,29 +555,27 @@ export const recordExit = async (req: AuthRequest, res: Response) => {
     const userName = await fetchUserName(userId)
 
     const updateData: any = {
-      exit_time: exitTime ? convertVietnamISOToUTCForStorage(exitTime) : getCurrentVietnamTime(),
-      exit_by: userId || null,
-      exit_by_name: userName,
-      current_status: 'departed',
+      exitTime: exitTime ? convertVietnamISOToUTCForStorage(exitTime) : getCurrentVietnamTime(),
+      exitBy: userId || null,
+      exitByName: userName,
+      status: 'departed',
     }
 
     if (passengersDeparting !== undefined) {
-      updateData.passengers_departing = passengersDeparting
+      updateData.passengersDeparting = passengersDeparting
     }
 
     // Set exit_shift_id if provided
     if (exitShiftId) {
-      updateData.exit_shift_id = exitShiftId
+      updateData.exitShiftId = exitShiftId
     }
 
-    const { data, error } = await firebase
-      .from('dispatch_records')
-      .update(updateData)
-      .eq('id', id)
-      .select('*')
-      .single()
+    const [data] = await db
+      .update(dispatchRecords)
+      .set(updateData)
+      .where(eq(dispatchRecords.id, id))
+      .returning()
 
-    if (error) throw error
     if (!data) {
       return res.status(404).json({ error: 'Dispatch record not found' })
     }
@@ -589,34 +590,32 @@ export const recordExit = async (req: AuthRequest, res: Response) => {
 // Delete dispatch record
 export const deleteDispatchRecord = async (req: AuthRequest, res: Response) => {
   try {
+    if (!db) throw new Error('Database not initialized')
+
     const { id } = req.params
     console.log('[deleteDispatchRecord] Attempting to delete record:', id)
 
     // Check if record exists
-    const { data: existingRecord, error: fetchError } = await firebase
-      .from('dispatch_records')
-      .select('*')
-      .eq('id', id)
-      .single()
+    const [existingRecord] = await db
+      .select()
+      .from(dispatchRecords)
+      .where(eq(dispatchRecords.id, id))
 
-    console.log('[deleteDispatchRecord] Fetch result:', { found: !!existingRecord, error: fetchError?.message })
+    console.log('[deleteDispatchRecord] Fetch result:', { found: !!existingRecord })
 
-    if (fetchError || !existingRecord) {
+    if (!existingRecord) {
       return res.status(404).json({ error: 'Dispatch record not found' })
     }
 
     // Only allow deletion of records that haven't departed yet
-    if (existingRecord.current_status === 'departed') {
+    if (existingRecord.status === 'departed') {
       return res.status(400).json({ error: 'Cannot delete a record that has already departed' })
     }
 
     // Delete the record
-    const { error: deleteError } = await firebase
-      .from('dispatch_records')
-      .delete()
-      .eq('id', id)
-
-    if (deleteError) throw deleteError
+    await db
+      .delete(dispatchRecords)
+      .where(eq(dispatchRecords.id, id))
 
     return res.json({ message: 'Dispatch record deleted successfully' })
   } catch (error: any) {
@@ -628,23 +627,24 @@ export const deleteDispatchRecord = async (req: AuthRequest, res: Response) => {
 // Update dispatch record (for editing basic info)
 export const updateDispatchRecord = async (req: AuthRequest, res: Response) => {
   try {
+    if (!db) throw new Error('Database not initialized')
+
     const { id } = req.params
     const { vehicleId, driverId, routeId, entryTime, notes } = req.body
 
     // Check if record exists
-    const { data: existingRecord, error: fetchError } = await firebase
-      .from('dispatch_records')
-      .select('*')
-      .eq('id', id)
-      .single()
+    const [existingRecord] = await db
+      .select()
+      .from(dispatchRecords)
+      .where(eq(dispatchRecords.id, id))
 
-    if (fetchError || !existingRecord) {
+    if (!existingRecord) {
       return res.status(404).json({ error: 'Dispatch record not found' })
     }
 
     // Only allow editing of records in early stages
     const editableStatuses = ['entered', 'passengers_dropped']
-    if (!editableStatuses.includes(existingRecord.current_status)) {
+    if (!editableStatuses.includes(existingRecord.status)) {
       return res.status(400).json({
         error: 'Cannot edit a record that has already been permitted or paid'
       })
@@ -652,12 +652,12 @@ export const updateDispatchRecord = async (req: AuthRequest, res: Response) => {
 
     // Build update data
     const updateData: Record<string, any> = {
-      updated_at: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
     }
 
     // Update vehicle if changed
-    if (vehicleId && vehicleId !== existingRecord.vehicle_id) {
-      updateData.vehicle_id = vehicleId
+    if (vehicleId && vehicleId !== existingRecord.vehicleId) {
+      updateData.vehicleId = vehicleId
       try {
         const denormalized = await fetchDenormalizedData(vehicleId)
         Object.assign(updateData, buildDenormalizedFields(denormalized))
@@ -669,31 +669,31 @@ export const updateDispatchRecord = async (req: AuthRequest, res: Response) => {
     }
 
     // Update driver if changed
-    if (driverId && driverId !== existingRecord.driver_id) {
+    if (driverId && driverId !== existingRecord.driverId) {
       const driverName = await fetchUserName(driverId)
-      updateData.driver_id = driverId
-      updateData.driver_full_name = driverName
+      updateData.driverId = driverId
+      updateData.driverFullName = driverName
     }
 
     // Update route if changed
     if (routeId !== undefined) {
-      if (routeId && routeId !== existingRecord.route_id) {
+      if (routeId && routeId !== existingRecord.routeId) {
         const routeData = await fetchRouteData(routeId)
-        updateData.route_id = routeId
+        updateData.routeId = routeId
         Object.assign(updateData, buildRouteDenormalizedFields(routeData))
       } else if (!routeId) {
-        updateData.route_id = null
-        updateData.route_name = null
-        updateData.route_type = null
-        updateData.route_destination_id = null
-        updateData.route_destination_name = null
-        updateData.route_destination_code = null
+        updateData.routeId = null
+        updateData.routeName = null
+        updateData.routeType = null
+        updateData.routeDestinationId = null
+        updateData.routeDestinationName = null
+        updateData.routeDestinationCode = null
       }
     }
 
     // Update entry time if changed
     if (entryTime) {
-      updateData.entry_time = convertVietnamISOToUTCForStorage(entryTime)
+      updateData.entryTime = convertVietnamISOToUTCForStorage(entryTime)
     }
 
     // Update notes if provided
@@ -702,13 +702,11 @@ export const updateDispatchRecord = async (req: AuthRequest, res: Response) => {
     }
 
     // Perform update
-    const { data, error } = await firebase
-      .from('dispatch_records')
-      .update(updateData)
-      .eq('id', id)
-      .single()
-
-    if (error) throw error
+    const [data] = await db
+      .update(dispatchRecords)
+      .set(updateData)
+      .where(eq(dispatchRecords.id, id))
+      .returning()
 
     return res.json({ message: 'Dispatch record updated successfully', dispatch: data })
   } catch (error: any) {
