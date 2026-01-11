@@ -45,7 +45,7 @@ interface Vehicle {
 
 interface Driver {
   id: string
-  name: string
+  fullName: string
   operatorId?: string | null
   [key: string]: any
 }

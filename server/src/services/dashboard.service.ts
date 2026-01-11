@@ -153,28 +153,28 @@ export class DashboardService {
     const vehicleExpiryDocs: Array<{ vehicleId: string; plateNumber: string; documentType: string; expiryDate: string }> = [];
 
     for (const vehicle of vehiclesData) {
-      if (vehicle.registrationExpiry) {
+      if (vehicle.inspectionExpiryDate) {
         vehicleExpiryDocs.push({
           vehicleId: vehicle.id,
           plateNumber: vehicle.plateNumber,
           documentType: 'registration',
-          expiryDate: vehicle.registrationExpiry,
+          expiryDate: vehicle.inspectionExpiryDate,
         });
       }
-      if (vehicle.insuranceExpiry) {
+      if (vehicle.insuranceExpiryDate) {
         vehicleExpiryDocs.push({
           vehicleId: vehicle.id,
           plateNumber: vehicle.plateNumber,
           documentType: 'insurance',
-          expiryDate: vehicle.insuranceExpiry,
+          expiryDate: vehicle.insuranceExpiryDate,
         });
       }
-      if (vehicle.roadWorthinessExpiry) {
+      if (vehicle.inspectionExpiryDate) {
         vehicleExpiryDocs.push({
           vehicleId: vehicle.id,
           plateNumber: vehicle.plateNumber,
           documentType: 'inspection',
-          expiryDate: vehicle.roadWorthinessExpiry,
+          expiryDate: vehicle.inspectionExpiryDate,
         });
       }
     }
@@ -323,12 +323,12 @@ export class DashboardService {
     }
 
     for (const driver of drivers) {
-      if (!driver.licenseExpiry) continue;
-      const expiryDate = driver.licenseExpiry.split('T')[0] || driver.licenseExpiry;
+      if (!driver.licenseExpiryDate) continue;
+      const expiryDate = driver.licenseExpiryDate.split('T')[0] || driver.licenseExpiryDate;
       if (expiryDate >= todayStr && expiryDate <= thirtyDaysFromNowStr) {
         warnings.push({
           type: 'driver',
-          name: driver.name || '',
+          name: driver.fullName || '',
           document: 'Bằng lái',
           expiryDate,
         });

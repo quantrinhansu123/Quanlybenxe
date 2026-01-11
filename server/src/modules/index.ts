@@ -4,7 +4,7 @@
  */
 
 // Operator module
-export * from './operator/index.js'
+// Operator module archived - use Drizzle directly
 
 // Fleet module (vehicles, drivers)
 export * from './fleet/index.js'

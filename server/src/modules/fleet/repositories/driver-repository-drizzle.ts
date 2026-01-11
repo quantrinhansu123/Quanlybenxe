@@ -45,7 +45,7 @@ class DrizzleDriverRepository extends DrizzleRepository<
       operator,
       operatorIds: operators.map((op) => op.id),
       operators,
-      fullName: driver.name,
+      fullName: driver.fullName,
       idNumber: driver.idNumber ?? undefined,
       phone: driver.phone ?? undefined,
       province: undefined,
@@ -53,7 +53,7 @@ class DrizzleDriverRepository extends DrizzleRepository<
       address: driver.address ?? undefined,
       licenseNumber: driver.licenseNumber ?? undefined,
       licenseClass: driver.licenseClass ?? undefined,
-      licenseExpiry: driver.licenseExpiry ?? undefined,
+      licenseExpiry: driver.licenseExpiryDate ?? undefined,
       dateOfBirth: driver.dateOfBirth ?? undefined,
       imageUrl: undefined,
       isActive: driver.isActive,
@@ -73,12 +73,12 @@ class DrizzleDriverRepository extends DrizzleRepository<
         // Driver fields
         id: drivers.id,
         operatorId: drivers.operatorId,
-        name: drivers.name,
+        fullName: drivers.fullName,
         phone: drivers.phone,
         idNumber: drivers.idNumber,
         licenseNumber: drivers.licenseNumber,
         licenseClass: drivers.licenseClass,
-        licenseExpiry: drivers.licenseExpiry,
+        licenseExpiryDate: drivers.licenseExpiryDate,
         dateOfBirth: drivers.dateOfBirth,
         address: drivers.address,
         isActive: drivers.isActive,
@@ -108,13 +108,13 @@ class DrizzleDriverRepository extends DrizzleRepository<
         {
           id: row.id,
           firebaseId: null,
-          name: row.name,
+          fullName: row.fullName,
           phone: row.phone,
           idNumber: row.idNumber,
           operatorId: row.operatorId,
           licenseNumber: row.licenseNumber,
           licenseClass: row.licenseClass,
-          licenseExpiry: row.licenseExpiry,
+          licenseExpiryDate: row.licenseExpiryDate,
           dateOfBirth: row.dateOfBirth,
           address: row.address,
           isActive: row.isActive,
@@ -122,7 +122,7 @@ class DrizzleDriverRepository extends DrizzleRepository<
           operatorCode: row.operatorCode,
           metadata: row.metadata,
           createdAt: row.createdAt,
-          updatedAt: row.updatedAt,
+          updatedAt: row.updatedAt, province: null, district: null, imageUrl: null,
         },
         operator
       )
@@ -140,12 +140,12 @@ class DrizzleDriverRepository extends DrizzleRepository<
         // Driver fields
         id: drivers.id,
         operatorId: drivers.operatorId,
-        name: drivers.name,
+        fullName: drivers.fullName,
         phone: drivers.phone,
         idNumber: drivers.idNumber,
         licenseNumber: drivers.licenseNumber,
         licenseClass: drivers.licenseClass,
-        licenseExpiry: drivers.licenseExpiry,
+        licenseExpiryDate: drivers.licenseExpiryDate,
         dateOfBirth: drivers.dateOfBirth,
         address: drivers.address,
         isActive: drivers.isActive,
@@ -178,13 +178,13 @@ class DrizzleDriverRepository extends DrizzleRepository<
       {
         id: row.id,
         firebaseId: null,
-        name: row.name,
+        fullName: row.fullName,
         phone: row.phone,
         idNumber: row.idNumber,
         operatorId: row.operatorId,
         licenseNumber: row.licenseNumber,
         licenseClass: row.licenseClass,
-        licenseExpiry: row.licenseExpiry,
+        licenseExpiryDate: row.licenseExpiryDate,
         dateOfBirth: row.dateOfBirth,
         address: row.address,
         isActive: row.isActive,
@@ -192,7 +192,7 @@ class DrizzleDriverRepository extends DrizzleRepository<
         operatorCode: row.operatorCode,
         metadata: row.metadata,
         createdAt: row.createdAt,
-        updatedAt: row.updatedAt,
+        updatedAt: row.updatedAt, province: null, district: null, imageUrl: null,
       },
       operator
     )
@@ -238,13 +238,13 @@ class DrizzleDriverRepository extends DrizzleRepository<
       .insert(drivers)
       .values({
         operatorId: data.operatorId || null,
-        name: data.fullName,
+        fullName: data.fullName,
         idNumber: data.idNumber || null,
         phone: data.phone || null,
         address: data.address || null,
         licenseNumber: data.licenseNumber || null,
         licenseClass: data.licenseClass || null,
-        licenseExpiry: data.licenseExpiryDate || null,
+        licenseExpiryDate: data.licenseExpiryDate || null,
         dateOfBirth: data.dateOfBirth || null,
         isActive: data.isActive ?? true,
       })
@@ -284,14 +284,14 @@ class DrizzleDriverRepository extends DrizzleRepository<
     const updateData: Partial<NewDriver> = {}
 
     if (data.operatorId !== undefined) updateData.operatorId = data.operatorId || null
-    if (data.fullName !== undefined) updateData.name = data.fullName
+    if (data.fullName !== undefined) updateData.fullName = data.fullName
     if (data.idNumber !== undefined) updateData.idNumber = data.idNumber || null
     if (data.phone !== undefined) updateData.phone = data.phone || null
     if (data.address !== undefined) updateData.address = data.address || null
     if (data.licenseNumber !== undefined) updateData.licenseNumber = data.licenseNumber || null
     if (data.licenseClass !== undefined) updateData.licenseClass = data.licenseClass || null
     if (data.licenseExpiryDate !== undefined)
-      updateData.licenseExpiry = data.licenseExpiryDate || null
+      updateData.licenseExpiryDate = data.licenseExpiryDate || null
     if (data.dateOfBirth !== undefined) updateData.dateOfBirth = data.dateOfBirth || null
     if (data.isActive !== undefined) updateData.isActive = data.isActive
 

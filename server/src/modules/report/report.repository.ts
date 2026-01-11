@@ -87,7 +87,7 @@ export async function getVehicleLogs(filters: VehicleLogFilters): Promise<Vehicl
       paymentAmount: dispatchRecords.paymentAmount,
       // Use denormalized fields first, fallback to JOINed data
       vehiclePlateNumber: sql<string | null>`COALESCE(${dispatchRecords.vehiclePlateNumber}, ${vehicles.plateNumber})`,
-      driverName: sql<string | null>`COALESCE(${dispatchRecords.driverFullName}, ${drivers.name})`,
+      driverName: sql<string | null>`COALESCE(${dispatchRecords.driverFullName}, ${drivers.fullName})`,
       routeName: sql<string | null>`COALESCE(${dispatchRecords.routeName}, CONCAT(${routes.departureStation}, ' - ', ${routes.arrivalStation}))`,
       operatorName: sql<string | null>`COALESCE(${dispatchRecords.vehicleOperatorName}, ${operators.name})`,
     })
@@ -168,7 +168,7 @@ export async function getStationActivity(filters: StationActivityFilters): Promi
       status: dispatchRecords.status,
       paymentAmount: dispatchRecords.paymentAmount,
       vehiclePlateNumber: sql<string | null>`COALESCE(${dispatchRecords.vehiclePlateNumber}, ${vehicles.plateNumber})`,
-      driverName: sql<string | null>`COALESCE(${dispatchRecords.driverFullName}, ${drivers.name})`,
+      driverName: sql<string | null>`COALESCE(${dispatchRecords.driverFullName}, ${drivers.fullName})`,
       routeName: sql<string | null>`COALESCE(${dispatchRecords.routeName}, CONCAT(${routes.departureStation}, ' - ', ${routes.arrivalStation}))`,
       operatorName: sql<string | null>`COALESCE(${dispatchRecords.vehicleOperatorName}, ${operators.name})`,
     })
@@ -209,7 +209,7 @@ export async function getInvalidVehicles(filters: VehicleLogFilters): Promise<Ve
       status: dispatchRecords.status,
       paymentAmount: dispatchRecords.paymentAmount,
       vehiclePlateNumber: sql<string | null>`COALESCE(${dispatchRecords.vehiclePlateNumber}, ${vehicles.plateNumber})`,
-      driverName: sql<string | null>`COALESCE(${dispatchRecords.driverFullName}, ${drivers.name})`,
+      driverName: sql<string | null>`COALESCE(${dispatchRecords.driverFullName}, ${drivers.fullName})`,
       routeName: sql<string | null>`COALESCE(${dispatchRecords.routeName}, CONCAT(${routes.departureStation}, ' - ', ${routes.arrivalStation}))`,
       operatorName: sql<string | null>`COALESCE(${dispatchRecords.vehicleOperatorName}, ${operators.name})`,
     })

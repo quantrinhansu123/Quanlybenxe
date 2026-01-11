@@ -66,7 +66,7 @@ async function runBenchmarks() {
       id: dispatchRecords.id,
       vehicleId: dispatchRecords.vehicleId,
       plateNumber: vehicles.plateNumber,
-      driverName: drivers.name,
+      driverName: drivers.fullName,
       operatorName: operators.name,
       entryTime: dispatchRecords.entryTime,
       status: dispatchRecords.status,

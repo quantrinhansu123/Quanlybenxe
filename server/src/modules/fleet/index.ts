@@ -51,7 +51,6 @@ export {
 // Repositories
 export { vehicleRepository, VehicleRepository } from './repositories/vehicle.repository.js'
 export { driverRepository, DriverRepository } from './repositories/driver.repository.js'
-export { vehicleTypeRepository, VehicleTypeRepository } from './repositories/vehicle-type.repository.js'
 
 // Services
 export { vehicleService, VehicleService } from './services/vehicle.service.js'

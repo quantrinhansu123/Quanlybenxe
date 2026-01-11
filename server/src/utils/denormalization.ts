@@ -81,7 +81,7 @@ export async function fetchDenormalizedData(params: {
         .select({
           id: vehicles.id,
           plateNumber: vehicles.plateNumber,
-          seatCount: vehicles.seatCount,
+          seatCount: vehicles.seatCapacity,
           operatorId: vehicles.operatorId,
         })
         .from(vehicles)
@@ -115,7 +115,7 @@ export async function fetchDenormalizedData(params: {
   // Fetch other entities in parallel
   const [driverResult, routeResult, userResult] = await Promise.all([
     params.driverId
-      ? db.select({ id: drivers.id, name: drivers.name })
+      ? db.select({ id: drivers.id, name: drivers.fullName })
           .from(drivers)
           .where(eq(drivers.id, params.driverId))
           .limit(1)
