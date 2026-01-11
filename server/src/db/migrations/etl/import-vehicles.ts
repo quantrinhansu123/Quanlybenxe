@@ -13,6 +13,7 @@ import {
   parseDate,
   logProgress,
   ensureDbInitialized,
+  logInvalidFK,
 } from './etl-helpers'
 
 interface FirebaseVehicle {
@@ -64,6 +65,14 @@ export async function importVehicles(exportDir: string): Promise<number> {
     try {
       const operatorId = await getPostgresId(item.operator_id, 'operators')
       const vehicleTypeId = await getPostgresId(item.vehicle_type_id, 'vehicle_types')
+
+      // Log invalid FKs
+      if (item.operator_id && !operatorId) {
+        await logInvalidFK(exportDir, 'vehicles', item.id, 'operator_id', item.operator_id, 'operators')
+      }
+      if (item.vehicle_type_id && !vehicleTypeId) {
+        await logInvalidFK(exportDir, 'vehicles', item.id, 'vehicle_type_id', item.vehicle_type_id, 'vehicle_types')
+      }
 
       const plateNumber = item.plate_number || item.biensoxe || item.id
 

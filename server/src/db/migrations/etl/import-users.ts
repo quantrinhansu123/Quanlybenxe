@@ -21,6 +21,7 @@ interface FirebaseUser {
   username?: string
   password_hash?: string
   full_name?: string
+  phone?: string
   role?: string
   is_active?: boolean | string
   last_login?: string

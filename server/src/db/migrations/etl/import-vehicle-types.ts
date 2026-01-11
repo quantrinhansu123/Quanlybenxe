@@ -51,9 +51,9 @@ export async function importVehicleTypes(exportDir: string): Promise<number> {
       const [inserted] = await db!.insert(vehicleTypes).values({
         firebaseId: item._firebase_id || item.id,
         name: (item.name || `Type_${item.id}`).substring(0, 100),
-        code: (item.code || item.id.substring(0, 20)).substring(0, 50),
-        description: item.description || null,
-        seatCapacity: item.seat_capacity || null,
+        code: (item.code || item.id.substring(0, 20)).substring(0, 20),
+        description: item.description?.substring(0, 255) || null,
+        seatCount: item.seat_capacity || null,
         isActive: parseBoolean(item.is_active),
         createdAt: parseDate(item.created_at) || new Date(),
         updatedAt: parseDate(item.updated_at) || new Date(),

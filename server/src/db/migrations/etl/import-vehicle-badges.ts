@@ -3,7 +3,8 @@
  * Level 3: Depends on vehicles
  */
 import { db } from '../../drizzle'
-import { vehicleBadges } from '../../schema'
+import { vehicleBadges, vehicles } from '../../schema'
+import { eq } from 'drizzle-orm'
 import { readFileSync } from 'fs'
 import { join } from 'path'
 import {
@@ -13,6 +14,7 @@ import {
   parseDate,
   logProgress,
   ensureDbInitialized,
+  logInvalidFK,
 } from './etl-helpers'
 
 interface FirebaseVehicleBadge {
@@ -57,14 +59,29 @@ export async function importVehicleBadges(exportDir: string): Promise<number> {
     try {
       const vehicleId = await getPostgresId(item.vehicle_id, 'vehicles')
 
+      // Log invalid FK
+      if (item.vehicle_id && !vehicleId) {
+        await logInvalidFK(exportDir, 'vehicle_badges', item.id, 'vehicle_id', item.vehicle_id, 'vehicles')
+      }
+
       const badgeNumber = item.badge_number || item.SOPHUHIEU || item.id
+
+      // Get plateNumber from vehicle if vehicleId exists, otherwise use BIENSOXE or fallback
+      let plateNumber = item.BIENSOXE || `UNKNOWN_${item.id}`
+      if (vehicleId) {
+        const [vehicle] = await db!.select().from(vehicles).where(eq(vehicles.id, vehicleId)).limit(1)
+        if (vehicle?.plateNumber) {
+          plateNumber = vehicle.plateNumber
+        }
+      }
 
       const [inserted] = await db!.insert(vehicleBadges).values({
         firebaseId: item._firebase_id || item.id,
         badgeNumber: badgeNumber.substring(0, 50),
+        plateNumber: plateNumber.substring(0, 20),
         vehicleId,
-        expiryDate: item.expiry_date?.substring(0, 20) || null,
-        issueDate: item.issue_date?.substring(0, 20) || null,
+        expiryDate: item.expiry_date || null,
+        issueDate: item.issue_date || null,
         isActive: parseBoolean(item.is_active),
         metadata: item.metadata || null,
         syncedAt: parseDate(item.synced_at),

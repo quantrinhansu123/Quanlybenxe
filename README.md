@@ -11,7 +11,7 @@ QuanLyBenXe (Bus Management) is a full-stack web application designed to streaml
 ### Prerequisites
 - Node.js 16+
 - npm or yarn
-- Firebase account with Realtime Database and Firestore enabled
+- Supabase account with PostgreSQL database enabled
 
 ### Installation
 
@@ -78,8 +78,8 @@ quanlybenxe/
 
 ### Backend
 - **Express.js** with TypeScript
-- **Firebase Realtime Database** for primary storage
-- **Firestore** for secondary queries
+- **Supabase PostgreSQL** for primary storage (Drizzle ORM)
+- **Firebase Realtime Database** (legacy - being phased out)
 - **JWT** for authentication
 - **Cloudinary** for image storage
 
@@ -149,7 +149,8 @@ Service (Business logic)
     ↓
 Repository (Database layer)
     ↓
-Firebase (RTDB + Firestore)
+Supabase PostgreSQL (Primary)
+Firebase (Legacy - being phased out)
 ```
 
 ### State Management
@@ -162,7 +163,8 @@ Firebase (RTDB + Firestore)
 **Backend:**
 - Service layer handles complex workflows
 - Repository pattern for data access
-- Firebase dual-write (RTDB ↔ Firestore sync)
+- Drizzle ORM for type-safe database queries
+- Firebase legacy support (being phased out)
 
 ---
 
@@ -213,7 +215,7 @@ npm run test
 ### Backend
 - Deployed to Render.com
 - Environment: Node.js with Express.js
-- Database: Firebase (cloud-managed)
+- Database: Supabase PostgreSQL (primary), Firebase (legacy)
 
 ### Frontend
 - Deployed to Vercel or similar
@@ -246,28 +248,12 @@ See `DEPLOYMENT_CONFIG.md` for detailed setup.
 
 ### Code Quality
 - TypeScript strict mode enabled
-- No `any` types allowed
-- Controller max: 200 lines
+- No `any` types policy (496 found - needs cleanup)
+- Controller max: 300 lines (current max: 263)
 - Service/Helper functions: <50 lines average
 
 ---
 
-## Support & Issues
-
-For bug reports or feature requests, please create an issue on GitHub with:
-- Clear description
-- Steps to reproduce
-- Expected vs actual behavior
-- Screenshots (if applicable)
-
----
-
-## License
-
-Proprietary - Freelance Project
-
----
-
-**Last Updated:** 2025-12-29
+**Last Updated:** 2026-01-11
 **Maintainers:** Development Team
-**Status:** Phase 4 Complete - Integration Testing (Phase 5) Pending
+**Status:** Phase 4 Complete - Firebase to Supabase Migration Complete - Phase 5 Delayed 10 Days

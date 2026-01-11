@@ -2,7 +2,9 @@
 
 ## Overview
 
-The Bus Station Management System (Quanlybenxe) uses a modular architecture with clear separation of concerns. The system is split into a React frontend and an Express backend using Firebase Realtime Database.
+The Bus Station Management System (Quanlybenxe) uses a modular architecture with clear separation of concerns. The system is split into a React frontend and an Express backend using **Supabase PostgreSQL with Drizzle ORM** (migrated from Firebase RTDB in Phase 3).
+
+**Last Updated:** 2026-01-11
 
 ## Backend Structure
 
@@ -78,9 +80,9 @@ Each module follows this layered pattern:
 - Utility functions specific to the module
 
 ### 4. Repository Layer
-- Database operations
-- Extends BaseRepository for common CRUD
-- Firebase-specific operations
+- Database operations via Drizzle ORM
+- Extends DrizzleRepository for type-safe CRUD
+- Supabase PostgreSQL with JOIN support
 
 ### 5. Routes Layer
 - Express route definitions
@@ -137,7 +139,7 @@ Request Flow:
 │       ↓                                                         │
 │  Repository (dispatch-repository.ts) → Database operations      │
 │       ↓                                                         │
-│  Firebase Realtime Database                                     │
+│  Supabase PostgreSQL (Drizzle ORM)                              │
 │       ↓                                                         │
 │  Response Mapper → Client Response                              │
 └─────────────────────────────────────────────────────────────────┘
@@ -179,9 +181,10 @@ entered → passengers_dropped → permit_issued → paid → departure_ordered 
 ```
 
 ### Repository Pattern
-All database operations go through repositories extending `BaseRepository`:
+All database operations go through repositories extending `DrizzleRepository`:
+- Type-safe Drizzle ORM queries
 - Consistent error handling
-- Type-safe operations
+- JOIN support for complex queries
 - Centralized query optimization
 
 ### Validation-First

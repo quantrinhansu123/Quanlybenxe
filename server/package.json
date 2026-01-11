@@ -28,6 +28,7 @@
     "db:benchmark": "tsx src/scripts/benchmark.ts",
     "smoke-test": "tsx src/scripts/smoke-test.ts",
     "etl:export": "tsx src/db/migrations/etl/export-firebase.ts",
+    "etl:analyze": "tsx src/db/migrations/etl/analyze-data.ts",
     "etl:migrate": "tsx src/db/migrations/etl/migrate-all.ts",
     "etl:validate": "tsx src/db/migrations/etl/validate-migration.ts",
     "etl:rollback": "tsx src/db/migrations/etl/rollback.ts"

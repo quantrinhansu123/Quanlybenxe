@@ -5,6 +5,8 @@
 import { db } from '../../drizzle'
 import { idMappings } from '../../schema'
 import { eq, and } from 'drizzle-orm'
+import { promises as fs } from 'fs'
+import * as path from 'path'
 
 export type EntityType =
   | 'operators'
@@ -143,5 +145,76 @@ export function ensureDbInitialized(): void {
     throw new Error(
       'Database not initialized. Check DATABASE_URL environment variable.'
     )
+  }
+}
+
+/**
+ * Invalid FK Report Entry
+ */
+export interface InvalidFKRecord {
+  timestamp: string
+  collection: string
+  recordId: string
+  fkField: string
+  fkValue: string
+  targetCollection: string
+}
+
+/**
+ * Log invalid foreign key reference to report file
+ */
+export async function logInvalidFK(
+  exportDir: string,
+  collection: string,
+  recordId: string,
+  fkField: string,
+  fkValue: string,
+  targetCollection: string
+): Promise<void> {
+  const reportPath = path.join(exportDir, 'invalid-fk-report.json')
+
+  const record: InvalidFKRecord = {
+    timestamp: new Date().toISOString(),
+    collection,
+    recordId,
+    fkField,
+    fkValue,
+    targetCollection,
+  }
+
+  try {
+    let records: InvalidFKRecord[] = []
+
+    // Read existing report if exists
+    try {
+      const content = await fs.readFile(reportPath, 'utf-8')
+      records = JSON.parse(content)
+    } catch {
+      // File doesn't exist or is invalid, start fresh
+    }
+
+    // Append new record
+    records.push(record)
+
+    // Write back
+    await fs.writeFile(reportPath, JSON.stringify(records, null, 2), 'utf-8')
+  } catch (error) {
+    console.error(`Failed to log invalid FK: ${error}`)
+  }
+}
+
+/**
+ * Get invalid FK report if exists
+ */
+export async function getInvalidFKReport(
+  exportDir: string
+): Promise<InvalidFKRecord[]> {
+  const reportPath = path.join(exportDir, 'invalid-fk-report.json')
+
+  try {
+    const content = await fs.readFile(reportPath, 'utf-8')
+    return JSON.parse(content)
+  } catch {
+    return []
   }
 }
