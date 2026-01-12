@@ -51,8 +51,8 @@ export function useDieuDo() {
   useEffect(() => {
     setTitle("Điều độ xe");
     loadVehicles();
-    loadRecords();
-    const interval = setInterval(loadRecords, 30000);
+    loadRecords(true); // Initial load with loading state
+    const interval = setInterval(() => loadRecords(false), 30000); // Polling without loading state
     return () => clearInterval(interval);
   }, [setTitle]);
 
@@ -60,6 +60,7 @@ export function useDieuDo() {
     try {
       // Use cached quanlyDataService (5 min FE cache + 30 min BE cache)
       const data = await quanlyDataService.getVehicles();
+
       // Map to Vehicle type (only need id + plateNumber for vehicleOptions)
       const vehicles: Vehicle[] = data.map((v) => ({
         id: v.id,
@@ -71,12 +72,13 @@ export function useDieuDo() {
       }));
       setVehicles(vehicles);
     } catch (error) {
-      console.error("Failed to load vehicles:", error);
+      console.error("[useDieuDo] Failed to load vehicles:", error);
     }
   };
 
-  const loadRecords = async () => {
-    setIsLoading(true);
+  const loadRecords = async (showLoading = true) => {
+    // Only show loading state on initial load, not on polling refresh (stale-while-revalidate)
+    if (showLoading) setIsLoading(true);
     try {
       const data = await dispatchService.getAll();
       // Filter out cancelled records
@@ -101,7 +103,7 @@ export function useDieuDo() {
       await dispatchService.delete(record.id);
       console.log("[handleDelete] Delete successful");
       toast.success("Đã xóa xe khỏi danh sách");
-      loadRecords();
+      await loadRecords();
     } catch (error: unknown) {
       console.error("[handleDelete] Error:", error);
       const err = error as { response?: { data?: { error?: string } } };
@@ -132,6 +134,10 @@ export function useDieuDo() {
     setIsReadOnly(false);
     setDialogOpen(true);
     updateUrlParams(record, "edit");
+    // Ensure vehicles are loaded for dropdown
+    if (vehicles.length === 0) {
+      loadVehicles();
+    }
   };
 
   const handleAction = (record: DispatchRecord, type: DialogType) => {
@@ -225,13 +231,17 @@ export function useDieuDo() {
   const vehicleOptions = useMemo(() => {
     const options = vehicles
       .filter((v) => {
+        // For "entry" dialog, allow ALL vehicles (no filtering by active status)
+        // This allows the same vehicle to enter multiple times per day
+        if (dialogType === "entry") return true;
+
         const normalizedPlate = v.plateNumber?.replace(/[.\-\s]/g, '').toUpperCase();
-        const isEditingThisVehicle = dialogType === "edit" && 
+        const isEditingThisVehicle = dialogType === "edit" &&
           selectedRecord?.vehiclePlateNumber?.replace(/[.\-\s]/g, '').toUpperCase() === normalizedPlate;
         return !activePlateNumbers.has(normalizedPlate) || isEditingThisVehicle;
       })
       .map((v) => ({ id: v.id, plateNumber: v.plateNumber }));
-    
+
     // When editing, ensure the current vehicle is in options with CORRECT ID
     // Match by ID (not plate) to ensure Autocomplete finds the option
     if (dialogType === "edit" && selectedRecord?.vehicleId && selectedRecord?.vehiclePlateNumber) {

@@ -6,6 +6,7 @@ import { ProtectedRoute } from "@/features/auth"
 import { MainLayout } from "@/components/layout/MainLayout"
 import { PublicLayout } from "@/components/layout/PublicLayout"
 import { PageLoader } from "@/components/common/PageLoader"
+import { ErrorBoundary } from "@/components/common/ErrorBoundary"
 import { ChatWidget } from "@/features/chat"
 
 // ============================================
@@ -83,8 +84,9 @@ const HuongDanBanVeUyThac = lazy(() => import("@/pages/guide/HuongDanBanVeUyThac
 
 function App() {
   return (
-    <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
-      <ToastContainer
+    <ErrorBoundary>
+      <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
+        <ToastContainer
         position="top-right"
         autoClose={3000}
         hideProgressBar={false}
@@ -677,7 +679,8 @@ function App() {
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
       <ChatWidget />
-    </BrowserRouter>
+      </BrowserRouter>
+    </ErrorBoundary>
   )
 }
 

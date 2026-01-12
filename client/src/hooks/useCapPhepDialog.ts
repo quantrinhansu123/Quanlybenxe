@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo } from "react";
+import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { toast } from "react-toastify";
 import { format, startOfMonth, endOfMonth } from "date-fns";
 import { scheduleService } from "@/services/schedule.service";
@@ -58,6 +58,9 @@ export function useCapPhepDialog(record: DispatchRecord, onClose: () => void, on
   const [cachedDispatchRecords, setCachedDispatchRecords] = useState<DispatchRecord[] | null>(null);
 
   const { currentShift } = useUIStore();
+
+  // Prevent multiple initializations
+  const isInitializedRef = useRef(false);
 
 
   const loadSchedules = useCallback(async (rid: string) => {
@@ -139,11 +142,22 @@ export function useCapPhepDialog(record: DispatchRecord, onClose: () => void, on
   const loadInitialData = useCallback(async () => {
     try {
       // Use unified endpoint - 1 request instead of 4, with frontend caching
-      const [quanlyData, schedulesData, chargesData] = await Promise.all([
+      // Add timeout to prevent infinite loading state
+      const timeout = (ms: number) => new Promise((_, reject) =>
+        setTimeout(() => reject(new Error('Request timeout')), ms)
+      );
+
+      const dataPromise = Promise.all([
         quanlyDataService.getAll(), // Gets routes, operators, vehicles, badges in 1 call
         record.routeId ? scheduleService.getAll(record.routeId, undefined, true) : Promise.resolve([]),
         record.id ? serviceChargeService.getAll(record.id) : Promise.resolve([]),
       ]);
+
+      // Race between data fetch and 30 second timeout
+      const [quanlyData, schedulesData, chargesData] = await Promise.race([
+        dataPromise,
+        timeout(30000).then(() => { throw new Error('Timeout'); }),
+      ]) as [Awaited<ReturnType<typeof quanlyDataService.getAll>>, Schedule[], ServiceCharge[]];
 
       // Map routes from quanly-data format to dropdown format
       const routesForDropdown = (quanlyData.routes || []).map((r: QuanLyRoute) => ({
@@ -262,6 +276,7 @@ export function useCapPhepDialog(record: DispatchRecord, onClose: () => void, on
       if (record.seatCount && record.seatCount > 0) setSeatCount(record.seatCount.toString());
     } catch (error) {
       console.error("Failed to load initial data:", error);
+      toast.error("Không thể tải dữ liệu. Vui lòng thử lại.");
     }
   }, [record]);
 
@@ -486,17 +501,24 @@ export function useCapPhepDialog(record: DispatchRecord, onClose: () => void, on
     }
   }, [drivers]);
 
-  // Effects
+  // Effects - Load initial data only once
   useEffect(() => {
+    // Prevent multiple initializations
+    if (isInitializedRef.current) return;
+    isInitializedRef.current = true;
+
     const init = async () => {
       setIsInitialLoading(true);
-      await loadInitialData();
-      setIsInitialLoading(false);
+      try {
+        await loadInitialData();
+      } finally {
+        setIsInitialLoading(false);
+      }
     };
     init();
     const { shifts: currentShifts, loadShifts } = useUIStore.getState();
     if (currentShifts.length === 0) loadShifts();
-  }, [loadInitialData]);
+  }, []); // Empty deps - run only once on mount
 
   useEffect(() => {
     if (routeId) loadSchedules(routeId);

@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import {
   RefreshCw,
   Clock,
@@ -16,6 +16,7 @@ import { dashboardService } from "@/services/dashboard.service";
 import type { DashboardStats, ChartDataPoint, RecentActivity, Warning, WeeklyStat, MonthlyStat, RouteBreakdown } from "@/services/dashboard.service";
 import { useUIStore } from "@/store/ui.store";
 import { cn } from "@/lib/utils";
+import { useCachedQuery, CACHE_TTL } from "@/lib/query-cache";
 
 // Chart components (to be implemented in Phase 2-4)
 import { VehicleTrendChart } from "@/components/dashboard/charts/VehicleTrendChart";
@@ -24,67 +25,76 @@ import { VehiclesByStatusChart } from "@/components/dashboard/charts/VehiclesByS
 import { VehiclesByRouteChart } from "@/components/dashboard/charts/VehiclesByRouteChart";
 import { MonthlyBreakdownChart } from "@/components/dashboard/charts/MonthlyBreakdownChart";
 
+// Dashboard data type for caching
+interface DashboardData {
+  stats: DashboardStats;
+  chartData: ChartDataPoint[];
+  recentActivity: RecentActivity[];
+  warnings: Warning[];
+  weeklyStats: WeeklyStat[];
+  monthlyStats: MonthlyStat[];
+  routeBreakdown: RouteBreakdown[];
+}
+
+const defaultStats: DashboardStats = {
+  totalVehiclesToday: 0,
+  vehiclesInStation: 0,
+  vehiclesDepartedToday: 0,
+  revenueToday: 0,
+  invalidVehicles: 0,
+};
+
 export default function Dashboard() {
-  const [stats, setStats] = useState<DashboardStats>({
-    totalVehiclesToday: 0,
-    vehiclesInStation: 0,
-    vehiclesDepartedToday: 0,
-    revenueToday: 0,
-    invalidVehicles: 0,
-  });
-  const [chartData, setChartData] = useState<ChartDataPoint[]>([]);
-  const [recentActivity, setRecentActivity] = useState<RecentActivity[]>([]);
-  const [warnings, setWarnings] = useState<Warning[]>([]);
-  const [weeklyStats, setWeeklyStats] = useState<WeeklyStat[]>([]);
-  const [monthlyStats, setMonthlyStats] = useState<MonthlyStat[]>([]);
-  const [routeBreakdown, setRouteBreakdown] = useState<RouteBreakdown[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
+  // Use cached query for dashboard data - persists across navigation
+  const { data: cachedData, isLoading: isCacheLoading, refetch } = useCachedQuery<DashboardData>(
+    'dashboard-all',
+    () => dashboardService.getDashboardData(),
+    { ttl: CACHE_TTL.SHORT, staleTime: 30000 } // 30s stale time matches polling
+  );
+
+  // Extract data from cache with defaults
+  const stats = cachedData?.stats || defaultStats;
+  const chartData = cachedData?.chartData || [];
+  const recentActivity = cachedData?.recentActivity || [];
+  const warnings = cachedData?.warnings || [];
+  const weeklyStats = cachedData?.weeklyStats || [];
+  const monthlyStats = cachedData?.monthlyStats || [];
+  const routeBreakdown = cachedData?.routeBreakdown || [];
+
+  const [isRefreshing, setIsRefreshing] = useState(false);
   const [editDocumentOpen, setEditDocumentOpen] = useState(false);
   const [selectedWarning, setSelectedWarning] = useState<Warning | null>(null);
   const [vehicleHistoryOpen, setVehicleHistoryOpen] = useState(false);
   const [lastUpdated, setLastUpdated] = useState<Date>(new Date());
   const setTitle = useUIStore((state) => state.setTitle);
 
+  const isLoading = isCacheLoading && !cachedData;
+
   useEffect(() => {
     setTitle("Tổng quan");
-    loadDashboardData();
-    const interval = setInterval(loadDashboardData, 30000);
+    // Set up polling every 30 seconds (background refresh)
+    const interval = setInterval(() => {
+      refetch().then(() => setLastUpdated(new Date()));
+    }, 30000);
     return () => clearInterval(interval);
-  }, [setTitle]);
+  }, [setTitle, refetch]);
 
-  const loadDashboardData = async () => {
-    setIsLoading(true);
-    try {
-      const data = await dashboardService.getDashboardData();
-      setStats(data.stats);
-      setChartData(data.chartData);
-      setRecentActivity(data.recentActivity);
-      setWarnings(data.warnings);
-      setWeeklyStats(data.weeklyStats || []);
-      setMonthlyStats(data.monthlyStats || []);
-      setRouteBreakdown(data.routeBreakdown || []);
+  // Update lastUpdated when data loads
+  useEffect(() => {
+    if (cachedData) {
       setLastUpdated(new Date());
-    } catch (error) {
-      console.error("Failed to load dashboard data:", error);
-      try {
-        const [statsData, chartDataData, activityData, warningsData] = await Promise.all([
-          dashboardService.getStats().catch(() => null),
-          dashboardService.getChartData().catch(() => []),
-          dashboardService.getRecentActivity().catch(() => []),
-          dashboardService.getWarnings().catch(() => []),
-        ]);
-        if (statsData) setStats(statsData);
-        if (chartDataData.length > 0) setChartData(chartDataData);
-        if (activityData.length > 0) setRecentActivity(activityData);
-        if (warningsData.length > 0) setWarnings(warningsData);
-        setLastUpdated(new Date());
-      } catch {
-        // Silent fail
-      }
-    } finally {
-      setIsLoading(false);
     }
-  };
+  }, [cachedData]);
+
+  const handleRefresh = useCallback(async () => {
+    setIsRefreshing(true);
+    try {
+      await refetch();
+      setLastUpdated(new Date());
+    } finally {
+      setIsRefreshing(false);
+    }
+  }, [refetch]);
 
   const handleEditDocument = (warning: Warning) => {
     setSelectedWarning(warning);
@@ -98,7 +108,7 @@ export default function Dashboard() {
 
   const handleSaveDocument = async () => {
     await new Promise((resolve) => setTimeout(resolve, 1000));
-    loadDashboardData();
+    await handleRefresh();
   };
 
   return (
@@ -125,10 +135,10 @@ export default function Dashboard() {
               variant="outline"
               size="sm"
               className="gap-2 h-10 px-4 rounded-xl border-stone-200 bg-white hover:bg-stone-50"
-              onClick={loadDashboardData}
-              disabled={isLoading}
+              onClick={handleRefresh}
+              disabled={isLoading || isRefreshing}
             >
-              <RefreshCw className={cn("w-4 h-4", isLoading && "animate-spin")} />
+              <RefreshCw className={cn("w-4 h-4", (isLoading || isRefreshing) && "animate-spin")} />
               <span className="hidden sm:inline">Làm mới</span>
             </Button>
           </div>

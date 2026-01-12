@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { toast } from "react-toastify";
 import {
@@ -35,6 +35,7 @@ import {
   PaymentSidebar,
   ZeroAmountWarningDialog,
 } from "@/components/payment";
+import { useCachedQuery, CACHE_TTL } from "@/lib/query-cache";
 
 export default function ThanhToan() {
   const { id } = useParams<{ id: string }>();
@@ -53,41 +54,32 @@ export default function ThanhToan() {
   const [isProcessing, setIsProcessing] = useState(false);
   const [showZeroAmountWarning, setShowZeroAmountWarning] = useState(false);
 
-  // List view state
-  const [allData, setAllData] = useState<DispatchRecord[]>([]);
-  const [listData, setListData] = useState<DispatchRecord[]>([]);
+  // List view state - use cached query for dispatch records
+  const { data: allDispatchRecords, isLoading: isListLoading, refetch: refetchList } = useCachedQuery<DispatchRecord[]>(
+    'thanhtoan-dispatch-list',
+    () => dispatchService.getAll(),
+    { ttl: CACHE_TTL.SHORT, staleTime: 30000, enabled: !id } // Only fetch when no ID (list view)
+  );
+
+  // Filter to last 7 days for list view
+  const allData = useMemo(() => {
+    if (!allDispatchRecords) return [];
+    const sevenDaysAgo = new Date();
+    sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+    sevenDaysAgo.setHours(0, 0, 0, 0);
+    return allDispatchRecords.filter(record => {
+      const entryTime = new Date(record.entryTime);
+      return entryTime >= sevenDaysAgo;
+    });
+  }, [allDispatchRecords]);
+
   const [selectedItems, setSelectedItems] = useState<Set<string>>(new Set());
   const [orderType, setOrderType] = useState<string>("all");
   const [searchQuery, setSearchQuery] = useState("");
   const [dateRange, setDateRange] = useState<DateRange | undefined>(undefined);
 
-  // Calculate stats
-  const stats = {
-    total: listData.length,
-    pending: listData.filter(i => i.currentStatus !== 'paid' && i.currentStatus !== 'departed').length,
-    paid: listData.filter(i => i.currentStatus === 'paid' || i.currentStatus === 'departed').length,
-    totalAmount: listData
-      .filter(i => i.currentStatus === 'paid' || i.currentStatus === 'departed')
-      .reduce((sum, i) => sum + (i.paymentAmount || 0), 0)
-  };
-
-  useEffect(() => {
-    if (id) {
-      setTitle("Xác nhận thanh toán");
-      loadData();
-    } else {
-      setTitle("Quản lý đơn hàng");
-      loadListData();
-    }
-  }, [id, setTitle]);
-
-  useEffect(() => {
-    if (!id && allData.length > 0) {
-      applyFilters();
-    }
-  }, [dateRange, orderType, searchQuery, allData.length, id]);
-
-  const applyFilters = () => {
+  // Filtered list data
+  const listData = useMemo(() => {
     let filtered = [...allData];
 
     if (dateRange?.from && dateRange?.to) {
@@ -116,45 +108,45 @@ export default function ThanhToan() {
     }
 
     filtered.sort((a, b) => new Date(b.entryTime).getTime() - new Date(a.entryTime).getTime());
-    setListData(filtered);
+    return filtered;
+  }, [allData, dateRange, searchQuery]);
 
+  // Calculate stats
+  const stats = useMemo(() => ({
+    total: listData.length,
+    pending: listData.filter(i => i.currentStatus !== 'paid' && i.currentStatus !== 'departed').length,
+    paid: listData.filter(i => i.currentStatus === 'paid' || i.currentStatus === 'departed').length,
+    totalAmount: listData
+      .filter(i => i.currentStatus === 'paid' || i.currentStatus === 'departed')
+      .reduce((sum, i) => sum + (i.paymentAmount || 0), 0)
+  }), [listData]);
+
+  useEffect(() => {
+    if (id) {
+      setTitle("Xác nhận thanh toán");
+      loadData();
+    } else {
+      setTitle("Quản lý đơn hàng");
+      // Data is loaded via useCachedQuery
+    }
+  }, [id, setTitle]);
+
+  // Clean up selected items when filtered list changes
+  useEffect(() => {
     setSelectedItems(prev => {
       const newSet = new Set<string>();
       prev.forEach(itemId => {
-        const item = filtered.find(i => i.id === itemId);
+        const item = listData.find(i => i.id === itemId);
         if (item && item.currentStatus !== 'paid' && item.currentStatus !== 'departed') {
           newSet.add(itemId);
         }
       });
       return newSet;
     });
-  };
+  }, [listData]);
 
   const loadListData = async () => {
-    setIsLoading(true);
-    try {
-      const data = await dispatchService.getAll();
-      
-      // Filter to only show TODAY's records
-      // This allows multiple trips per vehicle in a single day
-      // Old records from previous days won't pollute operational views
-      const today = new Date();
-      today.setHours(0, 0, 0, 0);
-      const tomorrow = new Date(today);
-      tomorrow.setDate(tomorrow.getDate() + 1);
-      
-      const todayRecords = data.filter(record => {
-        const entryTime = new Date(record.entryTime);
-        return entryTime >= today && entryTime < tomorrow;
-      });
-      
-      setAllData(todayRecords);
-    } catch (error) {
-      console.error("Failed to load list data:", error);
-      toast.error("Không thể tải danh sách đơn hàng");
-    } finally {
-      setIsLoading(false);
-    }
+    await refetchList();
   };
 
   const handleExportExcel = () => {
@@ -195,23 +187,52 @@ export default function ThanhToan() {
   };
 
   const loadData = async () => {
-    if (!id) return;
-    setIsLoading(true);
-    try {
-      const [recordData, chargesData, typesData] = await Promise.all([
-        dispatchService.getById(id),
-        serviceChargeService.getAll(id),
-        serviceChargeService.getServiceTypes(true)
-      ]);
-      setRecord(recordData);
-      setServiceCharges(chargesData);
-      setServiceTypes(typesData);
+    if (!id) {
+      console.error('[ThanhToan] No ID parameter provided');
+      toast.error('Không tìm thấy mã đơn hàng');
+      navigate("/dieu-do");
+      return;
+    }
 
-      if (recordData) {
-        setNote(`Đơn hàng điều độ (${format(new Date(recordData.entryTime), "dd/MM/yyyy HH:mm")})`);
+    setIsLoading(true);
+    console.log('[ThanhToan] Loading data for dispatch ID:', id);
+
+    try {
+      // Load dispatch record first - this is required
+      const recordData = await dispatchService.getById(id);
+      console.log('[ThanhToan] Record loaded:', recordData ? {
+        id: recordData.id,
+        status: recordData.currentStatus,
+        permitStatus: recordData.permitStatus,
+        plate: recordData.vehiclePlateNumber
+      } : 'null');
+
+      if (!recordData) {
+        console.error('[ThanhToan] Record not found for ID:', id);
+        toast.error('Không tìm thấy thông tin đơn hàng');
+        navigate("/dieu-do");
+        return;
+      }
+
+      setRecord(recordData);
+      setNote(`Đơn hàng điều độ (${format(new Date(recordData.entryTime), "dd/MM/yyyy HH:mm")})`);
+
+      // Load service charges and types - these can fail without blocking the page
+      try {
+        const [chargesData, typesData] = await Promise.all([
+          serviceChargeService.getAll(id),
+          serviceChargeService.getServiceTypes(true)
+        ]);
+        setServiceCharges(chargesData);
+        setServiceTypes(typesData);
+      } catch (chargeError) {
+        console.warn('[ThanhToan] Failed to load service charges:', chargeError);
+        // Don't block - show page with empty charges
+        setServiceCharges([]);
+        setServiceTypes([]);
       }
     } catch (error) {
-      console.error("Failed to load payment data:", error);
+      console.error("[ThanhToan] Failed to load payment data:", error);
       toast.error("Không thể tải dữ liệu thanh toán");
       navigate("/dieu-do");
     } finally {
@@ -230,13 +251,21 @@ export default function ThanhToan() {
     if (!record) return;
     const { total } = calculateTotals();
 
+    console.log('[ThanhToan] Processing payment:', {
+      recordId: record.id,
+      amount: total,
+      status: record.currentStatus,
+      permitStatus: record.permitStatus
+    });
+
     setIsProcessing(true);
     try {
       await dispatchService.processPayment(record.id, { paymentAmount: total, paymentMethod: 'cash' });
+      console.log('[ThanhToan] Payment successful');
       toast.success("Thanh toán thành công!");
       navigate("/thanh-toan");
     } catch (error) {
-      console.error("Failed to process payment:", error);
+      console.error("[ThanhToan] Failed to process payment:", error);
       toast.error("Không thể xử lý thanh toán");
     } finally {
       setIsProcessing(false);
@@ -358,7 +387,7 @@ export default function ThanhToan() {
           </Card>
 
           {/* Orders Grid */}
-          {isLoading ? (
+          {isListLoading && !allDispatchRecords ? (
             <div className="flex items-center justify-center py-20">
               <div className="text-center">
                 <div className="w-10 h-10 border-3 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto" />
