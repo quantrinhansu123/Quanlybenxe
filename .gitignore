@@ -87,3 +87,7 @@ docs/
 .factory/
 client/docs/archived/
 server/docs/archived/
+
+# Claude temp files
+tmpclaude-*
+**/tmpclaude-*
