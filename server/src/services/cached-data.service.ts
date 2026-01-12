@@ -329,19 +329,36 @@ class CachedDataService {
     console.log('[Cache] Preloading common data...')
     const start = Date.now()
 
+    // Load in batches to avoid exhausting connection pool
+    // Batch 1: Small, critical data (fast) - BLOCKING
     await Promise.all([
       this.getAllOperators(),
       this.getAllVehicleTypes(),
       this.getAllRoutes(),
-      this.getAllSchedules(),
-      this.getAllVehicles(),
-      this.getAllDrivers(),
-      this.getAllServices(),
       this.getAllShifts(),
-      this.getAllVehicleBadges(),
     ])
 
-    console.log(`[Cache] Preloaded in ${Date.now() - start}ms`)
+    // Batch 2: Medium data - BLOCKING
+    await Promise.all([
+      this.getAllSchedules(),
+      this.getAllServices(),
+    ])
+
+    console.log(`[Cache] Preloaded critical data in ${Date.now() - start}ms`)
+
+    // Batch 3: Large data - BACKGROUND (non-blocking)
+    // These run after critical data is ready
+    setImmediate(() => {
+      Promise.all([
+        this.getAllVehicles(),
+        this.getAllDrivers(),
+        this.getAllVehicleBadges(),
+      ]).then(() => {
+        console.log(`[Cache] Background data loaded in ${Date.now() - start}ms`)
+      }).catch(err => {
+        console.error('[Cache] Background data load failed:', err)
+      })
+    })
   }
 }
 

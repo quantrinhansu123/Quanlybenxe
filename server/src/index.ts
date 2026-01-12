@@ -155,26 +155,26 @@ if (!isCloudFunction && isMainModule) {
           console.warn('[DB] Drizzle connection failed - check DATABASE_URL')
         }
 
-        // Pre-warm caches in parallel for faster first request
+        // Import cache services (lazy import for faster startup)
         const [
           { vehicleCacheService },
           { cachedData },
-          { preWarmQuanLyCache },
           { chatCacheService }
         ] = await Promise.all([
           import('./modules/fleet/services/vehicle-cache.service.js'),
           import('./services/cached-data.service.js'),
-          import('./controllers/quanly-data.controller.js'),
           import('./modules/chat/services/chat-cache.service.js')
         ])
 
-        // Run cache preloading in parallel (excluding vehicle cache - now lazy loaded)
-        await Promise.all([
-          // vehicleCacheService.preWarm(), // REMOVED - lazy loaded on first request
-          cachedData.preloadCommonData(),
-          preWarmQuanLyCache(),
-          chatCacheService.preWarm()
-        ])
+        // Chat cache is lightweight (~10ms in-memory) - keep blocking for immediate availability
+        await chatCacheService.preWarm()
+
+        // Heavy caches run in background (non-blocking for Dashboard)
+        // preWarmQuanLyCache REMOVED - Dashboard doesn't use it, lazy loads on first /api/quanly-data request
+        const cacheStart = Date.now()
+        cachedData.preloadCommonData()
+          .then(() => console.log(`[Startup] Background cache preload complete in ${Date.now() - cacheStart}ms`))
+          .catch(e => console.error('[Startup] Background cache preload FAILED:', e))
 
         // Schedule background vehicle cache warm after 5s (if no requests yet)
         vehicleCacheService.scheduleBackgroundWarm(5000)
