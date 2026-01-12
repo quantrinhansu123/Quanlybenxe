@@ -190,13 +190,13 @@ export const issuePermit = async (req: AuthRequest, res: Response) => {
 
     if (input.permitStatus === 'approved') {
       updateData.transportOrderCode = input.transportOrderCode
-      updateData.plannedDepartureTime = input.plannedDepartureTime
+      updateData.plannedDepartureTime = input.plannedDepartureTime ? toDate(input.plannedDepartureTime) : null
       updateData.seatCount = input.seatCount
       updateData.status = DISPATCH_STATUS.PERMIT_ISSUED
       updateData.rejectionReason = input.rejectionReason || null
     } else {
       updateData.transportOrderCode = input.transportOrderCode || null
-      updateData.plannedDepartureTime = input.plannedDepartureTime || null
+      updateData.plannedDepartureTime = input.plannedDepartureTime ? toDate(input.plannedDepartureTime) : null
       updateData.seatCount = input.seatCount || null
       updateData.status = DISPATCH_STATUS.PERMIT_REJECTED
       updateData.rejectionReason = input.rejectionReason || null

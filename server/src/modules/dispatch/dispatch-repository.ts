@@ -232,10 +232,9 @@ class DrizzleDispatchRepository extends DrizzleRepository<
   /**
    * Override base delete to invalidate cache
    */
-  async delete(id: string): Promise<boolean> {
-    const result = await super.delete(id)
+  async delete(id: string): Promise<void> {
+    await super.delete(id)
     this.invalidateCache()
-    return result
   }
 }
 
