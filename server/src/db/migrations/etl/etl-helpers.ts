@@ -108,6 +108,15 @@ export function parseDate(dateStr?: string | null): Date | null {
   if (!dateStr) return null
 
   try {
+    // Handle DD/MM/YYYY format (common in Vietnamese data)
+    const ddmmyyyyMatch = /^(\d{1,2})\/(\d{1,2})\/(\d{4})$/.exec(dateStr.trim())
+    if (ddmmyyyyMatch) {
+      const [, day, month, year] = ddmmyyyyMatch
+      const date = new Date(+year, +month - 1, +day)
+      return isNaN(date.getTime()) ? null : date
+    }
+
+    // Fallback to ISO format
     const date = new Date(dateStr)
     return isNaN(date.getTime()) ? null : date
   } catch {
@@ -126,6 +135,24 @@ export function parseBoolean(value: unknown, defaultValue = true): boolean {
   }
   if (typeof value === 'number') return value !== 0
   return defaultValue
+}
+
+/**
+ * Safely truncate string with optional warning
+ */
+export function safeTruncate(
+  value: string | null | undefined,
+  maxLength: number,
+  fieldName?: string,
+  recordId?: string
+): string | null {
+  if (!value) return null
+  if (value.length <= maxLength) return value
+
+  if (fieldName && recordId) {
+    console.warn(`  ⚠ Truncated ${fieldName} for ${recordId}: ${value.length} → ${maxLength}`)
+  }
+  return value.substring(0, maxLength)
 }
 
 /**

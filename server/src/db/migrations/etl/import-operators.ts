@@ -4,7 +4,7 @@
  */
 import { db } from '../../drizzle'
 import { operators } from '../../schema'
-import { readFileSync } from 'fs'
+import { readFileSync, existsSync } from 'fs'
 import { join } from 'path'
 import {
   storeIdMapping,
@@ -33,27 +33,54 @@ interface FirebaseOperator {
   source?: string
   created_at?: string
   updated_at?: string
-  // Alternative field names from datasheet
+  // Alternative field names from datasheet (Vietnamese)
   DONVIVANTAI?: string
+  ten_dvvt?: string
   TENDV?: string
+  ten_dv?: string
   DIADV?: string
+  dia_chi?: string
   DIENTHOAI?: string
+  so_dien_thoai?: string
 }
 
 export async function importOperators(exportDir: string): Promise<number> {
   ensureDbInitialized()
 
-  const filePath = join(exportDir, 'operators.json')
-  let data: FirebaseOperator[]
+  // Try both operators.json and datasheet_operators.json
+  const operatorsFile = join(exportDir, 'operators.json')
+  const datasheetFile = join(exportDir, 'datasheet_operators.json')
 
-  try {
-    data = JSON.parse(readFileSync(filePath, 'utf-8'))
-  } catch {
-    console.log('  ⚠ operators.json not found, skipping...')
+  let data: FirebaseOperator[] = []
+
+  // Load operators.json (app-created, small)
+  if (existsSync(operatorsFile)) {
+    try {
+      const appOperators = JSON.parse(readFileSync(operatorsFile, 'utf-8'))
+      data = data.concat(appOperators)
+      console.log(`  Loaded ${appOperators.length} operators from operators.json`)
+    } catch {
+      console.log('  ⚠ Failed to read operators.json')
+    }
+  }
+
+  // Load datasheet_operators.json (datasheet, large)
+  if (existsSync(datasheetFile)) {
+    try {
+      const datasheetOperators = JSON.parse(readFileSync(datasheetFile, 'utf-8'))
+      data = data.concat(datasheetOperators)
+      console.log(`  Loaded ${datasheetOperators.length} operators from datasheet_operators.json`)
+    } catch {
+      console.log('  ⚠ Failed to read datasheet_operators.json')
+    }
+  }
+
+  if (data.length === 0) {
+    console.log('  ⚠ No operators data found, skipping...')
     return 0
   }
 
-  console.log(`  Importing ${data.length} operators...`)
+  console.log(`  Importing ${data.length} operators total...`)
 
   let imported = 0
   let skipped = 0
@@ -63,18 +90,19 @@ export async function importOperators(exportDir: string): Promise<number> {
 
     try {
       // Extract name from various possible fields
-      const name = item.name || item.TENDV || item.DONVIVANTAI || `Operator_${item.id}`
+      const name = item.name || item.TENDV || item.ten_dv || item.DONVIVANTAI || item.ten_dvvt || `Operator_${item.id}`
 
-      // Generate code if not present
-      const code = item.code || item.DONVIVANTAI || item.id.substring(0, 20)
+      // Generate code from various sources, normalize to uppercase
+      const rawCode = item.code || item.DONVIVANTAI || item.ten_dvvt || item.id
+      const code = rawCode.trim().toUpperCase().substring(0, 50)
 
       const [inserted] = await db!.insert(operators).values({
         firebaseId: item._firebase_id || item.id,
-        code: code.substring(0, 50), // Ensure max length
+        code: code,
         name: name.substring(0, 255),
         shortName: item.short_name?.substring(0, 100) || null,
-        address: item.address || item.DIADV || null,
-        phone: cleanPhoneNumber(item.phone || item.DIENTHOAI),
+        address: item.address || item.DIADV || item.dia_chi || null,
+        phone: cleanPhoneNumber(item.phone || item.DIENTHOAI || item.so_dien_thoai),
         email: item.email?.substring(0, 255) || null,
         taxCode: item.tax_code?.substring(0, 20) || null,
         representative: item.representative?.substring(0, 255) || null,

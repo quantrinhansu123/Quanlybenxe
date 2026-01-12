@@ -13,6 +13,7 @@ import {
   parseDate,
   logProgress,
   ensureDbInitialized,
+  logInvalidFK,
 } from './etl-helpers'
 
 interface FirebaseVehicle {
@@ -22,7 +23,9 @@ interface FirebaseVehicle {
   operator_id?: string
   vehicle_type_id?: string
   seat_capacity?: number
+  seat_count?: number
   bed_capacity?: number
+  load_capacity?: number
   manufacturer?: string
   brand?: string
   model?: string
@@ -42,16 +45,29 @@ interface FirebaseVehicle {
   gps_password?: string
   province?: string
   notes?: string
+  registration_info?: string
   is_active?: boolean | string
   operational_status?: string
   operator_name?: string
   operator_code?: string
   owner_name?: string
+  owner_address?: string
+  has_transport_business?: boolean
+  vehicle_category?: string
+  vehicle_type?: string
   metadata?: Record<string, unknown>
   synced_at?: string
   source?: string
   created_at?: string
   updated_at?: string
+}
+
+/**
+ * Normalize plate number: trim, uppercase, remove spaces/dots/dashes
+ * Example: "98H-082.80" -> "98H08280"
+ */
+function normalizePlateNumber(plate: string): string {
+  return plate.trim().toUpperCase().replace(/[\s.\-]/g, '')
 }
 
 export async function importVehicles(exportDir: string): Promise<number> {
@@ -74,8 +90,16 @@ export async function importVehicles(exportDir: string): Promise<number> {
     }
   }
 
-  // Skip datasheet_vehicles.json for now - too large and different structure
-  // Can be handled separately if needed
+  // Load datasheet_vehicles.json (bulk import from Google Sheets)
+  if (existsSync(datasheetFile)) {
+    try {
+      const datasheetVehicles = JSON.parse(readFileSync(datasheetFile, 'utf-8'))
+      data = data.concat(datasheetVehicles)
+      console.log(`  Loaded ${datasheetVehicles.length} vehicles from datasheet_vehicles.json`)
+    } catch (error) {
+      console.log('  ⚠ Failed to read datasheet_vehicles.json:', error)
+    }
+  }
 
   if (data.length === 0) {
     console.log('  ⚠ No vehicles data found, skipping...')
@@ -95,14 +119,20 @@ export async function importVehicles(exportDir: string): Promise<number> {
       let operatorId = null
       if (item.operator_id) {
         operatorId = await getPostgresId(item.operator_id, 'operators')
+        if (!operatorId) {
+          await logInvalidFK(exportDir, 'vehicles', item.id, 'operator_id', item.operator_id, 'operators')
+        }
       }
 
       let vehicleTypeId = null
       if (item.vehicle_type_id) {
         vehicleTypeId = await getPostgresId(item.vehicle_type_id, 'vehicle_types')
+        if (!vehicleTypeId) {
+          await logInvalidFK(exportDir, 'vehicles', item.id, 'vehicle_type_id', item.vehicle_type_id, 'vehicle_types')
+        }
       }
 
-      // Get plate number
+      // Get and normalize plate number
       const plateNumber = item.plate_number
       if (!plateNumber) {
         console.log(`\n  ⚠ Skipping vehicle ${item.id}: no plate_number`)
@@ -110,13 +140,24 @@ export async function importVehicles(exportDir: string): Promise<number> {
         continue
       }
 
+      const normalizedPlate = normalizePlateNumber(plateNumber)
+
+      // Get seat count (prefer seat_count from datasheet, fallback to seat_capacity)
+      const seatCount = item.seat_count ?? item.seat_capacity ?? 0
+
+      // Get notes (combine notes and registration_info if both exist)
+      let notes = item.notes || ''
+      if (item.registration_info) {
+        notes = notes ? `${notes}\n\n${item.registration_info}` : item.registration_info
+      }
+
       const [inserted] = await db!.insert(vehicles).values({
         firebaseId: item._firebase_id || item.id,
-        plateNumber: plateNumber.substring(0, 20),
+        plateNumber: normalizedPlate.substring(0, 20),
         operatorId: operatorId,
         vehicleTypeId: vehicleTypeId,
-        seatCount: item.seat_capacity || 0,
-        bedCapacity: item.bed_capacity || 0,
+        seatCount: seatCount,
+        bedCapacity: item.bed_capacity || item.load_capacity || 0,
         brand: (item.brand || item.manufacturer)?.substring(0, 100) || null,
         model: item.model?.substring(0, 100) || null,
         yearOfManufacture: item.manufacture_year || item.year_of_manufacture || null,
@@ -134,7 +175,7 @@ export async function importVehicles(exportDir: string): Promise<number> {
         gpsUsername: item.gps_username?.substring(0, 100) || null,
         gpsPassword: item.gps_password?.substring(0, 100) || null,
         province: item.province?.substring(0, 100) || null,
-        notes: item.notes?.substring(0, 500) || null,
+        notes: notes?.substring(0, 500) || null,
         isActive: parseBoolean(item.is_active),
         operationalStatus: item.operational_status?.substring(0, 50) || 'active',
         operatorName: (item.operator_name || item.owner_name)?.substring(0, 255) || null,
