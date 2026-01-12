@@ -110,28 +110,9 @@ export const dashboardService = {
   },
 
   getDashboardData: async (): Promise<DashboardData> => {
-    try {
-      const response = await api.get<DashboardData>('/dashboard')
-      return response.data
-    } catch (error) {
-      console.error('Error fetching dashboard data:', error)
-      // Fallback to individual calls
-      const [stats, chartData, recentActivity, warnings] = await Promise.all([
-        dashboardService.getStats(),
-        dashboardService.getChartData(),
-        dashboardService.getRecentActivity(),
-        dashboardService.getWarnings(),
-      ])
-
-      return {
-        stats,
-        chartData,
-        recentActivity,
-        warnings,
-        weeklyStats: [],
-        monthlyStats: [],
-        routeBreakdown: [],
-      }
-    }
+    // Single API call - no fallback to prevent masking backend issues
+    // Dashboard service on backend already handles data aggregation
+    const response = await api.get<DashboardData>('/dashboard')
+    return response.data
   },
 }

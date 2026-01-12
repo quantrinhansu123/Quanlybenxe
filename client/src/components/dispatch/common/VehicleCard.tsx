@@ -1,3 +1,4 @@
+import { memo } from "react";
 import { Bus, MapPin, User, Users, FileCheck, RefreshCw, Zap, XCircle, Timer, ArrowRightLeft } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { formatVietnamDateTime } from "@/lib/vietnam-time";
@@ -15,7 +16,7 @@ interface VehicleCardProps {
   actionButtons: React.ReactNode;
 }
 
-export function VehicleCard({ record, status, index, vehicleStatus, onClick, actionButtons }: VehicleCardProps) {
+export const VehicleCard = memo(function VehicleCard({ record, status, index, vehicleStatus, onClick, actionButtons }: VehicleCardProps) {
   const config = columnConfig[status];
   const iconBg = getVehicleIconBg(record, status);
 
@@ -95,7 +96,7 @@ export function VehicleCard({ record, status, index, vehicleStatus, onClick, act
       )} />
     </div>
   );
-}
+});
 
 function getVehicleIconBg(record: DispatchRecord, status: DisplayStatus) {
   if (record.metadata?.type === "irregular") return "from-amber-500 to-orange-600";
