@@ -153,28 +153,28 @@ export class DashboardService {
     const vehicleExpiryDocs: Array<{ vehicleId: string; plateNumber: string; documentType: string; expiryDate: string }> = [];
 
     for (const vehicle of vehiclesData) {
-      if (vehicle.inspectionExpiryDate) {
+      if (vehicle.roadWorthinessExpiry) {
         vehicleExpiryDocs.push({
           vehicleId: vehicle.id,
           plateNumber: vehicle.plateNumber,
           documentType: 'registration',
-          expiryDate: vehicle.inspectionExpiryDate,
+          expiryDate: vehicle.roadWorthinessExpiry,
         });
       }
-      if (vehicle.insuranceExpiryDate) {
+      if (vehicle.insuranceExpiry) {
         vehicleExpiryDocs.push({
           vehicleId: vehicle.id,
           plateNumber: vehicle.plateNumber,
           documentType: 'insurance',
-          expiryDate: vehicle.insuranceExpiryDate,
+          expiryDate: vehicle.insuranceExpiry,
         });
       }
-      if (vehicle.inspectionExpiryDate) {
+      if (vehicle.roadWorthinessExpiry) {
         vehicleExpiryDocs.push({
           vehicleId: vehicle.id,
           plateNumber: vehicle.plateNumber,
           documentType: 'inspection',
-          expiryDate: vehicle.inspectionExpiryDate,
+          expiryDate: vehicle.roadWorthinessExpiry,
         });
       }
     }

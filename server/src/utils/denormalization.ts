@@ -81,7 +81,7 @@ export async function fetchDenormalizedData(params: {
         .select({
           id: vehicles.id,
           plateNumber: vehicles.plateNumber,
-          seatCount: vehicles.seatCapacity,
+          seatCount: vehicles.seatCount,
           operatorId: vehicles.operatorId,
         })
         .from(vehicles)

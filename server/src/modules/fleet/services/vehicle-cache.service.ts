@@ -117,7 +117,7 @@ class VehicleCacheService {
 
         const operatorName = (x.operatorName || '').trim().toLowerCase();
         const vehicleCategory = (x.metadata as any)?.vehicle_category || '';
-        const seatCount = x.seatCapacity || 0;
+        const seatCount = x.seatCount || 0;
         // If vehicle category contains "giường nằm", seatCount is actually bedCount
         const hasBeds = isBedVehicle(vehicleCategory);
 
@@ -131,7 +131,7 @@ class VehicleCacheService {
           bedCapacity: hasBeds ? seatCount : 0,
           manufacturer: x.brand || '',
           modelCode: x.model || '',
-          manufactureYear: x.manufactureYear || null,
+          manufactureYear: x.yearOfManufacture || null,
           color: x.color || '',
           chassisNumber: x.chassisNumber || '',
           engineNumber: x.engineNumber || '',
@@ -141,8 +141,8 @@ class VehicleCacheService {
           isActive: x.isActive !== false,
           notes: (x.metadata as any)?.notes || '',
           source: 'legacy',
-          inspectionExpiryDate: x.inspectionExpiryDate || null,
-          insuranceExpiryDate: x.insuranceExpiryDate || null,
+          inspectionExpiryDate: x.roadWorthinessExpiry || null,
+          insuranceExpiryDate: x.insuranceExpiry || null,
           documents: {},
         });
 
@@ -224,11 +224,11 @@ class VehicleCacheService {
 
         if (matchingVehicle) {
           operatorName = matchingVehicle.operatorName || '';
-          seatCount = matchingVehicle.seatCapacity || 0;
+          seatCount = matchingVehicle.seatCount || 0;
           vehicleCategory = (matchingVehicle.metadata as any)?.vehicle_category || '';
           manufacturer = matchingVehicle.brand || '';
           modelCode = matchingVehicle.model || '';
-          manufactureYear = matchingVehicle.manufactureYear || null;
+          manufactureYear = matchingVehicle.yearOfManufacture || null;
           color = matchingVehicle.color || '';
           chassisNumber = matchingVehicle.chassisNumber || '';
           engineNumber = matchingVehicle.engineNumber || '';
@@ -288,7 +288,7 @@ class VehicleCacheService {
       if (!data) return null;
 
       const vehicleCategory = (data.metadata as any)?.vehicle_category || '';
-      const seatCount = data.seatCapacity || 0;
+      const seatCount = data.seatCount || 0;
       const hasBeds = isBedVehicle(vehicleCategory);
 
       return {
@@ -301,7 +301,7 @@ class VehicleCacheService {
         bedCapacity: hasBeds ? seatCount : 0,
         manufacturer: data.brand || '',
         modelCode: data.model || '',
-        manufactureYear: data.manufactureYear || null,
+        manufactureYear: data.yearOfManufacture || null,
         color: data.color || '',
         chassisNumber: data.chassisNumber || '',
         engineNumber: data.engineNumber || '',

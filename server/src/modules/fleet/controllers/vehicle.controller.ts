@@ -107,13 +107,13 @@ export const createVehicle = async (req: Request, res: Response) => {
         plateNumber: validated.plateNumber,
         vehicleTypeId: validated.vehicleTypeId || null,
         operatorId: validated.operatorId || null,
-        seatCapacity: validated.seatCapacity,
+        seatCount: validated.seatCapacity,
         bedCapacity: validated.bedCapacity || 0,
         chassisNumber: validated.chassisNumber || null,
         engineNumber: validated.engineNumber || null,
         imageUrl: validated.imageUrl || null,
-        insuranceExpiryDate: validated.insuranceExpiryDate || null,
-        inspectionExpiryDate: validated.inspectionExpiryDate || null,
+        insuranceExpiry: validated.insuranceExpiryDate || null,
+        roadWorthinessExpiry: validated.inspectionExpiryDate || null,
         cargoLength: validated.cargoLength || null,
         cargoWidth: validated.cargoWidth || null,
         cargoHeight: validated.cargoHeight || null,
@@ -171,13 +171,13 @@ export const updateVehicle = async (req: AuthRequest, res: Response) => {
     } else if (validated.operatorId !== undefined) {
       updateData.operatorId = validated.operatorId || null;
     }
-    if (validated.seatCapacity) updateData.seatCapacity = validated.seatCapacity;
+    if (validated.seatCapacity) updateData.seatCount = validated.seatCapacity;
     if (validated.bedCapacity !== undefined) updateData.bedCapacity = validated.bedCapacity || 0;
     if (validated.chassisNumber !== undefined) updateData.chassisNumber = validated.chassisNumber || null;
     if (validated.engineNumber !== undefined) updateData.engineNumber = validated.engineNumber || null;
     if (validated.imageUrl !== undefined) updateData.imageUrl = validated.imageUrl || null;
-    if (validated.insuranceExpiryDate !== undefined) updateData.insuranceExpiryDate = validated.insuranceExpiryDate || null;
-    if (validated.inspectionExpiryDate !== undefined) updateData.inspectionExpiryDate = validated.inspectionExpiryDate || null;
+    if (validated.insuranceExpiryDate !== undefined) updateData.insuranceExpiry = validated.insuranceExpiryDate || null;
+    if (validated.inspectionExpiryDate !== undefined) updateData.roadWorthinessExpiry = validated.inspectionExpiryDate || null;
     if (validated.cargoLength !== undefined) updateData.cargoLength = validated.cargoLength || null;
     if (validated.cargoWidth !== undefined) updateData.cargoWidth = validated.cargoWidth || null;
     if (validated.cargoHeight !== undefined) updateData.cargoHeight = validated.cargoHeight || null;

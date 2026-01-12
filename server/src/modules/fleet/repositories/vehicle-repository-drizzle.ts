@@ -34,16 +34,15 @@ class DrizzleVehicleRepository extends DrizzleRepository<
         plateNumber: vehicles.plateNumber,
         operatorId: vehicles.operatorId,
         vehicleTypeId: vehicles.vehicleTypeId,
-        seatCapacity: vehicles.seatCapacity,
+        seatCount: vehicles.seatCount,
         brand: vehicles.brand,
         model: vehicles.model,
-        manufactureYear: vehicles.manufactureYear,
+        yearOfManufacture: vehicles.yearOfManufacture,
         color: vehicles.color,
         chassisNumber: vehicles.chassisNumber,
         engineNumber: vehicles.engineNumber,
-        inspectionExpiryDate: vehicles.inspectionExpiryDate,
-        insuranceExpiryDate: vehicles.insuranceExpiryDate,
-        inspectionExpiryDate2: vehicles.inspectionExpiryDate,
+        roadWorthinessExpiry: vehicles.roadWorthinessExpiry,
+        insuranceExpiry: vehicles.insuranceExpiry,
         isActive: vehicles.isActive,
         operationalStatus: vehicles.operationalStatus,
         operatorName: vehicles.operatorName,
@@ -84,13 +83,13 @@ class DrizzleVehicleRepository extends DrizzleRepository<
           plate_number: row.plateNumber,
           operator_id: row.operatorId ?? undefined,
           vehicle_type_id: row.vehicleTypeId ?? undefined,
-          seat_capacity: row.seatCapacity || 0,
+          seat_capacity: row.seatCount || 0,
           bed_capacity: 0,
           chassis_number: row.chassisNumber ?? undefined,
           engine_number: row.engineNumber ?? undefined,
           image_url: undefined,
-          insurance_expiry_date: row.insuranceExpiryDate ?? undefined,
-          inspection_expiry_date: row.inspectionExpiryDate ?? undefined,
+          insurance_expiry_date: row.insuranceExpiry ?? undefined,
+          inspection_expiry_date: row.roadWorthinessExpiry ?? undefined,
           cargo_length: undefined,
           cargo_width: undefined,
           cargo_height: undefined,
@@ -134,16 +133,15 @@ class DrizzleVehicleRepository extends DrizzleRepository<
         plateNumber: vehicles.plateNumber,
         operatorId: vehicles.operatorId,
         vehicleTypeId: vehicles.vehicleTypeId,
-        seatCapacity: vehicles.seatCapacity,
+        seatCount: vehicles.seatCount,
         brand: vehicles.brand,
         model: vehicles.model,
-        manufactureYear: vehicles.manufactureYear,
+        yearOfManufacture: vehicles.yearOfManufacture,
         color: vehicles.color,
         chassisNumber: vehicles.chassisNumber,
         engineNumber: vehicles.engineNumber,
-        inspectionExpiryDate: vehicles.inspectionExpiryDate,
-        insuranceExpiryDate: vehicles.insuranceExpiryDate,
-        inspectionExpiryDate2: vehicles.inspectionExpiryDate,
+        roadWorthinessExpiry: vehicles.roadWorthinessExpiry,
+        insuranceExpiry: vehicles.insuranceExpiry,
         isActive: vehicles.isActive,
         operationalStatus: vehicles.operationalStatus,
         operatorName: vehicles.operatorName,
@@ -187,13 +185,13 @@ class DrizzleVehicleRepository extends DrizzleRepository<
         plate_number: row.plateNumber,
         operator_id: row.operatorId ?? undefined,
         vehicle_type_id: row.vehicleTypeId ?? undefined,
-        seat_capacity: row.seatCapacity || 0,
+        seat_capacity: row.seatCount || 0,
         bed_capacity: 0,
         chassis_number: row.chassisNumber ?? undefined,
         engine_number: row.engineNumber ?? undefined,
         image_url: undefined,
-        insurance_expiry_date: row.insuranceExpiryDate ?? undefined,
-        inspection_expiry_date: row.inspectionExpiryDate ?? undefined,
+        insurance_expiry_date: row.insuranceExpiry ?? undefined,
+        inspection_expiry_date: row.roadWorthinessExpiry ?? undefined,
         cargo_length: undefined,
         cargo_width: undefined,
         cargo_height: undefined,
@@ -312,11 +310,11 @@ class DrizzleVehicleRepository extends DrizzleRepository<
         plateNumber: data.plateNumber,
         vehicleTypeId: data.vehicleTypeId || null,
         operatorId: data.operatorId || null,
-        seatCapacity: data.seatCapacity,
+        seatCount: data.seatCapacity,
         chassisNumber: data.chassisNumber || null,
         engineNumber: data.engineNumber || null,
-        insuranceExpiryDate: data.insuranceExpiryDate || null,
-        inspectionExpiryDate: data.inspectionExpiryDate || null,
+        insuranceExpiry: data.insuranceExpiryDate || null,
+        roadWorthinessExpiry: data.inspectionExpiryDate || null,
         isActive: data.isActive ?? true,
       })
       .returning()
@@ -363,13 +361,13 @@ class DrizzleVehicleRepository extends DrizzleRepository<
     if (data.plateNumber !== undefined) updateData.plateNumber = data.plateNumber
     if (data.vehicleTypeId !== undefined) updateData.vehicleTypeId = data.vehicleTypeId || null
     if (data.operatorId !== undefined) updateData.operatorId = data.operatorId || null
-    if (data.seatCapacity !== undefined) updateData.seatCapacity = data.seatCapacity
+    if (data.seatCapacity !== undefined) updateData.seatCount = data.seatCapacity
     if (data.chassisNumber !== undefined) updateData.chassisNumber = data.chassisNumber || null
     if (data.engineNumber !== undefined) updateData.engineNumber = data.engineNumber || null
     if (data.insuranceExpiryDate !== undefined)
-      updateData.insuranceExpiryDate = data.insuranceExpiryDate || null
+      updateData.insuranceExpiry = data.insuranceExpiryDate || null
     if (data.inspectionExpiryDate !== undefined)
-      updateData.inspectionExpiryDate = data.inspectionExpiryDate || null
+      updateData.roadWorthinessExpiry = data.inspectionExpiryDate || null
     if (data.isActive !== undefined) updateData.isActive = data.isActive
 
     await database

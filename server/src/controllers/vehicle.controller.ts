@@ -12,14 +12,14 @@ const vehicleSchema = z.object({
   plateNumber: z.string().min(1, 'Plate number is required'),
   vehicleTypeId: z.string().min(1).optional(),
   operatorId: z.string().min(1, 'Invalid operator ID').optional(),
-  seatCapacity: z.number().int().positive('Seat capacity must be positive'),
+  seatCount: z.number().int().positive('Seat capacity must be positive'),
   bedCapacity: z.number().int().optional(),
   chassisNumber: z.string().optional(),
   engineNumber: z.string().optional(),
   imageUrl: z.string().url().optional().or(z.literal('')),
-  
-  insuranceExpiryDate: z.string().optional(),
-  inspectionExpiryDate: z.string().optional(),
+
+  insuranceExpiry: z.string().optional(),
+  roadWorthinessExpiry: z.string().optional(),
   
   cargoLength: z.number().optional(),
   cargoWidth: z.number().optional(),
@@ -238,16 +238,16 @@ export const getVehicleById = async (req: Request, res: Response) => {
         name: operator.name,
         code: operator.code,
       } : undefined,
-      seatCapacity: vehicle.seatCapacity,
+      seatCount: vehicle.seatCount,
       bedCapacity: vehicle.bedCapacity,
-      manufactureYear: vehicle.manufactureYear,
+      yearOfManufacture: vehicle.yearOfManufacture,
       chassisNumber: vehicle.chassisNumber,
       engineNumber: vehicle.engineNumber,
       color: vehicle.color,
       imageUrl: vehicle.imageUrl,
 
-      insuranceExpiryDate: vehicle.insuranceExpiryDate,
-      inspectionExpiryDate: vehicle.inspectionExpiryDate,
+      insuranceExpiry: vehicle.insuranceExpiry,
+      roadWorthinessExpiry: vehicle.roadWorthinessExpiry,
 
       cargoLength: vehicle.cargoLength,
       cargoWidth: vehicle.cargoWidth,
@@ -285,9 +285,9 @@ export const createVehicle = async (req: Request, res: Response) => {
 
     const validated = vehicleSchema.parse(req.body)
     const {
-      plateNumber, vehicleTypeId, operatorId, seatCapacity, bedCapacity,
+      plateNumber, vehicleTypeId, operatorId, seatCount, bedCapacity,
       chassisNumber, engineNumber, imageUrl,
-      insuranceExpiryDate, inspectionExpiryDate,
+      insuranceExpiry, roadWorthinessExpiry,
       cargoLength, cargoWidth, cargoHeight,
       gpsProvider, gpsUsername, gpsPassword,
       province,
@@ -299,14 +299,14 @@ export const createVehicle = async (req: Request, res: Response) => {
       plateNumber,
       vehicleTypeId: vehicleTypeId || null,
       operatorId: operatorId || null,
-      seatCapacity,
+      seatCount,
       bedCapacity: bedCapacity || 0,
       chassisNumber: chassisNumber || null,
       engineNumber: engineNumber || null,
       imageUrl: imageUrl || null,
 
-      insuranceExpiryDate: insuranceExpiryDate || null,
-      inspectionExpiryDate: inspectionExpiryDate || null,
+      insuranceExpiry: insuranceExpiry || null,
+      roadWorthinessExpiry: roadWorthinessExpiry || null,
 
       cargoLength: cargoLength || null,
       cargoWidth: cargoWidth || null,
@@ -392,13 +392,13 @@ export const createVehicle = async (req: Request, res: Response) => {
         name: operator.name,
         code: operator.code,
       } : undefined,
-      seatCapacity: vehicle.seatCapacity,
+      seatCount: vehicle.seatCount,
       bedCapacity: vehicle.bedCapacity,
       chassisNumber: vehicle.chassisNumber,
       engineNumber: vehicle.engineNumber,
 
-      insuranceExpiryDate: vehicle.insuranceExpiryDate,
-      inspectionExpiryDate: vehicle.inspectionExpiryDate,
+      insuranceExpiry: vehicle.insuranceExpiry,
+      roadWorthinessExpiry: vehicle.roadWorthinessExpiry,
 
       cargoLength: vehicle.cargoLength,
       cargoWidth: vehicle.cargoWidth,
@@ -458,14 +458,14 @@ export const updateVehicle = async (req: AuthRequest, res: Response) => {
       // Validated and present in request
       updateData.operatorId = validated.operatorId || null
     }
-    if (validated.seatCapacity) updateData.seatCapacity = validated.seatCapacity
+    if (validated.seatCount) updateData.seatCount = validated.seatCount
     if (validated.bedCapacity !== undefined) updateData.bedCapacity = validated.bedCapacity || 0
     if (validated.chassisNumber !== undefined) updateData.chassisNumber = validated.chassisNumber || null
     if (validated.engineNumber !== undefined) updateData.engineNumber = validated.engineNumber || null
     if (validated.imageUrl !== undefined) updateData.imageUrl = validated.imageUrl || null
 
-    if (validated.insuranceExpiryDate !== undefined) updateData.insuranceExpiryDate = validated.insuranceExpiryDate || null
-    if (validated.inspectionExpiryDate !== undefined) updateData.inspectionExpiryDate = validated.inspectionExpiryDate || null
+    if (validated.insuranceExpiry !== undefined) updateData.insuranceExpiry = validated.insuranceExpiry || null
+    if (validated.roadWorthinessExpiry !== undefined) updateData.roadWorthinessExpiry = validated.roadWorthinessExpiry || null
 
     if (validated.cargoLength !== undefined) updateData.cargoLength = validated.cargoLength || null
     if (validated.cargoWidth !== undefined) updateData.cargoWidth = validated.cargoWidth || null
@@ -593,16 +593,16 @@ export const updateVehicle = async (req: AuthRequest, res: Response) => {
         name: operator.name,
         code: operator.code,
       } : undefined,
-      seatCapacity: vehicle.seatCapacity,
+      seatCount: vehicle.seatCount,
       bedCapacity: vehicle.bedCapacity,
-      manufactureYear: vehicle.manufactureYear,
+      yearOfManufacture: vehicle.yearOfManufacture,
       chassisNumber: vehicle.chassisNumber,
       engineNumber: vehicle.engineNumber,
       color: vehicle.color,
       imageUrl: vehicle.imageUrl,
 
-      insuranceExpiryDate: vehicle.insuranceExpiryDate,
-      inspectionExpiryDate: vehicle.inspectionExpiryDate,
+      insuranceExpiry: vehicle.insuranceExpiry,
+      roadWorthinessExpiry: vehicle.roadWorthinessExpiry,
 
       cargoLength: vehicle.cargoLength,
       cargoWidth: vehicle.cargoWidth,
