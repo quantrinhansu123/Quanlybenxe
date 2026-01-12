@@ -136,52 +136,55 @@ const isCloudFunction = process.env.FUNCTION_TARGET ||
 const isMainModule = process.argv[1]?.includes('index.js') || process.argv[1]?.includes('index.ts')
 
 if (!isCloudFunction && isMainModule) {
-  // Import and test Firebase connection on startup
-  import('./config/database.js').then(async ({ testFirebaseConnection }) => {
-    const isConnected = await testFirebaseConnection()
-    if (!isConnected) {
-      console.error('========================================')
-      console.error('WARNING: Firebase connection failed!')
-      console.error('API calls to database will fail.')
-      console.error('Please check:')
-      console.error('  1. SERVICE_ACCOUNT_PATH points to valid JSON file')
-      console.error('  2. RTDB_URL is correct')
-      console.error('  3. Service account has database access')
-      console.error('========================================')
-    }
+  const startTime = Date.now()
 
-    // Start server first, then preload cache in background
-    app.listen(PORT, () => {
-      console.log(`Server is running on http://localhost:${PORT}`)
-      console.log(`API available at http://localhost:${PORT}/api`)
-      console.log(`Health check: http://localhost:${PORT}/health`)
-      
-      // Preload cache in background (non-blocking)
-      Promise.resolve().then(async () => {
-        try {
-          // Pre-warm vehicle cache FIRST (used by /api/vehicles - DieuDo page)
-          const { vehicleCacheService } = await import('./modules/fleet/services/vehicle-cache.service.js')
-          await vehicleCacheService.preWarm()
-          
-          const { cachedData } = await import('./services/cached-data.service.js')
-          await cachedData.preloadCommonData()
-          
-          // Pre-warm quanly-data cache (runs in background)
-          const { preWarmQuanLyCache } = await import('./controllers/quanly-data.controller.js')
-          await preWarmQuanLyCache()
-          
-          // Pre-warm chat cache for AI chatbot (all collections)
-          const { chatCacheService } = await import('./modules/chat/services/chat-cache.service.js')
-          await chatCacheService.preWarm()
-        } catch (error) {
-          console.warn('[Cache] Failed to preload:', error)
+  // Start server IMMEDIATELY - no blocking operations before listen
+  app.listen(PORT, () => {
+    const listenTime = Date.now() - startTime
+    console.log(`Server is running on http://localhost:${PORT} (started in ${listenTime}ms)`)
+    console.log(`API available at http://localhost:${PORT}/api`)
+    console.log(`Health check: http://localhost:${PORT}/health`)
+
+    // All initialization runs in background AFTER server is ready
+    setImmediate(async () => {
+      try {
+        // Test Drizzle connection (non-blocking, just for logging)
+        const { testDrizzleConnection } = await import('./db/drizzle.js')
+        const isConnected = await testDrizzleConnection()
+        if (!isConnected) {
+          console.warn('[DB] Drizzle connection failed - check DATABASE_URL')
         }
-      })
-    })
 
-  }).catch((error) => {
-    console.error('Failed to import database config:', error)
-    process.exit(1)
+        // Pre-warm caches in parallel for faster first request
+        const [
+          { vehicleCacheService },
+          { cachedData },
+          { preWarmQuanLyCache },
+          { chatCacheService }
+        ] = await Promise.all([
+          import('./modules/fleet/services/vehicle-cache.service.js'),
+          import('./services/cached-data.service.js'),
+          import('./controllers/quanly-data.controller.js'),
+          import('./modules/chat/services/chat-cache.service.js')
+        ])
+
+        // Run cache preloading in parallel (excluding vehicle cache - now lazy loaded)
+        await Promise.all([
+          // vehicleCacheService.preWarm(), // REMOVED - lazy loaded on first request
+          cachedData.preloadCommonData(),
+          preWarmQuanLyCache(),
+          chatCacheService.preWarm()
+        ])
+
+        // Schedule background vehicle cache warm after 5s (if no requests yet)
+        vehicleCacheService.scheduleBackgroundWarm(5000)
+
+        console.log(`[Startup] Initialization complete in ${Date.now() - startTime}ms`)
+        console.log(`[Startup] Vehicle cache will warm on first request or after 5s`)
+      } catch (error) {
+        console.warn('[Startup] Background initialization failed:', error)
+      }
+    })
   })
 }
 
