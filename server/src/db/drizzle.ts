@@ -18,10 +18,11 @@ if (!connectionString) {
 // Note: For Supabase, use the connection pooler URL (port 6543) for better performance
 const client = connectionString
   ? postgres(connectionString, {
-      max: 10, // Maximum connections in pool
-      idle_timeout: 20, // Close idle connections after 20 seconds
-      connect_timeout: 10, // Connection timeout in seconds
+      max: 20, // Increased: Maximum connections in pool (was 10)
+      idle_timeout: 30, // Close idle connections after 30 seconds (was 20)
+      connect_timeout: 15, // Connection timeout in seconds (was 10)
       prepare: false, // Required for Supabase Transaction Mode
+      max_lifetime: 60 * 30, // Max connection lifetime: 30 minutes
     })
   : null
 

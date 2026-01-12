@@ -2,7 +2,7 @@
  * Vehicle Badges Schema (Phù hiệu xe)
  * Migrated from Firebase RTDB: vehicle_badges, datasheet/PHUHIEUXE
  */
-import { pgTable, uuid, varchar, date, boolean, timestamp, jsonb, index } from 'drizzle-orm/pg-core'
+import { pgTable, uuid, varchar, boolean, timestamp, jsonb, index } from 'drizzle-orm/pg-core'
 import { relations } from 'drizzle-orm'
 import { vehicles } from './vehicles'
 import { operators } from './operators'
@@ -22,9 +22,9 @@ export const vehicleBadges = pgTable('vehicle_badges', {
   badgeType: varchar('badge_type', { length: 50 }),
   routeCode: varchar('route_code', { length: 50 }),
   routeName: varchar('route_name', { length: 255 }),
-  // Validity
-  issueDate: date('issue_date'),
-  expiryDate: date('expiry_date'),
+  // Validity (stored as YYYY-MM-DD strings)
+  issueDate: varchar('issue_date', { length: 10 }),
+  expiryDate: varchar('expiry_date', { length: 10 }),
   // Status
   status: varchar('status', { length: 50 }).default('active'),
   isActive: boolean('is_active').default(true).notNull(),

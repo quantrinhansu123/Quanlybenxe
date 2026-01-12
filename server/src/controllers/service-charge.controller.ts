@@ -1,7 +1,7 @@
 import { Request, Response } from 'express'
 import { db } from '../db/drizzle.js'
 import { serviceCharges, services } from '../db/schema/index.js'
-import { eq, desc } from 'drizzle-orm'
+import { eq, desc, asc } from 'drizzle-orm'
 import { z } from 'zod'
 
 const serviceChargeSchema = z.object({
@@ -199,7 +199,7 @@ export const getAllServiceTypes = async (req: Request, res: Response) => {
       query = query.where(eq(services.isActive, isActive === 'true'))
     }
 
-    const data = await query.orderBy(services.displayOrder, services.name)
+    const data = await query.orderBy(asc(services.displayOrder), asc(services.name))
 
     const serviceTypes = data.map((svc) => ({
       id: svc.id,

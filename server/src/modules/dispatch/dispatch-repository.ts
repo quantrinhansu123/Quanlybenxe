@@ -1,6 +1,7 @@
 /**
  * Dispatch Repository - Drizzle ORM Version
  * Handles all PostgreSQL operations for dispatch records via Supabase
+ * Includes in-memory caching for fast reads
  */
 import { db, withTransaction } from '../../db/drizzle'
 import { dispatchRecords } from '../../db/schema'
@@ -10,6 +11,14 @@ import type { DispatchFilters } from './dispatch-types'
 // Infer types from schema
 type DispatchRecord = typeof dispatchRecords.$inferSelect
 type NewDispatchRecord = typeof dispatchRecords.$inferInsert
+
+// Simple in-memory cache for dispatch records
+interface DispatchCache {
+  data: DispatchRecord[] | null
+  timestamp: number
+}
+const dispatchCache: DispatchCache = { data: null, timestamp: 0 }
+const CACHE_TTL = 5000 // 5 seconds - short TTL for real-time data
 
 /**
  * Dispatch Repository class - extends DrizzleRepository for common CRUD
@@ -23,11 +32,40 @@ class DrizzleDispatchRepository extends DrizzleRepository<
   protected idColumn = dispatchRecords.id
 
   /**
+   * Invalidate cache - call after any mutation
+   */
+  invalidateCache(): void {
+    dispatchCache.data = null
+    dispatchCache.timestamp = 0
+  }
+
+  /**
    * Find all dispatch records with optional filters
-   * Overrides base class to support DispatchFilters
+   * Uses cache for unfiltered queries
    */
   async findAllWithFilters(filters?: DispatchFilters): Promise<DispatchRecord[]> {
     const database = this.getDb()
+    const hasFilters = filters && Object.values(filters).some(v => v !== undefined)
+
+    // For unfiltered queries, use cache
+    if (!hasFilters) {
+      const now = Date.now()
+      if (dispatchCache.data && (now - dispatchCache.timestamp) < CACHE_TTL) {
+        return dispatchCache.data
+      }
+
+      // Fetch and cache
+      const records = await database
+        .select()
+        .from(dispatchRecords)
+        .orderBy(desc(dispatchRecords.entryTime))
+
+      dispatchCache.data = records
+      dispatchCache.timestamp = now
+      return records
+    }
+
+    // Filtered queries go directly to DB
     const conditions = []
 
     if (filters?.status) {
@@ -112,7 +150,7 @@ class DrizzleDispatchRepository extends DrizzleRepository<
   }
 
   /**
-   * Update dispatch status
+   * Update dispatch status - invalidates cache
    */
   async updateStatus(id: string, status: string, additionalData?: Partial<NewDispatchRecord>): Promise<DispatchRecord | null> {
     const database = this.getDb()
@@ -126,6 +164,9 @@ class DrizzleDispatchRepository extends DrizzleRepository<
       })
       .where(eq(dispatchRecords.id, id))
       .returning()
+
+    // Invalidate cache after mutation
+    this.invalidateCache()
 
     return result || null
   }
@@ -145,13 +186,13 @@ class DrizzleDispatchRepository extends DrizzleRepository<
   }
 
   /**
-   * Create dispatch record with transaction support
+   * Create dispatch record with transaction support - invalidates cache
    */
   async createWithTransaction<T>(
     data: NewDispatchRecord,
     callback?: (tx: NonNullable<typeof db>, dispatchId: string) => Promise<T>
   ): Promise<DispatchRecord> {
-    return withTransaction(async (tx) => {
+    const result = await withTransaction(async (tx) => {
       const [dispatch] = await tx
         .insert(dispatchRecords)
         .values(data)
@@ -163,6 +204,38 @@ class DrizzleDispatchRepository extends DrizzleRepository<
 
       return dispatch
     })
+
+    // Invalidate cache after mutation
+    this.invalidateCache()
+
+    return result
+  }
+
+  /**
+   * Override base create to invalidate cache
+   */
+  async create(data: NewDispatchRecord): Promise<DispatchRecord> {
+    const result = await super.create(data)
+    this.invalidateCache()
+    return result
+  }
+
+  /**
+   * Override base update to invalidate cache
+   */
+  async update(id: string, data: Partial<NewDispatchRecord>): Promise<DispatchRecord | null> {
+    const result = await super.update(id, data)
+    this.invalidateCache()
+    return result
+  }
+
+  /**
+   * Override base delete to invalidate cache
+   */
+  async delete(id: string): Promise<boolean> {
+    const result = await super.delete(id)
+    this.invalidateCache()
+    return result
   }
 }
 

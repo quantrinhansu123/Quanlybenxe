@@ -2,7 +2,7 @@
  * Vehicles Schema (Xe)
  * Migrated from Firebase RTDB: vehicles, datasheet/Xe
  */
-import { pgTable, uuid, varchar, integer, date, boolean, timestamp, jsonb, index } from 'drizzle-orm/pg-core'
+import { pgTable, uuid, varchar, integer, boolean, timestamp, jsonb, index } from 'drizzle-orm/pg-core'
 import { relations } from 'drizzle-orm'
 import { operators } from './operators'
 import { vehicleTypes } from './vehicle-types'
@@ -25,10 +25,10 @@ export const vehicles = pgTable('vehicles', {
   chassisNumber: varchar('chassis_number', { length: 50 }),
   engineNumber: varchar('engine_number', { length: 50 }),
   imageUrl: varchar('image_url', { length: 500 }),
-  // Document expiry dates
-  registrationExpiry: date('registration_expiry'),
-  insuranceExpiry: date('insurance_expiry'),
-  roadWorthinessExpiry: date('road_worthiness_expiry'),
+  // Document expiry dates (stored as YYYY-MM-DD strings)
+  registrationExpiry: varchar('registration_expiry', { length: 10 }),
+  insuranceExpiry: varchar('insurance_expiry', { length: 10 }),
+  roadWorthinessExpiry: varchar('road_worthiness_expiry', { length: 10 }),
   // Cargo dimensions
   cargoLength: integer('cargo_length'),
   cargoWidth: integer('cargo_width'),

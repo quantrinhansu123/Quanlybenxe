@@ -2,7 +2,7 @@
  * Drivers Schema (Tài xế)
  * Migrated from Firebase RTDB: drivers
  */
-import { pgTable, uuid, varchar, date, boolean, timestamp, jsonb, index } from 'drizzle-orm/pg-core'
+import { pgTable, uuid, varchar, boolean, timestamp, jsonb, index } from 'drizzle-orm/pg-core'
 import { relations } from 'drizzle-orm'
 import { operators } from './operators'
 
@@ -18,9 +18,9 @@ export const drivers = pgTable('drivers', {
   // License info
   licenseNumber: varchar('license_number', { length: 50 }),
   licenseClass: varchar('license_class', { length: 10 }),
-  licenseExpiryDate: date('license_expiry_date'),
+  licenseExpiryDate: varchar('license_expiry_date', { length: 10 }),
   // Other info
-  dateOfBirth: date('date_of_birth'),
+  dateOfBirth: varchar('date_of_birth', { length: 10 }),
   address: varchar('address', { length: 500 }),
   province: varchar('province', { length: 100 }),
   district: varchar('district', { length: 100 }),

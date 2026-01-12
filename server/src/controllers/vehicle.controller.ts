@@ -88,12 +88,12 @@ export const getAllVehicles = async (req: Request, res: Response) => {
     
     // Filter by operatorId if provided
     if (operatorId) {
-      vehicles = vehicles.filter((v: any) => v.operator_id === operatorId)
+      vehicles = vehicles.filter((v: any) => v.operatorId === operatorId)
     }
-    
+
     // Filter inactive if specifically requested
     if (isActive === 'false') {
-      vehicles = vehicles.filter((v: any) => v.is_active === false)
+      vehicles = vehicles.filter((v: any) => v.isActive === false)
     }
 
     // Use cached operators and vehicle types (parallel fetch)
@@ -125,40 +125,40 @@ export const getAllVehicles = async (req: Request, res: Response) => {
       })
 
       // Manual join with operators and vehicle_types
-      const operator = vehicle.operator_id ? operatorMap.get(vehicle.operator_id) as any : null
-      const vehicleType = vehicle.vehicle_type_id ? vehicleTypeMap.get(vehicle.vehicle_type_id) as any : null
+      const operator = vehicle.operatorId ? operatorMap.get(vehicle.operatorId) as any : null
+      const vehicleType = vehicle.vehicleTypeId ? vehicleTypeMap.get(vehicle.vehicleTypeId) as any : null
 
       return {
         id: vehicle.id,
-        plateNumber: vehicle.plate_number,
-        vehicleTypeId: vehicle.vehicle_type_id,
+        plateNumber: vehicle.plateNumber,
+        vehicleTypeId: vehicle.vehicleTypeId,
         vehicleType: vehicleType ? {
           id: vehicleType.id,
           name: vehicleType.name,
         } : undefined,
-        operatorId: vehicle.operator_id,
+        operatorId: vehicle.operatorId,
         operator: operator ? {
           id: operator.id,
           name: operator.name,
           code: operator.code,
         } : undefined,
-        seatCapacity: vehicle.seat_capacity,
-        bedCapacity: vehicle.bed_capacity,
-        manufactureYear: vehicle.manufacture_year,
-        chassisNumber: vehicle.chassis_number,
-        engineNumber: vehicle.engine_number,
+        seatCapacity: vehicle.seatCount,
+        bedCapacity: vehicle.bedCapacity,
+        manufactureYear: vehicle.yearOfManufacture,
+        chassisNumber: vehicle.chassisNumber,
+        engineNumber: vehicle.engineNumber,
         color: vehicle.color,
-        imageUrl: vehicle.image_url,
-        insuranceExpiryDate: vehicle.insurance_expiry_date,
-        inspectionExpiryDate: vehicle.inspection_expiry_date,
-        cargoLength: vehicle.cargo_length,
-        cargoWidth: vehicle.cargo_width,
-        cargoHeight: vehicle.cargo_height,
-        gpsProvider: vehicle.gps_provider,
-        gpsUsername: vehicle.gps_username,
-        gpsPassword: vehicle.gps_password,
+        imageUrl: vehicle.imageUrl,
+        insuranceExpiryDate: vehicle.insuranceExpiry,
+        inspectionExpiryDate: vehicle.roadWorthinessExpiry,
+        cargoLength: vehicle.cargoLength,
+        cargoWidth: vehicle.cargoWidth,
+        cargoHeight: vehicle.cargoHeight,
+        gpsProvider: vehicle.gpsProvider,
+        gpsUsername: vehicle.gpsUsername,
+        gpsPassword: vehicle.gpsPassword,
         province: vehicle.province,
-        isActive: vehicle.is_active,
+        isActive: vehicle.isActive,
         notes: vehicle.notes,
         documents: {
           registration: docsMap.registration || undefined,
@@ -167,8 +167,8 @@ export const getAllVehicles = async (req: Request, res: Response) => {
           operation_permit: docsMap.operation_permit || undefined,
           emblem: docsMap.emblem || undefined,
         },
-        createdAt: vehicle.created_at,
-        updatedAt: vehicle.updated_at,
+        createdAt: vehicle.createdAt,
+        updatedAt: vehicle.updatedAt,
       }
     })
 
@@ -849,8 +849,43 @@ export const lookupVehicleByPlate = async (req: Request, res: Response) => {
       return res.status(400).json({ error: 'Plate number is required' })
     }
 
-    // Use cached lookup - much faster than RTDB query
-    const vehicle = await vehicleCacheService.lookupByPlate(plate)
+    // Use cached lookup - much faster than DB query
+    let vehicle = await vehicleCacheService.lookupByPlate(plate)
+
+    // Fallback: direct DB query if not found in cache
+    if (!vehicle) {
+      // Query directly by plate_number (exact match or with common variations)
+      const plateVariations = [
+        plate,
+        plate.replace(/[.\-\s]/g, ''),
+        plate.toUpperCase(),
+        plate.replace(/[.\-\s]/g, '').toUpperCase(),
+      ]
+
+      for (const p of plateVariations) {
+        const results = await db.select({
+          id: vehicles.id,
+          plateNumber: vehicles.plateNumber,
+          seatCount: vehicles.seatCount,
+          bedCapacity: vehicles.bedCapacity,
+          operatorName: vehicles.operatorName,
+        }).from(vehicles).where(eq(vehicles.plateNumber, p)).limit(1)
+
+        if (results.length > 0) {
+          const v = results[0]
+          vehicle = {
+            id: v.id,
+            plateNumber: v.plateNumber || '',
+            seatCapacity: v.seatCount || 0,
+            bedCapacity: v.bedCapacity || 0,
+            operatorName: v.operatorName || '',
+            vehicleType: '',
+            source: 'legacy' as const,
+          }
+          break
+        }
+      }
+    }
 
     if (!vehicle) {
       return res.status(404).json({ error: 'Vehicle not found' })

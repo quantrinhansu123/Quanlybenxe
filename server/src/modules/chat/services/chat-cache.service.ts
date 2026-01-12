@@ -64,10 +64,19 @@ class ChatCacheService {
   private isWarming = false
 
   async preWarm(): Promise<void> {
+    // Skip heavy data loading at startup to avoid connection pool exhaustion
+    // Data will be loaded on first chat query instead (lazy load)
+    console.log('[ChatCache] Ready (lazy load on first query)')
+    this.lastRefresh = new Date()
+  }
+
+  // Actual data loading (called on first query)
+  async loadDataIfNeeded(): Promise<void> {
+    if (this.cache.size > 0) return // Already loaded
     if (this.isWarming) return
     this.isWarming = true
 
-    console.log('[ChatCache] Pre-warming cache from Drizzle...')
+    console.log('[ChatCache] Loading data on first query...')
     const startTime = Date.now()
 
     try {
