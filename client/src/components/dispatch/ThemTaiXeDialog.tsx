@@ -59,8 +59,17 @@ export function ThemTaiXeDialog({
   if (!open) return null;
 
   return createPortal(
-    <div className="fixed inset-0 z-[60] bg-black/50 flex items-center justify-center">
-      <div className="bg-white rounded-lg shadow-lg w-full max-w-2xl p-6 relative max-h-[90vh] flex flex-col">
+    <div
+      className="fixed inset-0 z-[60] bg-black/50 flex items-center justify-center"
+      onClick={(e) => {
+        e.stopPropagation();
+        onClose();
+      }}
+    >
+      <div
+        className="bg-white rounded-lg shadow-lg w-full max-w-2xl p-6 relative max-h-[90vh] flex flex-col"
+        onClick={(e) => e.stopPropagation()}
+      >
         <button
           onClick={onClose}
           className="absolute right-4 top-4 text-gray-400 hover:text-gray-600"

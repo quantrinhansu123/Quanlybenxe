@@ -4,6 +4,8 @@
 
 QuanLyBenXe (Bus Management) is a full-stack web application designed to streamline operations at bus stations, including dispatch management, fleet tracking, driver management, financial reporting, and route planning.
 
+**Status:** Migration Complete - Supabase Production Ready (Phase 6 Pending)
+
 ---
 
 ## Quick Start
@@ -78,8 +80,7 @@ quanlybenxe/
 
 ### Backend
 - **Express.js** with TypeScript
-- **Supabase PostgreSQL** for primary storage (Drizzle ORM)
-- **Firebase Realtime Database** (legacy - being phased out)
+- **Supabase PostgreSQL** via **Drizzle ORM** (primary database)
 - **JWT** for authentication
 - **Cloudinary** for image storage
 
@@ -149,8 +150,7 @@ Service (Business logic)
     ↓
 Repository (Database layer)
     ↓
-Supabase PostgreSQL (Primary)
-Firebase (Legacy - being phased out)
+Supabase PostgreSQL (Primary database)
 ```
 
 ### State Management
@@ -164,7 +164,7 @@ Firebase (Legacy - being phased out)
 - Service layer handles complex workflows
 - Repository pattern for data access
 - Drizzle ORM for type-safe database queries
-- Firebase legacy support (being phased out)
+- Row Level Security (RLS) for data access control
 
 ---
 
@@ -215,7 +215,7 @@ npm run test
 ### Backend
 - Deployed to Render.com
 - Environment: Node.js with Express.js
-- Database: Supabase PostgreSQL (primary), Firebase (legacy)
+- Database: Supabase PostgreSQL (primary)
 
 ### Frontend
 - Deployed to Vercel or similar
@@ -254,6 +254,6 @@ See `DEPLOYMENT_CONFIG.md` for detailed setup.
 
 ---
 
-**Last Updated:** 2026-01-11
+**Last Updated:** 2026-01-13
 **Maintainers:** Development Team
-**Status:** Phase 1-2 Complete - Data Migration + Core Services (Firebase to Supabase) ✅ | Phase 5 Testing Delayed 10 Days
+**Status:** Migration Complete - Supabase Production Ready
