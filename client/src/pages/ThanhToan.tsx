@@ -62,14 +62,19 @@ export default function ThanhToan() {
   );
 
   // Filter to last 7 days for list view
+  // For paid/departed records: use payment_time, for others: use entry_time
   const allData = useMemo(() => {
     if (!allDispatchRecords) return [];
     const sevenDaysAgo = new Date();
     sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
     sevenDaysAgo.setHours(0, 0, 0, 0);
     return allDispatchRecords.filter(record => {
-      const entryTime = new Date(record.entryTime);
-      return entryTime >= sevenDaysAgo;
+      const isPaidOrDeparted = record.currentStatus === 'paid' || record.currentStatus === 'departed';
+      // Use payment_time for paid/departed records, entry_time for others
+      const relevantTime = isPaidOrDeparted && record.paymentTime
+        ? new Date(record.paymentTime)
+        : new Date(record.entryTime);
+      return relevantTime >= sevenDaysAgo;
     });
   }, [allDispatchRecords]);
 
