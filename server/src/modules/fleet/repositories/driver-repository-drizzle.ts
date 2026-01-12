@@ -199,19 +199,133 @@ class DrizzleDriverRepository extends DrizzleRepository<
   }
 
   /**
-   * Find drivers by operator ID
+   * Find drivers by operator ID - uses DB WHERE clause instead of fetch-all
    */
   async findByOperatorId(operatorId: string): Promise<DriverAPI[]> {
-    const all = await this.findAllWithRelations()
-    return all.filter((d) => d.operatorId === operatorId)
+    const database = this.getDb()
+
+    const results = await database
+      .select({
+        id: drivers.id,
+        operatorId: drivers.operatorId,
+        fullName: drivers.fullName,
+        phone: drivers.phone,
+        idNumber: drivers.idNumber,
+        licenseNumber: drivers.licenseNumber,
+        licenseClass: drivers.licenseClass,
+        licenseExpiryDate: drivers.licenseExpiryDate,
+        dateOfBirth: drivers.dateOfBirth,
+        address: drivers.address,
+        isActive: drivers.isActive,
+        operatorName: drivers.operatorName,
+        operatorCode: drivers.operatorCode,
+        metadata: drivers.metadata,
+        createdAt: drivers.createdAt,
+        updatedAt: drivers.updatedAt,
+        operatorFullName: operators.name,
+        operatorCodeRel: operators.code,
+      })
+      .from(drivers)
+      .leftJoin(operators, eq(drivers.operatorId, operators.id))
+      .where(eq(drivers.operatorId, operatorId))
+      .orderBy(desc(drivers.createdAt))
+
+    return results.map((row) => {
+      const operator = row.operatorFullName
+        ? { id: row.operatorId!, name: row.operatorFullName, code: row.operatorCodeRel || '' }
+        : undefined
+
+      return this.mapToAPI(
+        {
+          id: row.id,
+          firebaseId: null,
+          fullName: row.fullName,
+          phone: row.phone,
+          idNumber: row.idNumber,
+          operatorId: row.operatorId,
+          licenseNumber: row.licenseNumber,
+          licenseClass: row.licenseClass,
+          licenseExpiryDate: row.licenseExpiryDate,
+          dateOfBirth: row.dateOfBirth,
+          address: row.address,
+          isActive: row.isActive,
+          operatorName: row.operatorName,
+          operatorCode: row.operatorCode,
+          metadata: row.metadata,
+          createdAt: row.createdAt,
+          updatedAt: row.updatedAt,
+          province: null,
+          district: null,
+          imageUrl: null,
+        },
+        operator
+      )
+    })
   }
 
   /**
-   * Find drivers by active status
+   * Find drivers by active status - uses DB WHERE clause instead of fetch-all
    */
   async findByActiveStatus(isActive: boolean): Promise<DriverAPI[]> {
-    const all = await this.findAllWithRelations()
-    return all.filter((d) => d.isActive === isActive)
+    const database = this.getDb()
+
+    const results = await database
+      .select({
+        id: drivers.id,
+        operatorId: drivers.operatorId,
+        fullName: drivers.fullName,
+        phone: drivers.phone,
+        idNumber: drivers.idNumber,
+        licenseNumber: drivers.licenseNumber,
+        licenseClass: drivers.licenseClass,
+        licenseExpiryDate: drivers.licenseExpiryDate,
+        dateOfBirth: drivers.dateOfBirth,
+        address: drivers.address,
+        isActive: drivers.isActive,
+        operatorName: drivers.operatorName,
+        operatorCode: drivers.operatorCode,
+        metadata: drivers.metadata,
+        createdAt: drivers.createdAt,
+        updatedAt: drivers.updatedAt,
+        operatorFullName: operators.name,
+        operatorCodeRel: operators.code,
+      })
+      .from(drivers)
+      .leftJoin(operators, eq(drivers.operatorId, operators.id))
+      .where(eq(drivers.isActive, isActive))
+      .orderBy(desc(drivers.createdAt))
+
+    return results.map((row) => {
+      const operator = row.operatorFullName
+        ? { id: row.operatorId!, name: row.operatorFullName, code: row.operatorCodeRel || '' }
+        : undefined
+
+      return this.mapToAPI(
+        {
+          id: row.id,
+          firebaseId: null,
+          fullName: row.fullName,
+          phone: row.phone,
+          idNumber: row.idNumber,
+          operatorId: row.operatorId,
+          licenseNumber: row.licenseNumber,
+          licenseClass: row.licenseClass,
+          licenseExpiryDate: row.licenseExpiryDate,
+          dateOfBirth: row.dateOfBirth,
+          address: row.address,
+          isActive: row.isActive,
+          operatorName: row.operatorName,
+          operatorCode: row.operatorCode,
+          metadata: row.metadata,
+          createdAt: row.createdAt,
+          updatedAt: row.updatedAt,
+          province: null,
+          district: null,
+          imageUrl: null,
+        },
+        operator
+      )
+    })
   }
 
   /**
@@ -314,19 +428,35 @@ class DrizzleDriverRepository extends DrizzleRepository<
   }
 
   /**
-   * Check if ID number exists
+   * Check if ID number exists - uses DB query instead of fetch-all
    */
   async idNumberExists(idNumber: string, excludeId?: string): Promise<boolean> {
-    const all = await this.findAllWithRelations()
-    return all.some((d) => d.idNumber === idNumber && d.id !== excludeId)
+    const database = this.getDb()
+
+    const results = await database
+      .select({ id: drivers.id })
+      .from(drivers)
+      .where(eq(drivers.idNumber, idNumber))
+      .limit(excludeId ? 2 : 1)
+
+    if (!excludeId) return results.length > 0
+    return results.some((d) => d.id !== excludeId)
   }
 
   /**
-   * Check if license number exists
+   * Check if license number exists - uses DB query instead of fetch-all
    */
   async licenseNumberExists(licenseNumber: string, excludeId?: string): Promise<boolean> {
-    const all = await this.findAllWithRelations()
-    return all.some((d) => d.licenseNumber === licenseNumber && d.id !== excludeId)
+    const database = this.getDb()
+
+    const results = await database
+      .select({ id: drivers.id })
+      .from(drivers)
+      .where(eq(drivers.licenseNumber, licenseNumber))
+      .limit(excludeId ? 2 : 1)
+
+    if (!excludeId) return results.length > 0
+    return results.some((d) => d.id !== excludeId)
   }
 }
 

@@ -6,7 +6,7 @@
 import { Request, Response } from 'express'
 import { db } from '../../../db/drizzle.js'
 import { drivers, driverOperators, operators } from '../../../db/schema/index.js'
-import { eq, desc } from 'drizzle-orm'
+import { eq, desc, inArray } from 'drizzle-orm'
 import { syncDriverChanges } from '../../../utils/denormalization-sync.js'
 import { validateCreateDriver, validateUpdateDriver } from '../fleet-validation.js'
 
@@ -17,7 +17,7 @@ interface OperatorInfo {
 }
 
 /**
- * Fetch junction table data for operators (manual join for Firebase RTDB)
+ * Fetch junction table data for operators - optimized to only fetch needed operators
  */
 async function fetchDriverOperators(driverId: string) {
   if (!db) throw new Error('Database not initialized')
@@ -29,12 +29,13 @@ async function fetchDriverOperators(driverId: string) {
 
   if (!junctionData || junctionData.length === 0) return []
 
-  // Get all operators for manual join
+  // Extract operator IDs and batch fetch only needed operators
+  const operatorIds = junctionData.map(j => j.operatorId)
   const operatorsData = await db.select({
     id: operators.id,
     name: operators.name,
     code: operators.code,
-  }).from(operators)
+  }).from(operators).where(inArray(operators.id, operatorIds))
 
   const operatorsMap = new Map<string, OperatorInfo>(operatorsData.map((op) => [op.id, op]))
 

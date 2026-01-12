@@ -126,20 +126,21 @@ export const createVehicle = async (req: Request, res: Response) => {
       })
       .returning();
 
-    // Fetch relations
-    let operator = null, vehicleType = null;
-    if (vehicle.operatorId) {
-      const [op] = await db.select({ id: operators.id, name: operators.name, code: operators.code })
-        .from(operators)
-        .where(eq(operators.id, vehicle.operatorId));
-      operator = op;
-    }
-    if (vehicle.vehicleTypeId) {
-      const [vt] = await db.select({ id: vehicleTypes.id, name: vehicleTypes.name })
-        .from(vehicleTypes)
-        .where(eq(vehicleTypes.id, vehicle.vehicleTypeId));
-      vehicleType = vt;
-    }
+    // Fetch relations in parallel
+    const [operator, vehicleType] = await Promise.all([
+      vehicle.operatorId
+        ? db.select({ id: operators.id, name: operators.name, code: operators.code })
+            .from(operators)
+            .where(eq(operators.id, vehicle.operatorId))
+            .then(r => r[0] || null)
+        : Promise.resolve(null),
+      vehicle.vehicleTypeId
+        ? db.select({ id: vehicleTypes.id, name: vehicleTypes.name })
+            .from(vehicleTypes)
+            .where(eq(vehicleTypes.id, vehicle.vehicleTypeId))
+            .then(r => r[0] || null)
+        : Promise.resolve(null)
+    ]);
 
     if (validated.documents) {
       await upsertDocuments(vehicle.id, validated.documents as Record<string, { number: string; issueDate: string; expiryDate: string; issuingAuthority?: string; documentUrl?: string; notes?: string }>);
@@ -198,19 +199,21 @@ export const updateVehicle = async (req: AuthRequest, res: Response) => {
     const [vehicle] = await db.select().from(vehicles).where(eq(vehicles.id, id));
     if (!vehicle) return res.status(404).json({ error: 'Vehicle not found after update' });
 
-    let operator = null, vehicleType = null;
-    if (vehicle.operatorId) {
-      const [op] = await db.select({ id: operators.id, name: operators.name, code: operators.code })
-        .from(operators)
-        .where(eq(operators.id, vehicle.operatorId));
-      operator = op;
-    }
-    if (vehicle.vehicleTypeId) {
-      const [vt] = await db.select({ id: vehicleTypes.id, name: vehicleTypes.name })
-        .from(vehicleTypes)
-        .where(eq(vehicleTypes.id, vehicle.vehicleTypeId));
-      vehicleType = vt;
-    }
+    // Fetch relations in parallel
+    const [operator, vehicleType] = await Promise.all([
+      vehicle.operatorId
+        ? db.select({ id: operators.id, name: operators.name, code: operators.code })
+            .from(operators)
+            .where(eq(operators.id, vehicle.operatorId))
+            .then(r => r[0] || null)
+        : Promise.resolve(null),
+      vehicle.vehicleTypeId
+        ? db.select({ id: vehicleTypes.id, name: vehicleTypes.name })
+            .from(vehicleTypes)
+            .where(eq(vehicleTypes.id, vehicle.vehicleTypeId))
+            .then(r => r[0] || null)
+        : Promise.resolve(null)
+    ]);
 
     if (updateData.plateNumber || updateData.operatorId !== undefined) {
       syncVehicleChanges(id, {
