@@ -1,13 +1,13 @@
 /**
  * Dashboard Service
  * Business logic for dashboard data aggregation
- * Optimized: Single query per table + caching
+ * Optimized: Filtered queries + caching
  * Migrated to Drizzle ORM
  */
 
 import { db } from '../db/drizzle.js';
 import { dispatchRecords, vehicles, routes, drivers, vehicleBadges } from '../db/schema/index.js';
-import { desc } from 'drizzle-orm';
+import { desc, gte, lte, lt, or, and, isNotNull, sql, eq } from 'drizzle-orm';
 import type { DispatchRecord } from '../db/schema/dispatch-records.js';
 import type { Vehicle } from '../db/schema/vehicles.js';
 import type { Route } from '../db/schema/routes.js';
@@ -34,15 +34,27 @@ interface DashboardAllData {
 let dashboardCache: DashboardCache = { data: null, timestamp: 0 };
 const CACHE_TTL = 60 * 1000; // 1 minute
 
-// Helper function to get today's date string in Vietnam timezone (YYYY-MM-DD)
-function getVietnamTodayStr(): string {
+// Helper function to get Vietnam date strings for queries
+function getVietnamDateRange(): { todayStr: string; weekAgoStr: string; thirtyDaysLaterStr: string } {
   const now = new Date();
   // Convert to Vietnam time (UTC+7)
   const vietnamTime = new Date(now.getTime() + (7 * 60 + now.getTimezoneOffset()) * 60000);
   const year = vietnamTime.getFullYear();
   const month = String(vietnamTime.getMonth() + 1).padStart(2, '0');
   const day = String(vietnamTime.getDate()).padStart(2, '0');
-  return `${year}-${month}-${day}`;
+  const todayStr = `${year}-${month}-${day}`;
+
+  // 7 days ago for weekly stats
+  const weekAgo = new Date(vietnamTime);
+  weekAgo.setDate(weekAgo.getDate() - 7);
+  const weekAgoStr = `${weekAgo.getFullYear()}-${String(weekAgo.getMonth() + 1).padStart(2, '0')}-${String(weekAgo.getDate()).padStart(2, '0')}`;
+
+  // 30 days later for warnings
+  const thirtyDaysLater = new Date(vietnamTime);
+  thirtyDaysLater.setDate(thirtyDaysLater.getDate() + 30);
+  const thirtyDaysLaterStr = `${thirtyDaysLater.getFullYear()}-${String(thirtyDaysLater.getMonth() + 1).padStart(2, '0')}-${String(thirtyDaysLater.getDate()).padStart(2, '0')}`;
+
+  return { todayStr, weekAgoStr, thirtyDaysLaterStr };
 }
 
 // Helper to check if a datetime string is from today (Vietnam time)
@@ -117,42 +129,78 @@ interface RawData {
 
 export class DashboardService {
   /**
-   * Load all raw data from database in parallel (ONE query per table)
+   * Load raw data from database with OPTIMIZED filtered queries
+   * Only loads data needed for dashboard (not full tables)
    */
   private async loadRawData(): Promise<RawData> {
     if (!db) {
       throw new Error('[Dashboard] Database not initialized');
     }
 
-    const todayStr = getVietnamTodayStr();
+    const { todayStr, weekAgoStr, thirtyDaysLaterStr } = getVietnamDateRange();
     const startTime = Date.now();
 
-    // Query all tables in PARALLEL
+    // Create date for SQL queries (week ago timestamp)
+    const weekAgoDate = new Date(weekAgoStr + 'T00:00:00+07:00');
+
+    // Query tables in PARALLEL with FILTERS to reduce data transfer
     const [
       dispatchRecordsData,
-      vehiclesData,
+      vehiclesWithExpiryData,
       routesData,
       vehicleBadgesData,
-      driversData,
+      driversWithExpiryData,
     ] = await Promise.all([
-      db.select().from(dispatchRecords).orderBy(desc(dispatchRecords.entryTime)),
-      db.select().from(vehicles),
+      // Only dispatch records from last 7 days (for weekly stats)
+      db.select().from(dispatchRecords)
+        .where(gte(dispatchRecords.entryTime, weekAgoDate))
+        .orderBy(desc(dispatchRecords.entryTime)),
+      // Only vehicles with expiry dates in warning range (next 30 days)
+      db.select({
+        id: vehicles.id,
+        plateNumber: vehicles.plateNumber,
+        registrationExpiry: vehicles.registrationExpiry,
+        insuranceExpiry: vehicles.insuranceExpiry,
+        roadWorthinessExpiry: vehicles.roadWorthinessExpiry,
+      }).from(vehicles).where(
+        or(
+          and(isNotNull(vehicles.registrationExpiry), lte(vehicles.registrationExpiry, thirtyDaysLaterStr)),
+          and(isNotNull(vehicles.insuranceExpiry), lte(vehicles.insuranceExpiry, thirtyDaysLaterStr)),
+          and(isNotNull(vehicles.roadWorthinessExpiry), lte(vehicles.roadWorthinessExpiry, thirtyDaysLaterStr))
+        )
+      ),
+      // Routes are small, load all
       db.select().from(routes),
-      db.select().from(vehicleBadges),
-      db.select().from(drivers),
+      // Only badges with expiry dates in warning range
+      db.select({
+        id: vehicleBadges.id,
+        vehicleId: vehicleBadges.vehicleId,
+        plateNumber: vehicleBadges.plateNumber,
+        expiryDate: vehicleBadges.expiryDate,
+      }).from(vehicleBadges).where(
+        and(isNotNull(vehicleBadges.expiryDate), lte(vehicleBadges.expiryDate, thirtyDaysLaterStr))
+      ),
+      // Only drivers with license expiry in warning range
+      db.select({
+        id: drivers.id,
+        fullName: drivers.fullName,
+        licenseExpiryDate: drivers.licenseExpiryDate,
+      }).from(drivers).where(
+        and(isNotNull(drivers.licenseExpiryDate), lte(drivers.licenseExpiryDate, thirtyDaysLaterStr))
+      ),
     ]);
 
     // Convert to lookup maps
     const vehiclesMap: Record<string, Vehicle> = {};
-    vehiclesData.forEach((v) => { vehiclesMap[v.id] = v; });
+    vehiclesWithExpiryData.forEach((v) => { vehiclesMap[v.id] = v as Vehicle; });
 
     const routesMap: Record<string, Route> = {};
     routesData.forEach((r) => { routesMap[r.id] = r; });
 
-    // Flatten vehicle expiry documents from vehicles table + badges
+    // Flatten vehicle expiry documents
     const vehicleExpiryDocs: Array<{ vehicleId: string; plateNumber: string; documentType: string; expiryDate: string }> = [];
 
-    for (const vehicle of vehiclesData) {
+    for (const vehicle of vehiclesWithExpiryData) {
       if (vehicle.roadWorthinessExpiry) {
         vehicleExpiryDocs.push({
           vehicleId: vehicle.id,
@@ -167,14 +215,6 @@ export class DashboardService {
           plateNumber: vehicle.plateNumber,
           documentType: 'insurance',
           expiryDate: vehicle.insuranceExpiry,
-        });
-      }
-      if (vehicle.roadWorthinessExpiry) {
-        vehicleExpiryDocs.push({
-          vehicleId: vehicle.id,
-          plateNumber: vehicle.plateNumber,
-          documentType: 'inspection',
-          expiryDate: vehicle.roadWorthinessExpiry,
         });
       }
     }
@@ -192,71 +232,124 @@ export class DashboardService {
       }
     }
 
-    console.log(`[Dashboard] Loaded raw data in ${Date.now() - startTime}ms`);
+    console.log(`[Dashboard] Loaded filtered data in ${Date.now() - startTime}ms (${dispatchRecordsData.length} dispatch, ${vehiclesWithExpiryData.length} vehicles, ${driversWithExpiryData.length} drivers)`);
 
     return {
       dispatchRecords: dispatchRecordsData,
       vehicles: vehiclesMap,
       routes: routesMap,
-      vehicleBadges: vehicleBadgesData,
+      vehicleBadges: vehicleBadgesData as VehicleBadge[],
       vehicleExpiryDocs,
-      drivers: driversData,
+      drivers: driversWithExpiryData as Driver[],
       todayStr,
     };
   }
 
   /**
-   * Calculate stats from raw data (no DB query)
+   * Get stats using SQL aggregation (OPTIMIZED)
    */
-  private calculateStats(raw: RawData): DashboardStats {
-    const { dispatchRecords, vehicleExpiryDocs, todayStr } = raw;
+  private async getStatsSQL(): Promise<DashboardStats> {
+    if (!db) throw new Error('[Dashboard] Database not initialized');
 
-    // Filter to today's records
-    const todayRecords = dispatchRecords.filter((r) => {
-      if (!r.entryTime) return false;
-      const entryTimeStr = r.entryTime.toISOString();
-      return isToday(entryTimeStr, todayStr);
-    });
+    const { todayStr } = getVietnamDateRange();
+    const todayStart = new Date(todayStr + 'T00:00:00+07:00');
+    const todayEnd = new Date(todayStr + 'T23:59:59.999+07:00');
 
-    const vehiclesInStation = todayRecords.filter(
-      (r) => ['entered', 'passengers_dropped', 'permit_issued', 'paid', 'departure_ordered'].includes(r.status || '') && !r.exitTime
-    ).length;
+    // Single query with FILTER clauses for different counts
+    const result = await db.select({
+      totalVehiclesToday: sql<number>`COUNT(*)::int`,
+      vehiclesInStation: sql<number>`COUNT(*) FILTER (WHERE status IN ('entered', 'passengers_dropped', 'permit_issued', 'paid', 'departure_ordered') AND exit_time IS NULL)::int`,
+      vehiclesDepartedToday: sql<number>`COUNT(*) FILTER (WHERE status = 'departed' AND exit_time IS NOT NULL)::int`,
+      revenueToday: sql<number>`COALESCE(SUM(CASE WHEN status IN ('paid', 'departed') THEN payment_amount ELSE 0 END), 0)::numeric`,
+    })
+    .from(dispatchRecords)
+    .where(and(
+      gte(dispatchRecords.entryTime, todayStart),
+      lte(dispatchRecords.entryTime, todayEnd)
+    ));
 
-    const vehiclesDepartedToday = todayRecords.filter((r) => r.status === 'departed' && r.exitTime).length;
+    const stats = result[0] || {
+      totalVehiclesToday: 0,
+      vehiclesInStation: 0,
+      vehiclesDepartedToday: 0,
+      revenueToday: 0,
+    };
 
-    const totalVehiclesToday = vehiclesInStation + vehiclesDepartedToday;
+    // Get invalid vehicles count separately
+    const invalidVehicles = await this.getInvalidVehiclesCount(todayStr);
 
-    const paidRecords = todayRecords.filter((r) => (r.status === 'paid' || r.status === 'departed') && r.paymentAmount);
-    const revenueToday = paidRecords.reduce((sum, r) => sum + (parseFloat(String(r.paymentAmount)) || 0), 0);
-
-    const invalidVehicles = vehicleExpiryDocs.filter((doc) => {
-      return doc.expiryDate && doc.expiryDate < todayStr;
-    }).length;
-
-    return { totalVehiclesToday, vehiclesInStation, vehiclesDepartedToday, revenueToday, invalidVehicles };
+    return {
+      totalVehiclesToday: stats.totalVehiclesToday,
+      vehiclesInStation: stats.vehiclesInStation,
+      vehiclesDepartedToday: stats.vehiclesDepartedToday,
+      revenueToday: parseFloat(String(stats.revenueToday)) || 0,
+      invalidVehicles,
+    };
   }
 
   /**
-   * Calculate chart data from raw data (no DB query)
+   * Get count of invalid vehicles (expired documents)
    */
-  private calculateChartData(raw: RawData): ChartDataPoint[] {
-    const { dispatchRecords, todayStr } = raw;
-    const hours = Array.from({ length: 12 }, (_, i) => i + 6);
-    const todayRecords = dispatchRecords.filter((r) => {
-      if (!r.entryTime) return false;
-      const entryTimeStr = r.entryTime.toISOString();
-      return isToday(entryTimeStr, todayStr);
-    });
+  private async getInvalidVehiclesCount(todayStr: string): Promise<number> {
+    if (!db) throw new Error('[Dashboard] Database not initialized');
 
-    return hours.map((hour) => {
-      const hourStr = hour.toString().padStart(2, '0');
-      const count = todayRecords.filter((r) => {
-        if (!r.entryTime) return false;
-        const timeStr = r.entryTime.toISOString().split('T')[1];
-        const recordHour = timeStr ? timeStr.substring(0, 2) : '';
-        return recordHour === hourStr;
-      }).length;
-      return { hour: `${hourStr}:00`, count };
+    // Count vehicles with expired registration/insurance
+    const vehicleCount = await db.select({
+      count: sql<number>`COUNT(*)::int`,
+    })
+    .from(vehicles)
+    .where(
+      or(
+        and(isNotNull(vehicles.registrationExpiry), lt(vehicles.registrationExpiry, todayStr)),
+        and(isNotNull(vehicles.insuranceExpiry), lt(vehicles.insuranceExpiry, todayStr)),
+        and(isNotNull(vehicles.roadWorthinessExpiry), lt(vehicles.roadWorthinessExpiry, todayStr))
+      )
+    );
+
+    // Count vehicle badges with expired dates
+    const badgeCount = await db.select({
+      count: sql<number>`COUNT(*)::int`,
+    })
+    .from(vehicleBadges)
+    .where(
+      and(isNotNull(vehicleBadges.expiryDate), lt(vehicleBadges.expiryDate, todayStr))
+    );
+
+    return (vehicleCount[0]?.count || 0) + (badgeCount[0]?.count || 0);
+  }
+
+  /**
+   * Get chart data using SQL GROUP BY hour (OPTIMIZED)
+   */
+  private async getChartDataSQL(): Promise<ChartDataPoint[]> {
+    if (!db) throw new Error('[Dashboard] Database not initialized');
+
+    const { todayStr } = getVietnamDateRange();
+    const todayStart = new Date(todayStr + 'T00:00:00+07:00');
+    const todayEnd = new Date(todayStr + 'T23:59:59.999+07:00');
+
+    const result = await db.select({
+      hour: sql<string>`TO_CHAR(entry_time AT TIME ZONE 'Asia/Saigon', 'HH24:00')`,
+      count: sql<number>`COUNT(*)::int`,
+    })
+    .from(dispatchRecords)
+    .where(and(
+      gte(dispatchRecords.entryTime, todayStart),
+      lte(dispatchRecords.entryTime, todayEnd)
+    ))
+    .groupBy(sql`TO_CHAR(entry_time AT TIME ZONE 'Asia/Saigon', 'HH24:00')`)
+    .orderBy(sql`1`);
+
+    // Fill in missing hours (6:00 to 17:00)
+    const hours = Array.from({ length: 12 }, (_, i) => i + 6);
+    const chartMap = new Map(result.map(r => [r.hour, r.count]));
+
+    return hours.map(hour => {
+      const hourStr = hour.toString().padStart(2, '0') + ':00';
+      return {
+        hour: hourStr,
+        count: chartMap.get(hourStr) || 0,
+      };
     });
   }
 
@@ -339,10 +432,25 @@ export class DashboardService {
   }
 
   /**
-   * Calculate weekly stats from raw data (no DB query)
+   * Get weekly stats using SQL GROUP BY date (OPTIMIZED)
    */
-  private calculateWeeklyStats(raw: RawData): WeeklyStat[] {
-    const { dispatchRecords } = raw;
+  private async getWeeklyStatsSQL(): Promise<WeeklyStat[]> {
+    if (!db) throw new Error('[Dashboard] Database not initialized');
+
+    const { weekAgoStr } = getVietnamDateRange();
+    const weekAgoDate = new Date(weekAgoStr + 'T00:00:00+07:00');
+
+    const result = await db.select({
+      day: sql<string>`DATE(entry_time AT TIME ZONE 'Asia/Saigon')::text`,
+      departed: sql<number>`COUNT(*) FILTER (WHERE status = 'departed' AND exit_time IS NOT NULL)::int`,
+      inStation: sql<number>`COUNT(*) FILTER (WHERE status IN ('entered', 'passengers_dropped', 'permit_issued', 'paid', 'departure_ordered') AND exit_time IS NULL)::int`,
+    })
+    .from(dispatchRecords)
+    .where(gte(dispatchRecords.entryTime, weekAgoDate))
+    .groupBy(sql`DATE(entry_time AT TIME ZONE 'Asia/Saigon')`)
+    .orderBy(sql`1`);
+
+    // Fill in missing days and add day names
     const dayNames = ['CN', 'T2', 'T3', 'T4', 'T5', 'T6', 'T7'];
     const days: { dateStr: string; dayName: string }[] = [];
 
@@ -354,17 +462,19 @@ export class DashboardService {
       days.push({ dateStr, dayName: dayNames[vietnamTime.getDay()] });
     }
 
+    const statsMap = new Map(result.map(r => [r.day, r]));
+
     return days.map(({ dateStr, dayName }) => {
-      const dayRecords = dispatchRecords.filter((r) => {
-        if (!r.entryTime) return false;
-        const entryTimeStr = r.entryTime.toISOString();
-        return isToday(entryTimeStr, dateStr);
-      });
-      const departed = dayRecords.filter((r) => r.status === 'departed' && r.exitTime).length;
-      const inStation = dayRecords.filter((r) =>
-        ['entered', 'passengers_dropped', 'permit_issued', 'paid', 'departure_ordered'].includes(r.status || '') && !r.exitTime
-      ).length;
-      return { day: dateStr, dayName, departed, inStation, total: departed + inStation };
+      const stats = statsMap.get(dateStr);
+      const departed = stats?.departed || 0;
+      const inStation = stats?.inStation || 0;
+      return {
+        day: dateStr,
+        dayName,
+        departed,
+        inStation,
+        total: departed + inStation,
+      };
     });
   }
 
@@ -394,39 +504,53 @@ export class DashboardService {
   }
 
   /**
-   * Calculate route breakdown from raw data (no DB query)
+   * Get route breakdown using SQL GROUP BY route with JOIN (OPTIMIZED)
    */
-  private calculateRouteBreakdown(raw: RawData): RouteBreakdown[] {
-    const { dispatchRecords, routes, todayStr } = raw;
-    const todayRecords = dispatchRecords.filter((r) => {
-      if (!r.entryTime) return false;
-      const entryTimeStr = r.entryTime.toISOString();
-      return isToday(entryTimeStr, todayStr);
-    });
-    const total = todayRecords.length || 1;
+  private async getRouteBreakdownSQL(): Promise<RouteBreakdown[]> {
+    if (!db) throw new Error('[Dashboard] Database not initialized');
 
-    const routeCounts: Record<string, { routeName: string; count: number }> = {};
-    for (const record of todayRecords) {
-      const routeId = record.routeId || 'unknown';
-      const route = routes[routeId];
-      const routeName = route?.routeCode || route?.departureStation || 'Khác';
-      if (!routeCounts[routeId]) routeCounts[routeId] = { routeName, count: 0 };
-      routeCounts[routeId].count++;
-    }
+    const { todayStr } = getVietnamDateRange();
+    const todayStart = new Date(todayStr + 'T00:00:00+07:00');
+    const todayEnd = new Date(todayStr + 'T23:59:59.999+07:00');
 
-    return Object.entries(routeCounts)
-      .map(([routeId, data]) => ({
-        routeId,
-        routeName: data.routeName,
-        count: data.count,
-        percentage: Math.round((data.count / total) * 100),
-      }))
-      .sort((a, b) => b.count - a.count)
-      .slice(0, 6);
+    // Get total count for percentage calculation
+    const totalResult = await db.select({
+      total: sql<number>`COUNT(*)::int`,
+    })
+    .from(dispatchRecords)
+    .where(and(
+      gte(dispatchRecords.entryTime, todayStart),
+      lte(dispatchRecords.entryTime, todayEnd)
+    ));
+
+    const total = totalResult[0]?.total || 1;
+
+    // Get route breakdown with LEFT JOIN
+    const result = await db.select({
+      routeId: sql<string>`COALESCE(${dispatchRecords.routeId}::text, 'unknown')`,
+      routeName: sql<string>`COALESCE(${routes.routeCode}, ${routes.departureStation}, 'Khác')`,
+      count: sql<number>`COUNT(*)::int`,
+    })
+    .from(dispatchRecords)
+    .leftJoin(routes, eq(dispatchRecords.routeId, routes.id))
+    .where(and(
+      gte(dispatchRecords.entryTime, todayStart),
+      lte(dispatchRecords.entryTime, todayEnd)
+    ))
+    .groupBy(dispatchRecords.routeId, routes.routeCode, routes.departureStation)
+    .orderBy(sql`3 DESC`)
+    .limit(6);
+
+    return result.map(r => ({
+      routeId: r.routeId,
+      routeName: r.routeName,
+      count: r.count,
+      percentage: Math.round((r.count / total) * 100),
+    }));
   }
 
   /**
-   * Get all dashboard data - OPTIMIZED: single load + caching
+   * Get all dashboard data - OPTIMIZED: SQL aggregation + caching
    */
   async getAllData(): Promise<DashboardAllData> {
     const now = Date.now();
@@ -439,24 +563,32 @@ export class DashboardService {
 
     const startTime = Date.now();
 
-    // Load all raw data in ONE parallel batch (5 queries instead of 15+)
+    // Use SQL aggregation for stats, charts, weekly, route (OPTIMIZED)
+    // Keep loadRawData for warnings and recentActivity (need full records for formatting)
     const raw = await this.loadRawData();
 
-    // Calculate all metrics from raw data (no more DB queries)
+    const [stats, chartData, weeklyStats, routeBreakdown] = await Promise.all([
+      this.getStatsSQL(),
+      this.getChartDataSQL(),
+      this.getWeeklyStatsSQL(),
+      this.getRouteBreakdownSQL(),
+    ]);
+
+    // Calculate metrics that need raw data
     const data: DashboardAllData = {
-      stats: this.calculateStats(raw),
-      chartData: this.calculateChartData(raw),
+      stats,
+      chartData,
       recentActivity: this.calculateRecentActivity(raw),
       warnings: this.calculateWarnings(raw),
-      weeklyStats: this.calculateWeeklyStats(raw),
-      monthlyStats: this.calculateMonthlyStats(raw),
-      routeBreakdown: this.calculateRouteBreakdown(raw),
+      weeklyStats,
+      monthlyStats: this.calculateMonthlyStats(raw), // Keep monthly stats (not in main dashboard view)
+      routeBreakdown,
     };
 
     // Update cache
     dashboardCache = { data, timestamp: now };
 
-    console.log(`[Dashboard] Generated all data in ${Date.now() - startTime}ms`);
+    console.log(`[Dashboard] Generated all data in ${Date.now() - startTime}ms (SQL aggregation)`);
     return data;
   }
 
