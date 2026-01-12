@@ -8,7 +8,7 @@
         "server"
     ],
     "scripts": {
-        "dev": "npm run dev:server & npm run dev:client",
+        "dev": "concurrently -n BE,FE -c blue,green \"npm:dev:server\" \"npm:dev:client\"",
         "dev:client": "npm run dev --workspace=client",
         "dev:server": "npm run dev --workspace=server",
         "build": "npm run build --workspaces",
@@ -34,5 +34,8 @@
     "license": "ISC",
     "engines": {
         "node": ">=18.0.0"
+    },
+    "devDependencies": {
+        "concurrently": "^9.2.1"
     }
 }
