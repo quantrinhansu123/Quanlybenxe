@@ -1,0 +1,98 @@
+NasGRich, [2026-01-12 2:47 CH]
+Tối ưu schema database là tối ưu cho 3 mục tiêu: đúng mô hình dữ liệu, nhanh khi truy vấn/ghi, và dễ mở rộng/bảo trì. Dưới đây là checklist “xài được ngay” (áp dụng tốt cho PostgreSQL/MySQL/SQL Server; mình sẽ ghi chú chỗ nào khác nhau).
+
+1) Bắt đầu từ workload (đừng tối ưu mù)
+ • Liệt kê Top 20 query quan trọng (đọc nhiều nhất + chậm nhất + chạy thường xuyên).
+ • Xác định pattern truy cập: lọc theo gì, join theo gì, sort theo gì, pagination kiểu gì.
+ • Đánh dấu bảng nào hot-write (ghi nhiều) vs hot-read (đọc nhiều).
+Schema tối ưu tốt luôn bám theo các query thật.
+
+2) Chuẩn hoá vừa đủ, denormalize có chủ đích
+ • Mặc định: thiết kế tới 3NF (tránh trùng lặp dữ liệu vô tội vạ).
+ • Denormalize khi:
+ • Một join cực nặng và chạy liên tục (vd: hiển thị danh sách đơn hàng kèm tổng tiền, trạng thái…)
+ • Dữ liệu đó ít thay đổi hoặc có thể đồng bộ bằng trigger/job/event.
+ • Mẹo: ưu tiên computed/materialized view (Postgres) hoặc summary table trước khi copy lung tung.
+
+3) Chọn kiểu khoá chính (PK) & khoá ngoại (FK) tối ưu
+ • PK:
+ • BIGINT auto-increment: đơn giản, tốt cho index locality.
+ • UUID: tốt cho phân tán nhưng index to hơn, join chậm hơn; cân nhắc dùng UUIDv7 (tăng dần theo thời gian) nếu DB hỗ trợ.
+ • FK:
+ • Luôn tạo FK nếu bạn cần integrity (đa số dự án cần).
+ • Nhưng nhớ: FK làm insert/update/delete tốn thêm chi phí kiểm tra → với bảng ghi cực lớn, cần test & chọn chiến lược (đôi khi dùng “soft FK” + job kiểm tra).
+
+4) Index: tạo đúng loại, đúng thứ tự cột
+
+Quy tắc thực dụng
+ • Index phục vụ: WHERE, JOIN, ORDER BY, và đôi khi GROUP BY.
+ • Composite index: thứ tự cột cực quan trọng
+ • ví dụ query: WHERE user_id=? AND status=? ORDER BY created_at DESC
+ • index hay dùng: (user_id, status, created_at DESC)
+ • Đừng index bừa: mỗi index là chi phí ghi + tốn dung lượng.
+
+Các loại index hay dùng
+ • B-tree: mặc định cho đa số case.
+ • Partial index (Postgres): ví dụ chỉ index “đơn chưa xoá”: WHERE deleted_at IS NULL.
+ • Covering index:
+ • MySQL: index bao gồm thêm cột để tránh “back to table”.
+ • Postgres: INCLUDE (col) để index-only scan.
+ • Full-text / GIN (Postgres) / FULLTEXT (MySQL): cho tìm kiếm văn bản.
+
+5) Data type & độ rộng cột: nhỏ vừa đủ
+ • Dùng kiểu phù hợp: INT vs BIGINT, VARCHAR(n) vs TEXT, TIMESTAMP vs DATE.
+ • Tránh dùng TEXT cho mọi thứ “cho nhanh” nếu bạn hay sort/filter theo cột đó.
+ • Tiền tệ: dùng DECIMAL (hoặc lưu “cents” bằng INT) thay vì float.
+ • Chuẩn hoá timezone: thường UTC.
+
+6) Ràng buộc dữ liệu: constraint giúp DB “tối ưu”
+ • NOT NULL giúp planner tốt hơn và dữ liệu sạch hơn.
+ • UNIQUE cho các khoá logic.
+ • CHECK cho enum/range.
+ • Nếu dùng soft delete: cân nhắc unique “theo điều kiện” (Postgres partial unique index).
+
+7) Thiết kế quan hệ & cardinality rõ ràng
+ • Many-to-many: bảng join nên có
+ • PK composite (a_id, b_id) hoặc surrogate + unique constraint
+ • index cho cả 2 chiều truy vấn (a_id, b_id) và/hoặc (b_id, a_id)
+ • One-to-many lớn: tránh “EAV” (entity-attribute-value) trừ khi thật sự cần linh hoạt.
+
+8) Partitioning cho bảng rất lớn
+
+Khi bảng lên tens/hundreds of millions rows, partitioning giúp:
+ • query theo thời gian nhanh hơn (range partition theo created_at)
+ • dọn dữ liệu cũ dễ hơn (drop partition)
+Nhưng partition cũng tăng độ phức tạp (index, FK, query plan), nên chỉ làm khi có số liệu.
+
+9) Chiến lược “hot path”
+
+Một số pattern thực tế:
+ • Log/event: append-only → tối ưu theo created_at, partition theo tháng, index tối thiểu.
+ • Feed/listing: cần sort theo time → index theo (owner_id, created_at desc) + pagination kiểu seek (tránh OFFSET lớn).
+ • Báo cáo: tách OLTP và OLAP (ETL sang warehouse) nếu report nặng.
+
+10) Kiểm tra bằng EXPLAIN + thống kê thật
+ • Postgres: EXPLAIN (ANALYZE, BUFFERS); bật pg_stat_statements.
+ • MySQL: EXPLAIN ANALYZE, performance_schema, slow query log.
+ • Luôn đo: “tối ưu” mà không đo thường là… đoán.
+
+11) Một ví dụ “tối ưu schema” điển hình
+
+Bài toán: bảng orders, query hay dùng:
+ • lấy danh sách đơn theo user, lọc status, sort mới nhất
+ • join order_items để tính tổng
+Giải pháp:
+ • orders: cột total_amount denormalize (cập nhật khi item đổi)
+
+NasGRich, [2026-01-12 2:47 CH]
+• index: (user_id, status, created_at desc)
+ • order_items: index (order_id) và nếu hay lọc theo product thì thêm (product_id, created_at) tuỳ query
+
+⸻
+
+Nếu bạn trả lời nhanh 4 thông tin này, mình sẽ đề xuất schema/index cụ thể hơn (chuẩn “theo workload”)
+ 1. Bạn dùng DB gì (Postgres/MySQL/SQL Server/SQLite)?
+ 2. 3–5 query quan trọng nhất là gì (copy SQL hoặc mô tả)?
+ 3. Bảng nào lớn nhất và ước lượng size/traffic (VD: 5M orders, 200 writes/s)?
+ 4. Có multi-tenant không (nhiều khách hàng chung DB)?
+
