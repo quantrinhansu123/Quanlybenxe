@@ -182,10 +182,8 @@ export interface FunctionCallResult {
 
 export async function executeFunction(name: string, args: Record<string, any>): Promise<FunctionCallResult> {
   try {
-    // Ensure cache is ready
-    if (!chatCacheService.isReady()) {
-      await chatCacheService.preWarm()
-    }
+    // Ensure cache data is loaded before searching
+    await chatCacheService.loadDataIfNeeded()
 
     switch (name) {
       case 'search_vehicle': {

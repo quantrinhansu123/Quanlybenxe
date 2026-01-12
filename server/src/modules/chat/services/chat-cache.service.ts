@@ -7,7 +7,10 @@ import {
   drivers,
   shifts,
   invoices,
-  dispatchRecords
+  dispatchRecords,
+  schedules,
+  services,
+  serviceCharges
 } from '../../../db/schema/index.js'
 
 // Cache key to Drizzle schema mapping
@@ -19,10 +22,14 @@ const SCHEMA_MAP: Record<string, any> = {
   drivers,
   dispatch_records: dispatchRecords,
   shifts,
-  invoices
+  invoices,
+  schedules,
+  services,
+  service_charges: serviceCharges
+  // Note: violations table exists but rarely used, skip for now
 }
 
-// All cache keys (including stubs for tables without schema)
+// All cache keys
 const CACHE_KEYS = [
   'vehicles',
   'badges',
@@ -30,12 +37,12 @@ const CACHE_KEYS = [
   'routes',
   'drivers',
   'dispatch_records',
-  'schedules', // stub
-  'services', // stub
+  'schedules',
+  'services',
   'shifts',
   'invoices',
-  'violations', // stub
-  'service_charges' // stub
+  'violations', // stub - table exists but rarely used
+  'service_charges'
 ] as const
 
 interface CacheStats {
@@ -121,8 +128,49 @@ class ChatCacheService {
   }
 
   async refresh(): Promise<void> {
-    console.log('[ChatCache] Refreshing cache...')
-    await this.preWarm()
+    if (this.isWarming) return // Prevent concurrent refreshes
+
+    console.log('[ChatCache] Refreshing cache in background...')
+    this.isWarming = true
+    const startTime = Date.now()
+
+    try {
+      // Load fresh data into temporary map first (avoid data loss on error)
+      const tempCache = new Map<string, any[]>()
+
+      const loadPromises = CACHE_KEYS.map(async (key) => {
+        try {
+          const schema = SCHEMA_MAP[key as keyof typeof SCHEMA_MAP]
+          if (schema && db) {
+            const items = await db.select().from(schema)
+            tempCache.set(key, items)
+            return { key, count: items.length }
+          } else {
+            tempCache.set(key, this.cache.get(key) || []) // Keep existing data
+            return { key, count: 0 }
+          }
+        } catch (error) {
+          console.warn(`[ChatCache] Refresh failed for ${key}:`, error)
+          tempCache.set(key, this.cache.get(key) || []) // Keep existing data
+          return { key, count: 0, error: true }
+        }
+      })
+
+      const results = await Promise.all(loadPromises)
+
+      // Swap cache atomically
+      this.cache = tempCache
+      this.buildIndexes()
+      this.lastRefresh = new Date()
+
+      const totalItems = results.reduce((sum, r) => sum + r.count, 0)
+      console.log(`[ChatCache] Refreshed ${totalItems} items in ${Date.now() - startTime}ms`)
+    } catch (error) {
+      console.error('[ChatCache] Refresh failed:', error)
+      // Keep existing cache data - graceful degradation
+    } finally {
+      this.isWarming = false
+    }
   }
 
   private buildIndexes(): void {
@@ -130,27 +178,27 @@ class ChatCacheService {
     this.nameIndex.clear()
     this.codeIndex.clear()
 
-    // Index vehicles by plate (Supabase uses snake_case)
+    // Index vehicles by plate (Drizzle returns camelCase, fallback to snake_case)
     const vehicles = this.cache.get('vehicles') || []
     vehicles.forEach((v: any) => {
-      const plate = this.normalizePlate(v.plate_number || '')
+      const plate = this.normalizePlate(v.plateNumber || v.plate_number || '')
       if (plate) {
         const existing = this.plateIndex.get(plate) || []
         this.plateIndex.set(plate, [...existing, { ...v, _source: 'vehicles' }])
       }
     })
 
-    // Index badges by plate (Supabase uses snake_case)
+    // Index badges by plate (Drizzle returns camelCase, fallback to snake_case)
     const badges = this.cache.get('badges') || []
     badges.forEach((b: any) => {
-      const plate = this.normalizePlate(b.plate_number || b.license_plate_sheet || '')
+      const plate = this.normalizePlate(b.plateNumber || b.plate_number || b.licensePlateSheet || b.license_plate_sheet || '')
       if (plate) {
         const existing = this.plateIndex.get(plate) || []
         this.plateIndex.set(plate, [...existing, { ...b, _source: 'badges' }])
       }
     })
 
-    // Index operators by name (Supabase uses 'name')
+    // Index operators by name
     const operators = this.cache.get('operators') || []
     operators.forEach((o: any) => {
       const name = this.normalizeText(o.name || '')
@@ -160,20 +208,20 @@ class ChatCacheService {
       }
     })
 
-    // Index drivers by name (Supabase uses 'full_name')
+    // Index drivers by name (Drizzle returns camelCase, fallback to snake_case)
     const drivers = this.cache.get('drivers') || []
     drivers.forEach((d: any) => {
-      const name = this.normalizeText(d.full_name || '')
+      const name = this.normalizeText(d.fullName || d.full_name || '')
       if (name) {
         const existing = this.nameIndex.get(name) || []
         this.nameIndex.set(name, [...existing, { ...d, _source: 'drivers' }])
       }
     })
 
-    // Index routes by code (Supabase uses 'route_code')
+    // Index routes by code (Drizzle returns camelCase, fallback to snake_case)
     const routes = this.cache.get('routes') || []
     routes.forEach((r: any) => {
-      const code = this.normalizeText(r.route_code || '')
+      const code = this.normalizeText(r.routeCode || r.route_code || '')
       if (code) {
         const existing = this.codeIndex.get(code) || []
         this.codeIndex.set(code, [...existing, { ...r, _source: 'routes' }])
@@ -216,11 +264,11 @@ class ChatCacheService {
       })
     }
 
-    // Fallback to full scan (Supabase uses snake_case)
+    // Fallback to full scan (Drizzle returns camelCase)
     if (results.length === 0 && normalized.length >= 3) {
       const vehicles = this.cache.get('vehicles') || []
       vehicles.forEach((v: any) => {
-        const vPlate = this.normalizePlate(v.plate_number || '')
+        const vPlate = this.normalizePlate(v.plateNumber || v.plate_number || '')
         if (vPlate.includes(normalized)) {
           results.push({ ...v, _source: 'vehicles' })
         }
@@ -241,11 +289,11 @@ class ChatCacheService {
       }
     })
 
-    // Fallback to full scan (Supabase uses 'full_name')
+    // Fallback to full scan (Drizzle returns camelCase)
     if (results.length === 0) {
       const drivers = this.cache.get('drivers') || []
       drivers.forEach((d: any) => {
-        const dName = this.normalizeText(d.full_name || '')
+        const dName = this.normalizeText(d.fullName || d.full_name || '')
         if (dName.includes(normalized)) {
           results.push({ ...d, _source: 'drivers' })
         }
@@ -291,12 +339,12 @@ class ChatCacheService {
       }
     })
 
-    // Search by departure/arrival station (Supabase uses snake_case)
+    // Search by departure/arrival station (Drizzle returns camelCase)
     if (results.length === 0) {
       const routes = this.cache.get('routes') || []
       routes.forEach((r: any) => {
-        const departure = this.normalizeText(r.departure_station || '')
-        const arrival = this.normalizeText(r.arrival_station || '')
+        const departure = this.normalizeText(r.departureStation || r.departure_station || '')
+        const arrival = this.normalizeText(r.arrivalStation || r.arrival_station || '')
         if (departure.includes(normalized) || arrival.includes(normalized)) {
           results.push({ ...r, _source: 'routes' })
         }
