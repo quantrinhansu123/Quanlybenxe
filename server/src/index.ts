@@ -34,11 +34,12 @@ const app = express()
 // Use APP_PORT instead of PORT (reserved in Firebase Functions)
 const PORT = Number(process.env.APP_PORT) || 3000
 
-// CORS Configuration - Allow Firebase Hosting and common domains
+// CORS Configuration - Allow common domains
 const ALLOWED_ORIGINS = [
   'http://localhost:5173',
   'http://localhost:3000',
   'http://127.0.0.1:5173',
+  // Firebase Hosting (legacy)
   'https://benxe-management-20251218.web.app',
   'https://benxe-management-20251218.firebaseapp.com',
 ]
@@ -61,6 +62,11 @@ app.use(cors({
 
     // Allow Firebase Hosting domains
     if (normalizedOrigin.includes('.web.app') || normalizedOrigin.includes('.firebaseapp.com')) {
+      return callback(null, true)
+    }
+
+    // Allow Vercel domains
+    if (normalizedOrigin.includes('.vercel.app')) {
       return callback(null, true)
     }
 
